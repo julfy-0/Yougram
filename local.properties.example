@@ -1,0 +1,5 @@
+# Скопируйте в local.properties (этот файл не попадает в git)
+# Получить api_id и api_hash: https://my.telegram.org -> API development tools
+sdk.dir=/path/to/Android/Sdk
+TG_API_ID=0
+TG_API_HASH=
