@@ -3,3 +3,5 @@
 sdk.dir=/path/to/Android/Sdk
 TG_API_ID=0
 TG_API_HASH=
+# Адрес JSON с версией для обновления из приложения (https), например файл в GitHub Releases / Pages
+UPDATE_URL=https://github.com/julfy-0/Yougram/releases/latest/download/update.json

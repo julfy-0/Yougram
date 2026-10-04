@@ -1,5 +1,7 @@
 package app.yougram.ui.chat
 
+import app.yougram.ui.LocalOpenLink
+import app.yougram.ui.rememberLinkified
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -23,12 +25,21 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.content.Context
 import android.Manifest
+import kotlinx.coroutines.flow.first
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import app.yougram.data.ReactionItem
+import app.yougram.data.ReplyPreview
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -132,9 +143,12 @@ fun ChatScreen(
     onOpenChatProfile: () -> Unit = {},
     /** Профиль автора сообщения по id чата. */
     onOpenProfile: (Long) -> Unit = {},
+    /** Звонок собеседнику в личном чате: (userId, видео). */
+    onCall: (Long, Boolean) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsState()
     val senders by viewModel.senders.collectAsState()
+    val replies by viewModel.replies.collectAsState()
     val glass by settings.glass.collectAsState()
     val chatPrefs by settings.chatPrefs.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
@@ -144,6 +158,10 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     var viewerMedia by remember { mutableStateOf<MediaItem?>(null) }
     var actionMessage by remember { mutableStateOf<MessageItem?>(null) }
+    var replyTo by remember { mutableStateOf<MessageItem?>(null) }
+    var editing by remember { mutableStateOf<MessageItem?>(null) }
+    var forwardMessage by remember { mutableStateOf<MessageItem?>(null) }
+    var deleteMessage by remember { mutableStateOf<MessageItem?>(null) }
     var editsDialog by remember { mutableStateOf<List<EditRecord>?>(null) }
     var emojiSheet by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -166,6 +184,34 @@ fun ChatScreen(
     val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.all { it }) videoRecorderOpen = true
         else Toast.makeText(context, "Нужен доступ к камере и микрофону", Toast.LENGTH_SHORT).show()
+    }
+    fun submit() {
+        val e = editing
+        if (e != null) {
+            viewModel.edit(e.id, input)
+            editing = null
+        } else {
+            viewModel.send(input, replyTo?.id)
+            replyTo = null
+        }
+        input = ""
+    }
+    var pendingCallVideo by remember { mutableStateOf(false) }
+    val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[Manifest.permission.RECORD_AUDIO] != false) onCall(viewModel.chatId, pendingCallVideo)
+        else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+    }
+    fun startCall(video: Boolean) {
+        val needed = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (video) add(Manifest.permission.CAMERA)
+        }.toTypedArray()
+        if (needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
+            onCall(viewModel.chatId, video)
+        } else {
+            pendingCallVideo = video
+            callPermissions.launch(needed)
+        }
     }
     fun openVideoRecorder() {
         AudioPlayback.stop()
@@ -287,6 +333,16 @@ fun ChatScreen(
                             groupChat = state.isGroup || state.isChannel,
                             sender = message.senderKey?.let { senders[it] },
                             onOpenSender = { message.senderKey?.let { key -> viewModel.openSender(key, onOpenProfile) } },
+                            reply = message.reply?.let { replies[it.messageId] },
+                            onReplyClick = {
+                                val target = message.reply?.messageId
+                                val idx = visibleMessages.indexOfFirst { it.id == target }
+                                scope.launch {
+                                    if (idx >= 0) listState.animateScrollToItem(idx)
+                                    else snackbar.showSnackbar("Исходное сообщение не загружено")
+                                }
+                            },
+                            onReact = { emoji -> viewModel.react(message.id, emoji) },
                         )
                     }
                     if (state.loadingOlder) {
@@ -337,6 +393,15 @@ fun ChatScreen(
                     )
                     YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
                 }
+                // Звонки доступны только в личных чатах (id чата = id пользователя).
+                if (!state.isGroup && !state.isChannel && viewModel.chatId > 0L) {
+                    IconButton(onClick = { startCall(false) }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { startCall(true) }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок", modifier = Modifier.size(22.dp))
+                    }
+                }
             }
         }
 
@@ -376,6 +441,36 @@ fun ChatScreen(
                     )
                 }
             } else {
+                val bannerMessage = editing ?: replyTo
+                if (bannerMessage != null) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .glass(backdrop, glass, RectangleShape)
+                            .padding(start = 16.dp, end = 4.dp, top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (editing != null) "Редактирование" else "Ответ",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                bannerMessage.summary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = {
+                            if (editing != null) input = ""
+                            editing = null
+                            replyTo = null
+                        }) { Icon(Icons.Filled.Close, contentDescription = "Отмена") }
+                    }
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -448,10 +543,7 @@ fun ChatScreen(
                                         ),
                                         keyboardActions = KeyboardActions(
                                             onSend = {
-                                                if (input.isNotBlank()) {
-                                                    viewModel.send(input)
-                                                    input = ""
-                                                }
+                                                if (input.isNotBlank()) submit()
                                             },
                                         ),
                                         textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -497,10 +589,7 @@ fun ChatScreen(
                                     onLongPress = { if (!canSend && !recording) videoMode = !videoMode },
                                     onTap = {
                                         when {
-                                            canSend -> {
-                                                viewModel.send(input)
-                                                input = ""
-                                            }
+                                            canSend -> submit()
                                             recording -> {
                                                 recording = false
                                                 recorder.stop()?.let { (path, seconds) -> viewModel.sendVoice(path, seconds) }
@@ -568,28 +657,78 @@ fun ChatScreen(
 
     actionMessage?.let { message ->
         val sender = message.senderUserId
-        AlertDialog(
-            onDismissRequest = { actionMessage = null },
-            title = { Text("Сообщение") },
-            text = {
-                Text(
-                    if (sender != null && !message.isOutgoing) {
-                        "Скрывать все сообщения этого пользователя во всех чатах? Отменить можно в разделе " +
-                                "«Фильтры сообщений» → «Теневой бан»."
+        var available by remember(message.id) { mutableStateOf(DefaultReactions) }
+        LaunchedEffect(message.id) {
+            viewModel.availableReactions(message.id).takeIf { it.isNotEmpty() }?.let { available = it }
+        }
+        MessageMenu(
+            message = message,
+            isRead = state.readAt[message.id] != null,
+            canEdit = message.isOutgoing && message.media == null && message.call == null && message.id !in state.deletedIds,
+            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.ANIMATION || it == MediaKind.DOCUMENT },
+            canShadowBan = sender != null && !message.isOutgoing,
+            reactions = available,
+            onDismiss = { actionMessage = null },
+            onReact = { viewModel.react(message.id, it) },
+            onReply = { editing = null; replyTo = message },
+            onSave = {
+                val media = message.media ?: return@MessageMenu
+                scope.launch {
+                    val path = viewModel.fileState(media.fileId).first().path
+                    if (path == null) {
+                        viewModel.download(media.fileId)
+                        snackbar.showSnackbar("Файл ещё загружается, попробуйте позже")
                     } else {
-                        "Для этого сообщения нет доступных действий."
-                    },
-                )
-            },
-            confirmButton = {
-                if (sender != null && !message.isOutgoing) {
-                    TextButton(onClick = {
-                        viewModel.shadowBan(sender)
-                        actionMessage = null
-                    }) { Text("Теневой бан") }
+                        val ok = saveToGallery(context, path, media.name, media.mimeType, media.kind)
+                        snackbar.showSnackbar(if (ok) "Сохранено в галерею" else "Не удалось сохранить")
+                    }
                 }
             },
-            dismissButton = { TextButton(onClick = { actionMessage = null }) { Text("Закрыть") } },
+            onForward = { forwardMessage = message },
+            onPin = { viewModel.pin(message.id) },
+            onEdit = { replyTo = null; editing = message; input = message.text },
+            onDelete = { deleteMessage = message },
+            onShadowBan = { sender?.let { viewModel.shadowBan(it) } },
+        )
+    }
+
+    deleteMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { deleteMessage = null },
+            title = { Text("Удалить сообщение?") },
+            text = { Text("Сообщение будет удалено у всех, если это позволяют права в чате.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.delete(message.id); deleteMessage = null }) { Text("Удалить") }
+            },
+            dismissButton = { TextButton(onClick = { deleteMessage = null }) { Text("Отмена") } },
+        )
+    }
+
+    forwardMessage?.let { message ->
+        val chatList by viewModel.chats.collectAsState()
+        AlertDialog(
+            onDismissRequest = { forwardMessage = null },
+            title = { Text("Переслать в…") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    chatList.forEach { chat ->
+                        Text(
+                            chat.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.forward(message.id, chat.id)
+                                    forwardMessage = null
+                                }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { forwardMessage = null }) { Text("Отмена") } },
         )
     }
 
@@ -670,6 +809,9 @@ private fun MessageBubble(
     groupChat: Boolean,
     sender: SenderInfo?,
     onOpenSender: () -> Unit,
+    reply: ReplyPreview?,
+    onReplyClick: () -> Unit,
+    onReact: (String) -> Unit,
 ) {
     val mine = message.isOutgoing
     val media = message.media
@@ -684,6 +826,9 @@ private fun MessageBubble(
     LaunchedEffect(senderKey, showSenderUi) {
         if (showSenderUi && senderKey != null) viewModel.ensureSender(senderKey)
     }
+
+    val replyRef = message.reply
+    LaunchedEffect(replyRef) { if (replyRef != null) viewModel.ensureReply(replyRef) }
 
     // Углы со стороны автора у склеенных сообщений становятся мелкими.
     val inner = minOf(BubbleInner, cornerRadius)
@@ -745,12 +890,24 @@ private fun MessageBubble(
                                 Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
                             )
                         }
+                        if (replyRef != null) {
+                            ReplyQuote(
+                                preview = reply,
+                                mine = mine,
+                                onClick = onReplyClick,
+                                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
+                            )
+                        }
                         if (media != null) {
                             Box(Modifier.padding(4.dp)) { MessageMedia(media, viewModel, onOpenPhoto) }
                         }
                         if (message.text.isNotEmpty()) {
                             Text(
-                                message.text,
+                                rememberLinkified(
+                                    message.text,
+                                    if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                    LocalOpenLink.current,
+                                ),
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = textSize.sp,
@@ -783,6 +940,9 @@ private fun MessageBubble(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
+            if (message.reactions.isNotEmpty()) {
+                ReactionRow(message.reactions, onReact, Modifier.padding(top = 4.dp))
+            }
         }
     }
 }
@@ -814,6 +974,80 @@ private fun MessageFooter(
         Text(formatTime(message.date), style = MaterialTheme.typography.labelSmall, color = muted)
         if (mine && readAt != null) {
             Text(" · прочитано ${formatTime(readAt)}", style = MaterialTheme.typography.labelSmall, color = muted)
+        }
+    }
+}
+
+/** Цитата оригинала над текстом ответа; тап прокручивает к оригиналу. */
+@Composable
+private fun ReplyQuote(
+    preview: ReplyPreview?,
+    mine: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+    Row(
+        modifier
+            .widthIn(min = 120.dp)
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(8.dp))
+            .background(accent.copy(alpha = 0.12f))
+            .clickable(onClick = onClick),
+    ) {
+        Box(Modifier.width(3.dp).fillMaxHeight().background(accent))
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Text(
+                preview?.author.orEmpty().ifEmpty { "Ответ" },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                preview?.text ?: "…",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Реакции чипами под сообщением; тап ставит или снимает свою. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReactionRow(
+    reactions: List<ReactionItem>,
+    onReact: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier.widthIn(max = 320.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        reactions.forEach { r ->
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (r.chosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    )
+                    .clickable { onReact(r.emoji) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(r.emoji, fontSize = 14.sp)
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    r.count.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }

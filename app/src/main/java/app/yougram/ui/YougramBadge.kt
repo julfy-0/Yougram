@@ -1,5 +1,6 @@
 package app.yougram.ui
 
+import app.yougram.data.YougramBanner
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import app.yougram.R
 
 val LocalYougramUsers = compositionLocalOf { emptySet<Long>() }
+val LocalYougramBanners = compositionLocalOf { emptyMap<Long, YougramBanner>() }
 val LocalBadgeChecker = compositionLocalOf<(Long) -> Unit> { { } }
 
 /** Значок приложения рядом с именем; рисуется только если у [userId] найдена метка Yougram. */

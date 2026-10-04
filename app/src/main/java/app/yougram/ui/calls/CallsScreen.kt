@@ -20,8 +20,8 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -73,17 +73,35 @@ fun CallsScreen(
         ) {
             item(key = "filter") {
                 Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    FilterChip(
-                        selected = !state.onlyMissed,
+                    Surface(
                         onClick = { viewModel.setOnlyMissed(false) },
-                        label = { Text("Все") },
-                    )
+                        shape = CircleShape,
+                        color = if (!state.onlyMissed) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                        contentColor = if (!state.onlyMissed) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Text(
+                            "Все",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
-                    FilterChip(
-                        selected = state.onlyMissed,
+                    Surface(
                         onClick = { viewModel.setOnlyMissed(true) },
-                        label = { Text("Пропущенные") },
-                    )
+                        shape = CircleShape,
+                        color = if (state.onlyMissed) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                        contentColor = if (state.onlyMissed) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Text(
+                            "Пропущенные",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
             itemsIndexed(state.calls, key = { _, c -> c.messageId }) { index, call ->

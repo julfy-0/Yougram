@@ -1,11 +1,20 @@
 package app.yougram
 
+import app.yougram.ui.LocalYougramBanners
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import app.yougram.data.AuthStep
+import app.yougram.data.ConnectionService
+import app.yougram.data.NotificationCenter
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,11 +33,32 @@ import app.yougram.ui.LocalYougramUsers
 class MainActivity : ComponentActivity() {
     private val container by lazy { (application as YougramApp).container }
 
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    /** Тап по уведомлению несёт id чата: передаём его навигации. */
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null || !intent.hasExtra(NotificationCenter.EXTRA_CHAT_ID)) return
+        val chatId = intent.getLongExtra(NotificationCenter.EXTRA_CHAT_ID, 0L)
+        intent.removeExtra(NotificationCenter.EXTRA_CHAT_ID)
+        if (chatId == 0L) return
+        container.notificationCenter.forgetChat(chatId)
+        container.pendingOpenChat.value = chatId
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Флаг защиты ставим до первого кадра, чтобы превью в «Недавних» не успело показать содержимое.
         applySecureFlag(container.appLock.settings.value.let { it.type != LockType.None && it.secureScreen })
+
+        if (savedInstanceState == null) handleIntent(intent)
 
         setContent {
             val theme by container.settings.theme.collectAsState()
@@ -37,13 +67,38 @@ class MainActivity : ComponentActivity() {
             val dark = isDarkTheme(theme)
             val secure = lock.type != LockType.None && lock.secureScreen
             val yougramUsers by container.chatRepository.yougramUsers.collectAsState()
+            val yougramBanners by container.chatRepository.banners.collectAsState()
+            val inCall by container.callManager.call.collectAsState()
+            val authStep by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
+            val notifPrefs by container.settings.notifications.collectAsState()
+
+            // После входа: запрашиваем разрешение на уведомления и поднимаем фоновое соединение.
+            LaunchedEffect(authStep == AuthStep.Ready, notifPrefs.backgroundConnection) {
+                if (authStep != AuthStep.Ready) return@LaunchedEffect
+                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                if (notifPrefs.backgroundConnection) ConnectionService.start(this@MainActivity)
+            }
 
             LaunchedEffect(secure) { applySecureFlag(secure) }
+
+            // Входящий звонок должен быть виден и на заблокированном экране.
+            LaunchedEffect(inCall != null) {
+                setShowWhenLocked(inCall != null)
+                setTurnScreenOn(inCall != null)
+            }
 
             // Иконки статус-бара и навигации должны быть контрастны выбранной теме,
             // даже если она отличается от системной.
             DisposableEffect(dark) {
-                val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+                val style = if (dark) {
+                    SystemBarStyle.dark(Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose {}
             }
@@ -52,6 +107,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalGlass provides glass,
                     LocalYougramUsers provides yougramUsers,
+                    LocalYougramBanners provides yougramBanners,
                     LocalBadgeChecker provides container.chatRepository::checkBadge,
                 ) {
                     LockGate(container.appLock) {
@@ -64,11 +120,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        container.notificationCenter.appVisible = true
         container.appLock.onForeground()
     }
 
     override fun onStop() {
         super.onStop()
+        container.notificationCenter.appVisible = false
         // Поворот экрана тоже вызывает onStop, но это не уход из приложения.
         if (!isChangingConfigurations) container.appLock.onBackground()
     }

@@ -26,7 +26,7 @@ enum class ThemeMode { System, Light, Dark }
 
 /** Настройки темы: режим, системные цвета (Material You) или свой акцентный цвет. */
 data class ThemeSettings(
-    val mode: ThemeMode = ThemeMode.System,
+    val mode: ThemeMode = ThemeMode.Dark,
     val dynamic: Boolean = true,
     /** Индекс в списке акцентов; используется, когда [dynamic] выключен. */
     val accent: Int = 0,
@@ -202,7 +202,7 @@ class SettingsRepository(context: Context) {
 
     private val _theme = MutableStateFlow(
         ThemeSettings(
-            mode = ThemeMode.entries.getOrElse(prefs.getInt(KEY_MODE, 0)) { ThemeMode.System },
+            mode = ThemeMode.entries.getOrElse(prefs.getInt(KEY_MODE, ThemeMode.Dark.ordinal)) { ThemeMode.Dark },
             dynamic = prefs.getBoolean(KEY_DYNAMIC, true),
             accent = prefs.getInt(KEY_ACCENT, 0),
         )
@@ -538,5 +538,28 @@ class SettingsRepository(context: Context) {
     fun setBadge(value: Boolean) {
         _badge.value = value
         prefs.edit().putBoolean("yougram_badge", value).apply()
+    }
+
+    private val _banner = MutableStateFlow(
+        prefs.getInt("yougram_banner", -1).takeIf { it >= 0 }?.let {
+            YougramBanner(palette = it and 15, pattern = (it shr 4) and 15, shape = (it shr 8) and 15)
+        },
+    )
+    /** Собственный баннер профиля; null — без баннера. */
+    val banner: StateFlow<YougramBanner?> = _banner.asStateFlow()
+
+    fun setBanner(value: YougramBanner?) {
+        _banner.value = value
+        val packed = value?.let { (it.palette and 15) or ((it.pattern and 15) shl 4) or ((it.shape and 15) shl 8) } ?: -1
+        prefs.edit().putInt("yougram_banner", packed).apply()
+    }
+
+    private val _inAppBrowser = MutableStateFlow(prefs.getBoolean("in_app_browser", true))
+    /** Открывать ссылки из чатов во встроенном браузере. */
+    val inAppBrowser: StateFlow<Boolean> = _inAppBrowser.asStateFlow()
+
+    fun setInAppBrowser(value: Boolean) {
+        _inAppBrowser.value = value
+        prefs.edit().putBoolean("in_app_browser", value).apply()
     }
 }

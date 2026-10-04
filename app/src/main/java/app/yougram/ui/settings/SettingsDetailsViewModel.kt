@@ -1,5 +1,6 @@
 package app.yougram.ui.settings
 
+import app.yougram.data.YougramBadge
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -87,7 +88,9 @@ class SettingsDetailsViewModel(
     }
 
     fun saveBio(bio: String) = launchCatching {
-        account.setBio(bio.trim())
+        // Текущий хвост (метка и баннер Yougram) читаем заново: он мог измениться после загрузки экрана.
+        val tail = YougramBadge.tail(account.loadAccount().bio)
+        account.setBio(bio.trim() + tail)
         _state.update { it.copy(account = account.loadAccount()) }
     }
 

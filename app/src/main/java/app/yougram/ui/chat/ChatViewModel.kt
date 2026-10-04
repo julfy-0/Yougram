@@ -10,6 +10,8 @@ import app.yougram.data.EditRecord
 import app.yougram.data.SettingsRepository
 import app.yougram.data.FileState
 import app.yougram.data.MessageItem
+import app.yougram.data.ReplyPreview
+import app.yougram.data.ReplyRef
 import app.yougram.data.SenderInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -54,6 +56,20 @@ class ChatViewModel(
     /** Авторы сообщений (ключ — id пользователя или чата), подгружаются по мере показа. */
     val senders: StateFlow<Map<Long, SenderInfo>> = _senders.asStateFlow()
     private val requestedSenders = HashSet<Long>()
+
+    private val _replies = MutableStateFlow<Map<Long, ReplyPreview>>(emptyMap())
+
+    /** Превью оригиналов для цитат: id сообщения-оригинала -> автор и текст. */
+    val replies: StateFlow<Map<Long, ReplyPreview>> = _replies.asStateFlow()
+    private val requestedReplies = HashSet<Long>()
+
+    fun ensureReply(ref: ReplyRef) {
+        if (!requestedReplies.add(ref.messageId)) return
+        viewModelScope.launch {
+            val preview = repository.replyPreview(ref)
+            _replies.update { it + (ref.messageId to preview) }
+        }
+    }
 
     fun ensureSender(key: Long) {
         if (!requestedSenders.add(key)) return
@@ -139,6 +155,18 @@ class ChatViewModel(
             }
         }
         viewModelScope.launch {
+            repository.reactionEvents.collect { event ->
+                if (event.chatId != chatId) return@collect
+                _state.update { s ->
+                    s.copy(
+                        messages = s.messages.map {
+                            if (it.id == event.messageId) it.copy(reactions = event.reactions) else it
+                        },
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
             repository.readEvents.collect { event ->
                 if (event.chatId != chatId) return@collect
                 _state.update { s ->
@@ -184,12 +212,49 @@ class ChatViewModel(
         }
     }
 
-    fun send(text: String) {
+    /** Чаты для выбора адресата при пересылке. */
+    val chats get() = repository.chats
+
+    private fun action(notice: String? = null, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+                if (notice != null) _state.update { it.copy(error = notice) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Не удалось выполнить действие") }
+            }
+        }
+    }
+
+    /** Тап по реакции: если она уже моя — снимаем, иначе ставим. */
+    fun react(messageId: Long, emoji: String) {
+        val mine = _state.value.messages.firstOrNull { it.id == messageId }
+            ?.reactions?.any { it.emoji == emoji && it.chosen } == true
+        action { repository.react(chatId, messageId, emoji, remove = mine) }
+    }
+
+    /** Эмодзи-реакции, доступные для сообщения; пустой список — использовать набор по умолчанию. */
+    suspend fun availableReactions(messageId: Long): List<String> =
+        repository.availableReactions(chatId, messageId)
+
+    fun edit(messageId: Long, text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isNotEmpty()) action { repository.editText(chatId, messageId, trimmed) }
+    }
+
+    fun delete(messageId: Long) = action { repository.deleteMessage(chatId, messageId) }
+
+    fun pin(messageId: Long) = action("Сообщение закреплено") { repository.pinMessage(chatId, messageId) }
+
+    fun forward(messageId: Long, toChatId: Long) =
+        action("Сообщение переслано") { repository.forwardMessage(toChatId, chatId, messageId) }
+
+    fun send(text: String, replyToId: Long? = null) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
             try {
-                repository.sendText(chatId, trimmed)
+                repository.sendText(chatId, trimmed, replyToId)
                 // Режим призрака: сообщения читаем только когда пользователь сам что-то делает в чате.
                 if (settings.ghost.value.enabled && settings.ghost.value.readOnAction) {
                     val unread = _state.value.messages.filter { !it.isOutgoing }.take(50).map { it.id }

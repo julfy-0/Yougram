@@ -35,7 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Close
@@ -94,7 +94,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 
 enum class MainTab(val title: String, val icon: ImageVector) {
-    Contacts("Контакты", Icons.Filled.AccountCircle),
+    Contacts("Контакты", Icons.Filled.People),
     Calls("Звонки", Icons.Filled.Call),
     Chats("Чаты", Icons.Filled.ChatBubble),
     Settings("Настройки", Icons.Filled.Settings),
@@ -113,8 +113,8 @@ private val SearchButtonShape = RoundedCornerShape(20.dp)
 
 private const val BarsAnimationMillis = 260
 
-/** Длительность перехода между вкладками и подэкранами настроек. */
-private const val ScreenAnimationMillis = 300
+/** Длительность перехода между вкладками и подэкранами настроек (соответствует анимации чата). */
+private const val ScreenAnimationMillis = 320
 
 /**
  * Следит за прокруткой дочернего содержимого, ничего не потребляя: вниз по списку — прячем панели,
@@ -145,11 +145,12 @@ fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
     val chatPrefs by container.settings.chatPrefs.collectAsState()
     val backdrop = rememberBackdropState()
     val badgeOn by container.settings.badge.collectAsState()
+    val ownBanner by container.settings.banner.collectAsState()
     val badgeContext = LocalContext.current
-    LaunchedEffect(badgeOn) {
-        val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn) }.getOrDefault(false)
+    LaunchedEffect(badgeOn, ownBanner) {
+        val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn, ownBanner) }.getOrDefault(false)
         if (!ok && badgeOn) {
-            Toast.makeText(badgeContext, "Не удалось поставить метку Yougram в профиль", Toast.LENGTH_LONG).show()
+            Toast.makeText(badgeContext, "Не удалось обновить метку или баннер Yougram в профиле (проверьте длину «О себе»)", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -235,10 +236,10 @@ fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
                     }
                     val dir = if (forward) 1 else -1
                     (
-                            slideInHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { dir * it / 5 } +
+                            slideInHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { dir * it } +
                                     fadeIn(tween(ScreenAnimationMillis))
                             ).togetherWith(
-                            slideOutHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { -dir * it / 5 } +
+                            slideOutHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { -dir * it / 3 } +
                                     fadeOut(tween(ScreenAnimationMillis / 2)),
                         )
                 },
@@ -432,7 +433,8 @@ private fun FolderChip(text: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
     ) {
         Text(

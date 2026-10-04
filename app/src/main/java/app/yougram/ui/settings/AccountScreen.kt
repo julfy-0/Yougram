@@ -1,5 +1,6 @@
 package app.yougram.ui.settings
 
+import app.yougram.data.YougramBadge
 import android.content.Intent
 import android.os.Process
 import android.widget.Toast
@@ -84,7 +85,9 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
     // Локальные копии полей: правятся прямо в карточках, сохраняются при уходе из поля и с экрана.
     var first by remember(account?.firstName) { mutableStateOf(account?.firstName.orEmpty()) }
     var last by remember(account?.lastName) { mutableStateOf(account?.lastName.orEmpty()) }
-    var bio by remember(account?.bio) { mutableStateOf(account?.bio.orEmpty()) }
+    // Метка и баннер Yougram лежат в конце bio невидимыми символами: в поле их не показываем и при сохранении возвращаем.
+    val bioTail = YougramBadge.tail(account?.bio.orEmpty())
+    var bio by remember(account?.bio) { mutableStateOf(YougramBadge.strip(account?.bio.orEmpty())) }
 
     val flush by rememberUpdatedState {
         val a = account
@@ -92,7 +95,7 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
             if (first.isNotBlank() && (first.trim() != a.firstName || last.trim() != a.lastName)) {
                 viewModel.saveName(first, last)
             }
-            if (bio.trim() != a.bio) viewModel.saveBio(bio)
+            if (bio.trim() != YougramBadge.strip(a.bio)) viewModel.saveBio(bio)
         }
     }
     DisposableEffect(Unit) { onDispose { flush() } }
@@ -167,11 +170,11 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
             item {
                 InlineField(
                     value = bio,
-                    onValueChange = { if (it.length <= BIO_MAX_LENGTH) bio = it },
+                    onValueChange = { if (it.length <= BIO_MAX_LENGTH - bioTail.length) bio = it },
                     placeholder = "Расскажите о себе",
                     onFocusLost = { flush() },
                     singleLine = false,
-                    counter = BIO_MAX_LENGTH - bio.length,
+                    counter = BIO_MAX_LENGTH - bioTail.length - bio.length,
                 )
             }
         }

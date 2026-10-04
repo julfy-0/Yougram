@@ -24,17 +24,17 @@ class NTgCallsEngine : CallEngine {
 
     override val isAvailable: Boolean = true
 
-    val protocol: CallProtocol
-        get() {
+    override val protocol: CallProtocol?
+        get() = runCatching {
             val p = NTgCalls.getProtocol()
-            return CallProtocol(
+            CallProtocol(
                 udpP2p = p.udp_p2p,
                 udpReflector = p.udp_reflector,
                 minLayer = p.min_layer,
                 maxLayer = p.max_layer,
                 libraryVersions = p.library_versions.toTypedArray(),
             )
-        }
+        }.getOrNull()
 
     override fun start(
         userId: Long,

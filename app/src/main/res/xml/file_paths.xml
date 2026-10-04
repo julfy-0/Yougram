@@ -2,4 +2,5 @@
 <paths>
     <external-files-path name="tdlib_external" path="tdlib_files/" />
     <files-path name="tdlib_internal" path="tdlib_files/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

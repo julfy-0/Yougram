@@ -1,5 +1,6 @@
 package app.yougram.data
 
+import dev.g000sha256.tdl.dto.CallProtocol
 import dev.g000sha256.tdl.dto.CallStateReady
 
 /**
@@ -13,6 +14,9 @@ import dev.g000sha256.tdl.dto.CallStateReady
 interface CallEngine {
     /** true, если движок реально передаёт медиа. */
     val isAvailable: Boolean
+
+    /** Протокол, который поддерживает движок; null — использовать значения по умолчанию. */
+    val protocol: CallProtocol? get() = null
 
     fun start(userId: Long, state: CallStateReady, isOutgoing: Boolean, isVideo: Boolean, sendSignaling: (ByteArray) -> Unit)
     fun onSignalingData(data: ByteArray)

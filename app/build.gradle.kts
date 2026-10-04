@@ -19,15 +19,31 @@ android {
         applicationId = "app.yougram"
         minSdk = 31 // Android 12
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 5
+        versionName = "0.3.0"
 
         buildConfigField("int", "TG_API_ID", (localProps.getProperty("TG_API_ID") ?: "0"))
         buildConfigField("String", "TG_API_HASH", "\"${localProps.getProperty("TG_API_HASH") ?: ""}\"")
+        buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("UPDATE_URL") ?: ""}\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            val pass = localProps.getProperty("KS_PASS")
+            val keystore = rootProject.file("yougram.jks")
+            // Если ключа или пароля нет, подпись не настраиваем, чтобы не ломать debug-сборку.
+            if (pass != null && keystore.exists()) {
+                storeFile = keystore
+                storePassword = pass
+                keyAlias = "yougram"
+                keyPassword = pass
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

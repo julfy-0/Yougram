@@ -40,10 +40,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.yougram.BuildConfig
 import app.yougram.R
+import app.yougram.data.AppUpdater
+import app.yougram.data.UpdateState
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 
 @Composable
-fun AboutScreen(contentPadding: PaddingValues) {
+fun AboutScreen(contentPadding: PaddingValues, updater: AppUpdater) {
     val context = LocalContext.current
+    val update by updater.state.collectAsState()
+    LaunchedEffect(Unit) { updater.check() }
     val openUrl = { url: String ->
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -128,6 +136,48 @@ fun AboutScreen(contentPadding: PaddingValues) {
                         }
                     },
                 )
+            }
+        }
+
+        SectionLabel("Обновление")
+        SettingGroup {
+            item {
+                when (val u = update) {
+                    UpdateState.Idle, UpdateState.Checking -> SettingRow(
+                        title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
+                    )
+                    UpdateState.UpToDate -> SettingRow(
+                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
+                        value = "Проверить", onClick = { updater.check() },
+                    )
+                    is UpdateState.Available -> SettingRow(
+                        title = "Доступна версия ${u.info.versionName}",
+                        subtitle = u.info.notes.ifBlank { null },
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Скачать", onClick = { updater.download() },
+                    )
+                    is UpdateState.Downloading -> SettingRow(
+                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
+                        below = {
+                            LinearProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
+                        },
+                    )
+                    is UpdateState.Ready -> SettingRow(
+                        title = "Версия ${u.info.versionName} скачана",
+                        subtitle = "Нажмите, чтобы установить",
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Обновить",
+                        onClick = {
+                            if (!updater.install()) {
+                                Toast.makeText(context, "Разрешите установку из этого приложения и нажмите снова", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                    )
+                    is UpdateState.Error -> SettingRow(
+                        title = u.message, icon = Icons.Filled.SystemUpdate,
+                        value = "Повторить", onClick = { updater.check() },
+                    )
+                }
             }
         }
 

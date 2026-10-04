@@ -26,6 +26,8 @@ import dev.g000sha256.tdl.dto.InputDocument
 import dev.g000sha256.tdl.dto.InputFileLocal
 import dev.g000sha256.tdl.dto.InputMessageContent
 import dev.g000sha256.tdl.dto.InputMessageDocument
+import dev.g000sha256.tdl.dto.InputMessageReplyToMessage
+import dev.g000sha256.tdl.dto.ReactionTypeEmoji
 import dev.g000sha256.tdl.dto.InputMessagePhoto
 import dev.g000sha256.tdl.dto.InputMessageText
 import dev.g000sha256.tdl.dto.InputMessageVideoNote
@@ -36,6 +38,8 @@ import dev.g000sha256.tdl.dto.MessageAnimation
 import dev.g000sha256.tdl.dto.MessageCall
 import dev.g000sha256.tdl.dto.MessageContent
 import dev.g000sha256.tdl.dto.MessageDocument
+import dev.g000sha256.tdl.dto.MessageInteractionInfo
+import dev.g000sha256.tdl.dto.MessageReplyToMessage
 import dev.g000sha256.tdl.dto.MessagePhoto
 import dev.g000sha256.tdl.dto.MessageSenderChat
 import dev.g000sha256.tdl.dto.MessageSenderUser
@@ -81,6 +85,9 @@ data class ChatInfo(
     val isGroup: Boolean = false,
     val avatarFileId: Int? = null,
 )
+
+/** Вид чата для уведомлений и их фильтров. */
+enum class ChatKind { PRIVATE, GROUP, CHANNEL }
 
 /** Модель чата для UI. */
 data class ChatItem(
@@ -137,6 +144,18 @@ data class FileState(
     val active: Boolean = false,
 )
 
+/** Ссылка на сообщение, на которое отвечают. */
+data class ReplyRef(val chatId: Long, val messageId: Long)
+
+/** Превью оригинала для цитаты в пузыре. */
+data class ReplyPreview(val author: String, val text: String)
+
+/** Реакция под сообщением: сколько поставили и ставил ли я. */
+data class ReactionItem(val emoji: String, val count: Int, val chosen: Boolean)
+
+/** Реакции сообщения изменились (updateMessageInteractionInfo). */
+data class ReactionEvent(val chatId: Long, val messageId: Long, val reactions: List<ReactionItem>)
+
 /** Модель сообщения для UI. */
 data class MessageItem(
     val id: Long,
@@ -146,12 +165,17 @@ data class MessageItem(
     val isOutgoing: Boolean,
     val date: Int,
     val media: MediaItem? = null,
+    val call: CallItem? = null,
     /** Краткое описание для списка чатов: текст, а для медиа без подписи — тип. */
     val summary: String = text,
     /** Автор-пользователь (для фильтров и теневого бана); null — канал/анонимный админ. */
     val senderUserId: Long? = null,
     /** Автор-чат (канал или анонимный админ группы); null — автор пользователь. */
     val senderChatId: Long? = null,
+    /** Сообщение, на которое это — ответ; null, если не ответ. */
+    val reply: ReplyRef? = null,
+    /** Реакции под сообщением. */
+    val reactions: List<ReactionItem> = emptyList(),
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -253,6 +277,10 @@ class ChatRepository(
     private data class PendingSave(val chatId: Long, val name: String)
 
     private val metaCache = ConcurrentHashMap<Long, ChatMeta>()
+    private val kindCache = ConcurrentHashMap<Long, ChatKind>()
+
+    /** Сообщения, которые пользователь удаляет сам: шпион не должен оставлять их как «удалённые». */
+    private val selfDeleting = ConcurrentHashMap.newKeySet<Long>()
     private val senderCache = ConcurrentHashMap<Long, SenderInfo>()
     private val pendingSaves = ConcurrentHashMap<Int, PendingSave>()
 
@@ -265,9 +293,24 @@ class ChatRepository(
     private val _readEvents = MutableSharedFlow<ReadEvent>(extraBufferCapacity = 64)
     val readEvents: SharedFlow<ReadEvent> = _readEvents.asSharedFlow()
 
+    private val _reactionEvents = MutableSharedFlow<ReactionEvent>(extraBufferCapacity = 64)
+    val reactionEvents: SharedFlow<ReactionEvent> = _reactionEvents.asSharedFlow()
+
     private val _yougramUsers = MutableStateFlow<Set<Long>>(emptySet())
     /** Пользователи, у которых найдена метка Yougram. */
     val yougramUsers: StateFlow<Set<Long>> = _yougramUsers.asStateFlow()
+
+    private val _banners = MutableStateFlow<Map<Long, YougramBanner>>(emptyMap())
+    /** Баннеры профилей пользователей Yougram (userId -> баннер). */
+    val banners: StateFlow<Map<Long, YougramBanner>> = _banners.asStateFlow()
+
+    /** Обновляет метку и баннер пользователя по его актуальному bio. */
+    private fun noteBio(userId: Long, bio: String) {
+        val marked = YougramBadge.hasMarker(bio)
+        _yougramUsers.update { if (marked) it + userId else it - userId }
+        val banner = if (marked) YougramBadge.bannerOf(bio) else null
+        _banners.update { if (banner != null) it + (userId to banner) else it - userId }
+    }
 
     private val badgeChecked = ConcurrentHashMap.newKeySet<Long>()
     private val badgeLimiter = Semaphore(3)
@@ -285,33 +328,27 @@ class ChatRepository(
                     badgeChecked.remove(userId) // не получилось — попробуем позже
                     return@withPermit
                 }
-                if (YougramBadge.hasMarker(full.bio?.text.orEmpty())) {
-                    _yougramUsers.update { it + userId }
-                }
+                noteBio(userId, full.bio?.text.orEmpty())
             }
         }
     }
 
     /**
-     * Ставит или убирает метку в bio текущего пользователя.
-     * Возвращает true, если после записи состояние bio совпало с [enabled].
+     * Приводит хвост bio текущего пользователя к нужному виду: метка Yougram и, если задан, баннер
+     * (или ничего, если [enabled] выключен). Возвращает true, если после записи bio совпало с желаемым.
      */
-    suspend fun syncOwnBadge(enabled: Boolean): Boolean {
+    suspend fun syncOwnBadge(enabled: Boolean, banner: YougramBanner? = null): Boolean {
         val me = client.getMe().getOrThrow()
         val bio = client.getUserFullInfo(userId = me.id).getOrThrow().bio?.text.orEmpty()
-        val marked = YougramBadge.hasMarker(bio)
-        when {
-            enabled && !marked -> {
-                val newBio = YougramBadge.withMarker(bio)
-                if (newBio.length > YougramBadge.BIO_LIMIT) return false
-                client.setBio(bio = newBio).getOrThrow()
-            }
-            !enabled && marked -> client.setBio(bio = YougramBadge.strip(bio)).getOrThrow()
+        val desired = if (enabled) YougramBadge.MARKER + banner?.encode().orEmpty() else ""
+        if (YougramBadge.tail(bio) != desired) {
+            val newBio = YougramBadge.strip(bio) + desired
+            if (newBio.length > YougramBadge.BIO_LIMIT) return false
+            client.setBio(bio = newBio).getOrThrow()
         }
         val after = client.getUserFullInfo(userId = me.id).getOrThrow().bio?.text.orEmpty()
-        val ok = YougramBadge.hasMarker(after) == enabled
-        _yougramUsers.update { if (enabled && ok) it + me.id else it - me.id }
-        return ok
+        noteBio(me.id, after)
+        return YougramBadge.tail(after) == desired
     }
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
@@ -469,14 +506,23 @@ class ChatRepository(
                 onSpyMessage(item)
             }
         }
+        scope.launch {
+            client.messageInteractionInfoUpdates.collect { update ->
+                _reactionEvents.tryEmit(
+                    ReactionEvent(update.chatId, update.messageId, update.interactionInfo.toReactions()),
+                )
+            }
+        }
         // Режим шпиона: удаление, правки, прочтение, онлайн.
         scope.launch {
             client.deleteMessagesUpdates.collect { update ->
                 // fromCache — сообщения лишь выгружены из памяти TDLib, а не удалены.
                 if (!update.isPermanent || update.fromCache) return@collect
                 val ids = update.messageIds.toList()
-                val kept = if (settings.spyPrefs.value.saveDeleted) {
-                    io { spy.markDeleted(update.chatId, ids, now()) }
+                val own = ids.filter { selfDeleting.remove(it) }.toSet()
+                val rest = ids.filterNot { it in own }
+                val kept = if (settings.spyPrefs.value.saveDeleted && rest.isNotEmpty()) {
+                    io { spy.markDeleted(update.chatId, rest, now()) }
                 } else emptySet()
                 _deletions.tryEmit(DeleteEvent(update.chatId, kept, ids.toSet() - kept))
             }
@@ -484,7 +530,7 @@ class ChatRepository(
         scope.launch {
             client.messageContentUpdates.collect { update ->
                 val content = update.newContent
-                val text = bodyOf(content)
+                val text = bodyOf(content, isOutgoing = false)
                 val media = content.toMedia()
                 val summary = summaryOf(text, media)
                 val at = now()
@@ -787,11 +833,11 @@ class ChatRepository(
 
     fun incomingFor(chatId: Long): Flow<MessageItem> = newMessages.filter { it.chatId == chatId }
 
-    suspend fun sendText(chatId: Long, text: String) {
+    suspend fun sendText(chatId: Long, text: String, replyToId: Long? = null) {
         client.sendMessage(
             chatId = chatId,
             topicId = null,
-            replyTo = null,
+            replyTo = replyToId?.let { InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "") },
             options = null,
             replyMarkup = null,
             inputMessageContent = InputMessageText(
@@ -858,12 +904,13 @@ class ChatRepository(
                 val full = (client.getUserFullInfo(userId = type.userId) as? TdlResult.Success)?.result
                 val names = user.usernames?.activeUsernames?.toList().orEmpty()
                 val bot = user.type is UserTypeBot
+                if (!bot && full != null) noteBio(user.id, full.bio?.text.orEmpty())
                 ProfileDetails(
                     kind = if (bot) ProfileKind.BOT else ProfileKind.USER,
                     chatId = chatId,
                     title = chat.title,
                     subtitle = if (bot) "бот" else statusText(user),
-                    description = full?.bio?.text.orEmpty(),
+                    description = YougramBadge.strip(full?.bio?.text.orEmpty()),
                     phone = user.phoneNumber.takeIf { it.isNotEmpty() }?.let { "+$it" },
                     username = names.firstOrNull(),
                     otherUsernames = names.drop(1),
@@ -929,6 +976,103 @@ class ChatRepository(
     /** Последние сообщения чата для вкладок профиля (медиа, файлы, ссылки); фильтрация — на стороне UI. */
     suspend fun sharedMessages(chatId: Long, limit: Int = 200): List<MessageItem> =
         fetchHistory(chatId, fromMessageId = 0L, limit = limit).sortedByDescending { it.id }
+
+    /** Ставит реакцию или, если [remove], снимает свою. */
+    suspend fun react(chatId: Long, messageId: Long, emoji: String, remove: Boolean = false) {
+        val type = ReactionTypeEmoji(emoji = emoji)
+        if (remove) {
+            client.removeMessageReaction(chatId = chatId, messageId = messageId, reactionType = type).getOrThrow()
+        } else {
+            client.addMessageReaction(
+                chatId = chatId,
+                messageId = messageId,
+                reactionType = type,
+                isBig = false,
+                updateRecentReactions = true,
+            ).getOrThrow()
+        }
+    }
+
+    /** Эмодзи-реакции, доступные для этого сообщения; пустой список — не удалось получить. */
+    suspend fun availableReactions(chatId: Long, messageId: Long): List<String> = runCatching {
+        val r = client.getMessageAvailableReactions(chatId = chatId, messageId = messageId, rowSize = 8).getOrThrow()
+        (r.topReactions.orEmpty().filterNotNull() +
+                r.recentReactions.orEmpty().filterNotNull() +
+                r.popularReactions.orEmpty().filterNotNull())
+            .filter { !it.needsPremium }
+            .mapNotNull { (it.type as? ReactionTypeEmoji)?.emoji }
+            .distinct()
+    }.getOrDefault(emptyList())
+
+    /** Вид чата (личный, группа, канал); при ошибке считается личным. */
+    suspend fun chatKind(chatId: Long): ChatKind {
+        kindCache[chatId]?.let { return it }
+        val kind = runCatching {
+            when (val type = client.getChat(chatId = chatId).getOrThrow().type) {
+                is ChatTypeBasicGroup -> ChatKind.GROUP
+                is ChatTypeSupergroup -> if (type.isChannel) ChatKind.CHANNEL else ChatKind.GROUP
+                else -> ChatKind.PRIVATE
+            }
+        }.getOrNull() ?: return ChatKind.PRIVATE
+        kindCache[chatId] = kind
+        return kind
+    }
+
+    /** Для уведомлений: имя автора и краткий текст сообщения. */
+    suspend fun describeForNotification(message: Message): Pair<String, String> {
+        val item = message.toItem()
+        val name = item.senderKey?.let { sender(it)?.name }.orEmpty()
+        return name to item.summary.ifEmpty { "Сообщение" }
+    }
+
+    /** Автор и текст оригинала для цитаты в пузыре. */
+    suspend fun replyPreview(ref: ReplyRef): ReplyPreview = runCatching {
+        val item = client.getMessage(chatId = ref.chatId, messageId = ref.messageId).getOrThrow().toItem()
+        val author = if (item.isOutgoing) "Вы" else item.senderKey?.let { sender(it)?.name }.orEmpty()
+        ReplyPreview(author, item.summary.ifEmpty { "Сообщение" })
+    }.getOrDefault(ReplyPreview("", "Сообщение недоступно"))
+
+    suspend fun editText(chatId: Long, messageId: Long, text: String) {
+        client.editMessageText(
+            chatId = chatId,
+            messageId = messageId,
+            replyMarkup = null,
+            inputMessageContent = InputMessageText(
+                text = FormattedText(text = text, entities = emptyArray()),
+                linkPreviewOptions = null,
+                clearDraft = false,
+            ),
+        ).getOrThrow()
+    }
+
+    /** Удаляет сообщение у всех (в личных чатах и там, где позволяют права). */
+    suspend fun deleteMessage(chatId: Long, messageId: Long) {
+        selfDeleting.add(messageId)
+        val result = client.deleteMessages(chatId = chatId, messageIds = longArrayOf(messageId), revoke = true)
+        if (result is dev.g000sha256.tdl.TdlResult.Failure) selfDeleting.remove(messageId)
+        result.getOrThrow()
+    }
+
+    suspend fun pinMessage(chatId: Long, messageId: Long) {
+        client.pinChatMessage(
+            chatId = chatId,
+            messageId = messageId,
+            disableNotification = false,
+            onlyForSelf = false,
+        ).getOrThrow()
+    }
+
+    suspend fun forwardMessage(toChatId: Long, fromChatId: Long, messageId: Long) {
+        client.forwardMessages(
+            chatId = toChatId,
+            topicId = null,
+            fromChatId = fromChatId,
+            messageIds = longArrayOf(messageId),
+            options = null,
+            sendCopy = false,
+            removeCaption = false,
+        ).getOrThrow()
+    }
 
     private suspend fun sendContent(chatId: Long, content: InputMessageContent) {
         client.sendMessage(
@@ -1213,7 +1357,7 @@ class ChatRepository(
             .sortedByDescending { it.order }
     }
 
-    private fun bodyOf(c: MessageContent): String = when (c) {
+    private fun bodyOf(c: MessageContent, isOutgoing: Boolean): String = when (c) {
         is MessageText -> c.text.text
         is MessagePhoto -> c.caption.text
         is MessageVideo -> c.caption.text
@@ -1221,7 +1365,27 @@ class ChatRepository(
         is MessageDocument -> c.caption.text
         is MessageVoiceNote -> c.caption.text
         is MessageVideoNote -> ""
+        is MessageCall -> formatCallMessage(c, isOutgoing)
         else -> typeLabel(c)
+    }
+
+    private fun formatCallMessage(call: MessageCall, isOutgoing: Boolean): String {
+        val reason = call.discardReason
+        val typeStr = if (call.isVideo) "видеозвонок" else "звонок"
+        val dur = if (call.duration > 0) " (${formatCallDuration(call.duration)})" else ""
+        return when {
+            reason is CallDiscardReasonMissed -> "Пропущенный $typeStr"
+            reason is CallDiscardReasonDeclined -> "Отклонённый $typeStr"
+            isOutgoing -> if (call.duration > 0) "Исходящий $typeStr$dur" else "Исходящий $typeStr (без ответа)"
+            else -> "Входящий $typeStr$dur"
+        }
+    }
+
+    private fun formatCallDuration(seconds: Int): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
 
     /** Человекочитаемое название типа сообщения без отдельной поддержки в UI. */
@@ -1260,10 +1424,36 @@ class ChatRepository(
         else -> media.kind.label
     }
 
+    private fun MessageInteractionInfo?.toReactions(): List<ReactionItem> =
+        this?.reactions?.reactions.orEmpty().filterNotNull().mapNotNull { r ->
+            val type = r.type as? ReactionTypeEmoji ?: return@mapNotNull null
+            ReactionItem(type.emoji, r.totalCount, r.isChosen)
+        }
+
     private fun Message.toItem(): MessageItem {
         val c = content
         val media = c.toMedia()
-        val body = bodyOf(c)
+        val callItem = (c as? MessageCall)?.let { call ->
+            val reason = call.discardReason
+            val kind = when {
+                reason is CallDiscardReasonMissed -> CallKind.MISSED
+                reason is CallDiscardReasonDeclined -> CallKind.DECLINED
+                isOutgoing -> CallKind.OUTGOING
+                else -> CallKind.INCOMING
+            }
+            CallItem(
+                messageId = id,
+                chatId = chatId,
+                title = "",
+                avatarFileId = null,
+                isOutgoing = isOutgoing,
+                isVideo = call.isVideo,
+                kind = kind,
+                duration = call.duration,
+                date = date,
+            )
+        }
+        val body = bodyOf(c, isOutgoing)
         return MessageItem(
             id = id,
             chatId = chatId,
@@ -1271,9 +1461,14 @@ class ChatRepository(
             isOutgoing = isOutgoing,
             date = date,
             media = media,
+            call = callItem,
             summary = summaryOf(body, media),
             senderUserId = (senderId as? MessageSenderUser)?.userId,
             senderChatId = (senderId as? MessageSenderChat)?.chatId,
+            reply = (replyTo as? MessageReplyToMessage)
+                ?.takeIf { it.messageId != 0L }
+                ?.let { ReplyRef(it.chatId, it.messageId) },
+            reactions = interactionInfo.toReactions(),
         )
     }
 

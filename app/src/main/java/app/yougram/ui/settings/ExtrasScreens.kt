@@ -1,5 +1,7 @@
 package app.yougram.ui.settings
 
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Language
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,6 +40,7 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
     val ghost by settings.ghost.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
     val badge by settings.badge.collectAsState()
+    val inAppBrowser by settings.inAppBrowser.collectAsState()
     SettingsPageColumn(contentPadding) {
         SectionLabel("Категории")
         SettingGroup {
@@ -72,6 +75,23 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
                     { v -> settings.setBadge(v) },
                     subtitle = "Ставит метку в «О себе»: другие пользователи Yougram увидят значок у вашего имени",
                     icon = Icons.Filled.VerifiedUser,
+                )
+            }
+            item {
+                SettingRow(
+                    "Баннер профиля",
+                    subtitle = "Виден только пользователям Yougram",
+                    icon = Icons.Filled.Image,
+                    onClick = { onNavigate(SettingsPage.Banner) },
+                )
+            }
+            item {
+                SwitchRow(
+                    "Встроенный браузер",
+                    inAppBrowser,
+                    { v -> settings.setInAppBrowser(v) },
+                    subtitle = "Ссылки из чатов открываются внутри Yougram, а не во внешнем браузере",
+                    icon = Icons.Filled.Language,
                 )
             }
         }

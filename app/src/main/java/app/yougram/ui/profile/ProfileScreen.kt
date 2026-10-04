@@ -1,5 +1,8 @@
 package app.yougram.ui.profile
 
+import app.yougram.ui.LocalOpenLink
+import app.yougram.ui.LocalYougramBanners
+import app.yougram.ui.ProfileBanner
 import app.yougram.ui.glass.SystemBarsGlass
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -301,12 +304,34 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel) 
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        FileAvatar(
-            title = details.title,
-            fileId = details.avatarFileId,
-            fileState = viewModel::fileState,
-            size = 96.dp,
-        )
+        val banner = if (details.kind == ProfileKind.USER) LocalYougramBanners.current[details.id] else null
+        if (banner != null) {
+            // Баннер видят только пользователи Yougram; аватар наполовину заходит на него.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                ProfileBanner(banner, Modifier.fillMaxWidth().height(120.dp))
+                Box(
+                    Modifier
+                        .padding(top = 72.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(4.dp),
+                ) {
+                    FileAvatar(
+                        title = details.title,
+                        fileId = details.avatarFileId,
+                        fileState = viewModel::fileState,
+                        size = 96.dp,
+                    )
+                }
+            }
+        } else {
+            FileAvatar(
+                title = details.title,
+                fileId = details.avatarFileId,
+                fileState = viewModel::fileState,
+                size = 96.dp,
+            )
+        }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Text(
@@ -482,6 +507,7 @@ private fun FileRow(media: MediaItem, context: Context) {
 
 @Composable
 private fun LinkRow(message: MessageItem, context: Context) {
+    val openLink = LocalOpenLink.current
     val url = UrlRegex.find(message.text)?.value.orEmpty()
     val rest = message.text.replace(url, "").trim()
     SettingGroup {
@@ -489,7 +515,7 @@ private fun LinkRow(message: MessageItem, context: Context) {
             SettingRow(
                 title = url,
                 subtitle = rest.ifEmpty { null },
-                onClick = { openUrl(context, url) },
+                onClick = { openLink(url) },
             )
         }
     }

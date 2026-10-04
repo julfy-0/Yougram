@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.ChatBubble
@@ -108,6 +108,7 @@ enum class SettingsPage(val title: String) {
     MessageFilters("Фильтры сообщений"),
     SharedFilters("Общие фильтры"),
     ShadowBan("Теневой бан"),
+    Banner("Баннер профиля"),
     Premium("Telegram Premium"),
     Stars("Звёзды Telegram"),
     Business("Telegram для бизнеса");
@@ -116,7 +117,7 @@ enum class SettingsPage(val title: String) {
     val parent: SettingsPage
         get() = when (this) {
             Blocked, Websites -> Privacy
-            Ghost, Spy, MessageFilters -> Extras
+            Ghost, Spy, MessageFilters, Banner -> Extras
             SharedFilters, ShadowBan -> MessageFilters
             else -> Home
         }
@@ -177,7 +178,7 @@ fun SettingsHomeScreen(
         }
 
         SettingGroup {
-            item { SettingRow("Аккаунт", subtitle = "Номер телефона, имя пользователя", icon = Icons.Filled.AccountCircle, onClick = { onNavigate(SettingsPage.Account) }) }
+            item { SettingRow("Аккаунт", subtitle = "Номер телефона, имя пользователя", icon = Icons.Filled.Person, onClick = { onNavigate(SettingsPage.Account) }) }
             item { SettingRow("Настройки чатов", subtitle = "Размер текста, анимации", icon = Icons.Filled.ChatBubble, onClick = { onNavigate(SettingsPage.ChatSettings) }) }
             item { SettingRow("Конфиденциальность", subtitle = "Кто видит ваши данные", icon = Icons.Filled.VpnKey, onClick = { onNavigate(SettingsPage.Privacy) }) }
             item { SettingRow("Безопасность", subtitle = "Пин-код, графический ключ, отпечаток", icon = Icons.Filled.Lock, onClick = { onNavigate(SettingsPage.Security) }) }

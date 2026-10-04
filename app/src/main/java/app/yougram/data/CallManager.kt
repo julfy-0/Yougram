@@ -1,5 +1,6 @@
 package app.yougram.data
 
+import android.content.Context
 import dev.g000sha256.tdl.TdlResult
 import dev.g000sha256.tdl.dto.Call
 import dev.g000sha256.tdl.dto.CallProtocol
@@ -40,6 +41,8 @@ class CallManager(
     private val telegram: TelegramClient,
     private val scope: CoroutineScope,
     private val chats: ChatRepository,
+    private val appContext: Context,
+    private val audio: CallAudio,
 ) {
     private val client get() = telegram.client
 
@@ -50,13 +53,23 @@ class CallManager(
     private val _call = MutableStateFlow<ActiveCall?>(null)
     val call: StateFlow<ActiveCall?> = _call.asStateFlow()
 
-    private val protocol = CallProtocol(
+    /** Запасной протокол, если движок не сообщил свой. */
+    private val fallbackProtocol = CallProtocol(
         udpP2p = true,
         udpReflector = true,
         minLayer = 65,
         maxLayer = 92,
         libraryVersions = arrayOf("2.4.4", "5.0.0", "7.0.0", "9.0.0", "11.0.0"),
     )
+
+    /** Версии библиотеки должны совпадать с теми, что реально умеет движок, иначе собеседник выберет несовместимую. */
+    private val protocol: CallProtocol get() = engine.protocol ?: fallbackProtocol
+
+    /** Текущий маршрут звука и наличие Bluetooth-гарнитуры. */
+    val route: StateFlow<AudioRoute> = audio.route
+    val bluetoothAvailable: StateFlow<Boolean> = audio.bluetoothAvailable
+
+    fun cycleRoute() = audio.cycle()
 
     fun start() {
         scope.launch {
@@ -93,6 +106,7 @@ class CallManager(
         val c = _call.value ?: return
         val duration = c.startedAtMillis?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
         engine.stop()
+        audio.stop()
         _call.update { it?.copy(phase = CallPhase.ENDED, message = "Звонок завершён") }
         scope.launch {
             client.discardCall(
@@ -124,6 +138,7 @@ class CallManager(
         }
         val base = current ?: run {
             val info = runCatching { chats.userCardInfo(call.userId) }.getOrNull()
+            CallService.start(appContext)
             ActiveCall(
                 id = call.id,
                 userId = call.userId,
@@ -150,6 +165,7 @@ class CallManager(
                     message = if (engine.isAvailable) null else "Медиа-движок не подключён: звука и видео нет",
                 )
                 if (first) {
+                    audio.start(call.isVideo)
                     engine.start(call.userId, state, call.isOutgoing, call.isVideo) { data ->
                         scope.launch { client.sendCallSignalingData(callId = call.id, data = data) }
                     }
@@ -164,6 +180,7 @@ class CallManager(
 
     private suspend fun finish(base: ActiveCall, text: String) {
         engine.stop()
+        audio.stop()
         _call.value = base.copy(phase = CallPhase.ENDED, message = text)
         delay(1200)
         if (_call.value?.id == base.id) _call.value = null

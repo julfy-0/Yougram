@@ -9,3 +9,4 @@
 .externalNativeBuild/
 .cxx/
 *.zip
+.yougram-updates-json

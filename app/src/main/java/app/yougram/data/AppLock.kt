@@ -30,7 +30,7 @@ data class LockSettings(
     /** Через сколько секунд в фоне блокировать приложение; 0 — сразу. */
     val autoLockSeconds: Int = 0,
     /** Скрывать содержимое в «Недавних» и запрещать скриншоты (FLAG_SECURE). */
-    val secureScreen: Boolean = true,
+    val secureScreen: Boolean = false,
 )
 
 sealed interface VerifyResult {
@@ -71,7 +71,7 @@ class AppLock(context: Context) {
             type = type,
             biometric = type != LockType.None && prefs.getBoolean(KEY_BIOMETRIC, false),
             autoLockSeconds = prefs.getInt(KEY_AUTO_LOCK, 0),
-            secureScreen = prefs.getBoolean(KEY_SECURE, true),
+            secureScreen = prefs.getBoolean(KEY_SECURE, false),
         )
     }
 
@@ -250,7 +250,7 @@ class AppLock(context: Context) {
         const val KEY_HASH = "hash"
         const val KEY_BIOMETRIC = "biometric"
         const val KEY_AUTO_LOCK = "auto_lock_seconds"
-        const val KEY_SECURE = "secure_screen"
+        const val KEY_SECURE = "secure_screen_v2"
         const val KEY_FAILED = "failed_attempts"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
     }

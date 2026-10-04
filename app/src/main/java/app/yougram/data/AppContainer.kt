@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Простой ручной DI-контейнер: один TDLib-клиент на всё приложение. */
 class AppContainer(private val context: Context) {
@@ -15,13 +16,21 @@ class AppContainer(private val context: Context) {
     val telegram = TelegramClient(context.applicationContext, appScope)
     val authRepository = AuthRepository(telegram)
     val spy = SpyStore(context.applicationContext)
+    val updater = AppUpdater(context.applicationContext, appScope)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext)
     val accountRepository = AccountRepository(telegram)
-    val callManager = CallManager(telegram, appScope, chatRepository)
+    val callAudio = CallAudio(context.applicationContext)
+    val notificationCenter = NotificationCenter(context.applicationContext, telegram, appScope, chatRepository, settings)
+    val callManager = CallManager(telegram, appScope, chatRepository, context.applicationContext, callAudio)
+        .also { it.engine = NTgCallsEngine() }
+
+    /** Чат, который нужно открыть по тапу на уведомление; навигация сбрасывает значение после открытия. */
+    val pendingOpenChat = MutableStateFlow<Long?>(null)
 
     fun start() {
         telegram.start()
         chatRepository.start()
+        notificationCenter.start()
         callManager.start()
     }
 }

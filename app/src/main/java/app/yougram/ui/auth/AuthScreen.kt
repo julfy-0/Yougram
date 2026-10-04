@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -32,63 +33,68 @@ fun AuthScreen(viewModel: AuthViewModel) {
     val step by viewModel.step.collectAsState()
     val ui by viewModel.ui.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
     ) {
-        Text("Yougram", style = MaterialTheme.typography.displaySmall)
-        Spacer(Modifier.height(32.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Yougram", style = MaterialTheme.typography.displaySmall)
+            Spacer(Modifier.height(32.dp))
 
-        when (val s = step) {
-            AuthStep.Loading, AuthStep.Ready -> CircularProgressIndicator()
+            when (val s = step) {
+                AuthStep.Loading, AuthStep.Ready -> CircularProgressIndicator()
 
-            AuthStep.MissingCredentials -> Text(
-                "Не заданы TG_API_ID и TG_API_HASH.\n\n" +
-                    "1. Получите их на my.telegram.org (API development tools).\n" +
-                    "2. Впишите в файл local.properties в корне проекта:\n" +
-                    "TG_API_ID=123456\nTG_API_HASH=abcdef...\n" +
-                    "3. Пересоберите и запустите приложение.",
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+                AuthStep.MissingCredentials -> Text(
+                    "Не заданы TG_API_ID и TG_API_HASH.\n\n" +
+                        "1. Получите их на my.telegram.org (API development tools).\n" +
+                        "2. Впишите в файл local.properties в корне проекта:\n" +
+                        "TG_API_ID=123456\nTG_API_HASH=abcdef...\n" +
+                        "3. Пересоберите и запустите приложение.",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
 
-            AuthStep.EnterPhone -> InputStep(
-                title = "Введите номер телефона",
-                label = "Номер (например, +380...)",
-                keyboardType = KeyboardType.Phone,
-                busy = ui.busy,
-                onSubmit = viewModel::submitPhone,
-            )
+                AuthStep.EnterPhone -> InputStep(
+                    title = "Введите номер телефона",
+                    label = "Номер (например, +380...)",
+                    keyboardType = KeyboardType.Phone,
+                    busy = ui.busy,
+                    onSubmit = viewModel::submitPhone,
+                )
 
-            is AuthStep.EnterCode -> InputStep(
-                title = "Введите код из Telegram",
-                label = "Код",
-                keyboardType = KeyboardType.Number,
-                busy = ui.busy,
-                onSubmit = viewModel::submitCode,
-            )
+                is AuthStep.EnterCode -> InputStep(
+                    title = "Введите код из Telegram",
+                    label = "Код",
+                    keyboardType = KeyboardType.Number,
+                    busy = ui.busy,
+                    onSubmit = viewModel::submitCode,
+                )
 
-            is AuthStep.EnterPassword -> InputStep(
-                title = "Облачный пароль (2FA)",
-                label = if (s.hint.isNotEmpty()) "Пароль (подсказка: ${s.hint})" else "Пароль",
-                keyboardType = KeyboardType.Password,
-                secret = true,
-                busy = ui.busy,
-                onSubmit = viewModel::submitPassword,
-            )
+                is AuthStep.EnterPassword -> InputStep(
+                    title = "Облачный пароль (2FA)",
+                    label = if (s.hint.isNotEmpty()) "Пароль (подсказка: ${s.hint})" else "Пароль",
+                    keyboardType = KeyboardType.Password,
+                    secret = true,
+                    busy = ui.busy,
+                    onSubmit = viewModel::submitPassword,
+                )
 
-            is AuthStep.Unsupported -> Text(
-                "Этот способ входа (${s.description}) пока не поддерживается.",
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-        }
+                is AuthStep.Unsupported -> Text(
+                    "Этот способ входа (${s.description}) пока не поддерживается.",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
 
-        ui.error?.let {
-            Spacer(Modifier.height(16.dp))
-            Text(it, color = MaterialTheme.colorScheme.error)
+            ui.error?.let {
+                Spacer(Modifier.height(16.dp))
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
