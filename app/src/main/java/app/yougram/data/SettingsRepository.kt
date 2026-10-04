@@ -35,9 +35,23 @@ data class NotificationPrefs(
     val privateChats: Boolean = true,
     val groups: Boolean = true,
     val channels: Boolean = true,
+    val stories: Boolean = true,
+    val reactions: Boolean = true,
+    val callVibration: Int = 0,
+    val ringtone: Int = 0,
+    val showCounter: Boolean = true,
+    val countMuted: Boolean = false,
+    val countMessages: Boolean = true,
     val preview: Boolean = true,
     val sound: Boolean = true,
     val vibration: Boolean = true,
+    val chatSound: Boolean = true,
+    val popups: Boolean = true,
+    val contactJoined: Boolean = false,
+    val pinnedMessages: Boolean = true,
+    val restartOnClose: Boolean = true,
+    val backgroundConnection: Boolean = true,
+    val repeatMinutes: Int = 60,
 )
 
 enum class SwipeAction(val label: String) {
@@ -98,12 +112,23 @@ data class PrivacyPrefs(
     val linkPreview: Boolean = false,
 )
 
-/** Автозагрузка медиа. */
+/** Данные и память: автозагрузка, сохранение в галерею, стриминг, экономия трафика в звонках, прокси. */
 data class DataPrefs(
-    val autoPhotos: Boolean = true,
-    val autoVideos: Boolean = false,
-    val autoFiles: Boolean = false,
-    val onlyWifi: Boolean = true,
+    val autoMobile: Boolean = true,
+    val autoWifi: Boolean = true,
+    val autoRoaming: Boolean = true,
+    val saveToGalleryPrivate: Boolean = false,
+    val saveToGalleryGroups: Boolean = false,
+    val saveToGalleryChannels: Boolean = false,
+    val streamMedia: Boolean = true,
+    val streamMkv: Boolean = false,
+    val streamAll: Boolean = true,
+    /** 0 — никогда, 1 — только в роуминге, 2 — всегда. */
+    val callsDataSaving: Int = 1,
+    val proxyServer: String = "",
+    val proxyPort: String = "",
+    val proxyUser: String = "",
+    val proxyPass: String = "",
 )
 
 class SettingsRepository(context: Context) {
@@ -158,16 +183,30 @@ class SettingsRepository(context: Context) {
     }
 
     // Уведомления.
-    private val _notifications = MutableStateFlow(
-        NotificationPrefs(
-            privateChats = prefs.getBoolean("n_private", true),
-            groups = prefs.getBoolean("n_groups", true),
-            channels = prefs.getBoolean("n_channels", true),
-            preview = prefs.getBoolean("n_preview", true),
-            sound = prefs.getBoolean("n_sound", true),
-            vibration = prefs.getBoolean("n_vibration", true),
-        )
+    private fun loadNotifications() = NotificationPrefs(
+        privateChats = prefs.getBoolean("n_private", true),
+        groups = prefs.getBoolean("n_groups", true),
+        channels = prefs.getBoolean("n_channels", true),
+        stories = prefs.getBoolean("n_stories", true),
+        reactions = prefs.getBoolean("n_reactions", true),
+        callVibration = prefs.getInt("n_call_vibration", 0),
+        ringtone = prefs.getInt("n_ringtone", 0),
+        showCounter = prefs.getBoolean("n_show_counter", true),
+        countMuted = prefs.getBoolean("n_count_muted", false),
+        countMessages = prefs.getBoolean("n_count_messages", true),
+        preview = prefs.getBoolean("n_preview", true),
+        sound = prefs.getBoolean("n_sound", true),
+        vibration = prefs.getBoolean("n_vibration", true),
+        chatSound = prefs.getBoolean("n_chat_sound", true),
+        popups = prefs.getBoolean("n_popups", true),
+        contactJoined = prefs.getBoolean("n_contact_joined", false),
+        pinnedMessages = prefs.getBoolean("n_pinned", true),
+        restartOnClose = prefs.getBoolean("n_restart", true),
+        backgroundConnection = prefs.getBoolean("n_background", true),
+        repeatMinutes = prefs.getInt("n_repeat", 60),
     )
+
+    private val _notifications = MutableStateFlow(loadNotifications())
     val notifications: StateFlow<NotificationPrefs> = _notifications.asStateFlow()
 
     fun updateNotifications(transform: (NotificationPrefs) -> NotificationPrefs) {
@@ -177,11 +216,27 @@ class SettingsRepository(context: Context) {
             .putBoolean("n_private", n.privateChats)
             .putBoolean("n_groups", n.groups)
             .putBoolean("n_channels", n.channels)
+            .putBoolean("n_stories", n.stories)
+            .putBoolean("n_reactions", n.reactions)
+            .putInt("n_call_vibration", n.callVibration)
+            .putInt("n_ringtone", n.ringtone)
+            .putBoolean("n_show_counter", n.showCounter)
+            .putBoolean("n_count_muted", n.countMuted)
+            .putBoolean("n_count_messages", n.countMessages)
             .putBoolean("n_preview", n.preview)
             .putBoolean("n_sound", n.sound)
             .putBoolean("n_vibration", n.vibration)
+            .putBoolean("n_chat_sound", n.chatSound)
+            .putBoolean("n_popups", n.popups)
+            .putBoolean("n_contact_joined", n.contactJoined)
+            .putBoolean("n_pinned", n.pinnedMessages)
+            .putBoolean("n_restart", n.restartOnClose)
+            .putBoolean("n_background", n.backgroundConnection)
+            .putInt("n_repeat", n.repeatMinutes)
             .apply()
     }
+
+    fun resetNotifications() = updateNotifications { NotificationPrefs() }
 
     // Настройки чатов.
     private val _chatPrefs = MutableStateFlow(
@@ -253,13 +308,23 @@ class SettingsRepository(context: Context) {
             .apply()
     }
 
-    // Автозагрузка медиа.
+    // Данные и память.
     private val _dataPrefs = MutableStateFlow(
         DataPrefs(
-            autoPhotos = prefs.getBoolean("d_photos", true),
-            autoVideos = prefs.getBoolean("d_videos", false),
-            autoFiles = prefs.getBoolean("d_files", false),
-            onlyWifi = prefs.getBoolean("d_wifi", true),
+            autoMobile = prefs.getBoolean("d_auto_mobile", true),
+            autoWifi = prefs.getBoolean("d_auto_wifi", true),
+            autoRoaming = prefs.getBoolean("d_auto_roaming", true),
+            saveToGalleryPrivate = prefs.getBoolean("d_gallery_private", false),
+            saveToGalleryGroups = prefs.getBoolean("d_gallery_groups", false),
+            saveToGalleryChannels = prefs.getBoolean("d_gallery_channels", false),
+            streamMedia = prefs.getBoolean("d_stream_media", true),
+            streamMkv = prefs.getBoolean("d_stream_mkv", false),
+            streamAll = prefs.getBoolean("d_stream_all", true),
+            callsDataSaving = prefs.getInt("d_calls_saving", 1),
+            proxyServer = prefs.getString("d_proxy_server", "").orEmpty(),
+            proxyPort = prefs.getString("d_proxy_port", "").orEmpty(),
+            proxyUser = prefs.getString("d_proxy_user", "").orEmpty(),
+            proxyPass = prefs.getString("d_proxy_pass", "").orEmpty(),
         )
     )
     val dataPrefs: StateFlow<DataPrefs> = _dataPrefs.asStateFlow()
@@ -268,10 +333,20 @@ class SettingsRepository(context: Context) {
         val d = transform(_dataPrefs.value)
         _dataPrefs.value = d
         prefs.edit()
-            .putBoolean("d_photos", d.autoPhotos)
-            .putBoolean("d_videos", d.autoVideos)
-            .putBoolean("d_files", d.autoFiles)
-            .putBoolean("d_wifi", d.onlyWifi)
+            .putBoolean("d_auto_mobile", d.autoMobile)
+            .putBoolean("d_auto_wifi", d.autoWifi)
+            .putBoolean("d_auto_roaming", d.autoRoaming)
+            .putBoolean("d_gallery_private", d.saveToGalleryPrivate)
+            .putBoolean("d_gallery_groups", d.saveToGalleryGroups)
+            .putBoolean("d_gallery_channels", d.saveToGalleryChannels)
+            .putBoolean("d_stream_media", d.streamMedia)
+            .putBoolean("d_stream_mkv", d.streamMkv)
+            .putBoolean("d_stream_all", d.streamAll)
+            .putInt("d_calls_saving", d.callsDataSaving)
+            .putString("d_proxy_server", d.proxyServer)
+            .putString("d_proxy_port", d.proxyPort)
+            .putString("d_proxy_user", d.proxyUser)
+            .putString("d_proxy_pass", d.proxyPass)
             .apply()
     }
 

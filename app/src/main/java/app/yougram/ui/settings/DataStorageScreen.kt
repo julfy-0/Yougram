@@ -1,62 +1,191 @@
 package app.yougram.ui.settings
 
+import android.net.TrafficStats
+import android.os.Process
 import android.text.format.Formatter
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import app.yougram.data.SettingsRepository
+
+private val CallsSavingOptions = listOf("Никогда", "Только в роуминге", "Всегда")
+
+private enum class DataDialog { ClearCache, ResetAutoDownload, CallsSaving, Proxy, Drafts }
+
+private fun yesNo(value: Boolean) = if (value) "Да" else "Нет"
+
+private fun appTrafficBytes(): Long {
+    val rx = TrafficStats.getUidRxBytes(Process.myUid())
+    val tx = TrafficStats.getUidTxBytes(Process.myUid())
+    val unsupported = TrafficStats.UNSUPPORTED.toLong()
+    return (if (rx == unsupported) 0L else rx) + (if (tx == unsupported) 0L else tx)
+}
+
+@Composable
+private fun DangerRow(title: String, onClick: () -> Unit) {
+    Text(
+        title,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.error,
+    )
+}
 
 @Composable
 fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRepository, contentPadding: PaddingValues) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val prefs by settings.dataPrefs.collectAsState()
-    LaunchedEffect(Unit) { viewModel.loadStorage() }
-    var confirmClear by remember { mutableStateOf(false) }
+    var traffic by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        viewModel.loadStorage()
+        traffic = appTrafficBytes()
+    }
+    var dialog by remember { mutableStateOf<DataDialog?>(null) }
     val storage = state.storage
     fun size(bytes: Long) = Formatter.formatFileSize(context, bytes)
 
     SettingsPageColumn(contentPadding) {
-        SectionLabel("Использование памяти")
+        SectionLabel("Использование сети и кэша")
         SettingGroup {
-            item { SettingRow("Кэш медиа", icon = Icons.Filled.Storage, value = storage?.let { size(it.filesBytes) } ?: "…") }
-            item { SettingRow("База данных", icon = Icons.Filled.Storage, value = storage?.let { size(it.databaseBytes) } ?: "…") }
-            item { SettingRow("Очистить кэш", subtitle = "Файлы можно скачать заново", icon = Icons.Filled.Delete, onClick = { confirmClear = true }) }
+            item { SettingRow("Использование памяти", icon = Icons.Filled.Storage, value = storage?.let { size(it.filesBytes + it.databaseBytes) } ?: "…") }
+            item { SettingRow("Использование трафика", icon = Icons.Filled.BarChart, value = size(traffic)) }
+            item { SettingRow("Очистить кэш", subtitle = "Файлы можно скачать заново", icon = Icons.Filled.Delete, onClick = { dialog = DataDialog.ClearCache }) }
         }
 
         SectionLabel("Автозагрузка медиа")
         SettingGroup {
-            item { SwitchRow("Фото", prefs.autoPhotos, { v -> settings.updateDataPrefs { it.copy(autoPhotos = v) } }, icon = Icons.Filled.Image) }
-            item { SwitchRow("Видео", prefs.autoVideos, { v -> settings.updateDataPrefs { it.copy(autoVideos = v) } }, icon = Icons.Filled.VideoLibrary) }
-            item { SwitchRow("Файлы", prefs.autoFiles, { v -> settings.updateDataPrefs { it.copy(autoFiles = v) } }, icon = Icons.Filled.AttachFile) }
-            item { SwitchRow("Только по Wi-Fi", prefs.onlyWifi, { v -> settings.updateDataPrefs { it.copy(onlyWifi = v) } }, icon = Icons.Filled.Wifi) }
+            item { SwitchRow("Через мобильную сеть", prefs.autoMobile, { v -> settings.updateDataPrefs { it.copy(autoMobile = v) } }, subtitle = "Фото, Видео (10 MB), Файлы (1 MB)") }
+            item { SwitchRow("Через сети Wi-Fi", prefs.autoWifi, { v -> settings.updateDataPrefs { it.copy(autoWifi = v) } }, subtitle = "Фото, Видео (15 MB), Файлы (3 MB)") }
+            item { SwitchRow("В роуминге", prefs.autoRoaming, { v -> settings.updateDataPrefs { it.copy(autoRoaming = v) } }, subtitle = "Фото") }
+            item { DangerRow("Сбросить настройки") { dialog = DataDialog.ResetAutoDownload } }
         }
-        SettingsFootnote("Параметры автозагрузки сохраняются, но пока не влияют на загрузку медиа в чатах.")
+
+        SectionLabel("Сохранять в галерее")
+        SettingGroup {
+            item { SwitchRow("Личные чаты", prefs.saveToGalleryPrivate, { v -> settings.updateDataPrefs { it.copy(saveToGalleryPrivate = v) } }, subtitle = yesNo(prefs.saveToGalleryPrivate)) }
+            item { SwitchRow("Группы", prefs.saveToGalleryGroups, { v -> settings.updateDataPrefs { it.copy(saveToGalleryGroups = v) } }, subtitle = yesNo(prefs.saveToGalleryGroups)) }
+            item { SwitchRow("Каналы", prefs.saveToGalleryChannels, { v -> settings.updateDataPrefs { it.copy(saveToGalleryChannels = v) } }, subtitle = yesNo(prefs.saveToGalleryChannels)) }
+        }
+
+        SectionLabel("Стриминг")
+        SettingGroup {
+            item { SwitchRow("Стриминг аудиофайлов и видео", prefs.streamMedia, { v -> settings.updateDataPrefs { it.copy(streamMedia = v) } }) }
+            item { SwitchRow("Stream MKV Videos β", prefs.streamMkv, { v -> settings.updateDataPrefs { it.copy(streamMkv = v) } }) }
+            item { SwitchRow("Stream ALL Videos β", prefs.streamAll, { v -> settings.updateDataPrefs { it.copy(streamAll = v) } }) }
+        }
+        SettingsFootnote("Когда это возможно, приложение будет воспроизводить видеозаписи и музыку, не дожидаясь завершения загрузки.")
+
+        SectionLabel("Звонки")
+        SettingGroup {
+            item {
+                SettingRow(
+                    "Экономия трафика",
+                    value = CallsSavingOptions.getOrElse(prefs.callsDataSaving) { CallsSavingOptions[1] },
+                    onClick = { dialog = DataDialog.CallsSaving },
+                )
+            }
+        }
+
+        SectionLabel("Прокси")
+        SettingGroup {
+            item {
+                SettingRow(
+                    "Настройки прокси",
+                    value = if (prefs.proxyServer.isBlank()) null else "${prefs.proxyServer}:${prefs.proxyPort}",
+                    onClick = { dialog = DataDialog.Proxy },
+                )
+            }
+            item { SettingRow("Удалить черновики", onClick = { dialog = DataDialog.Drafts }) }
+        }
     }
 
-    if (confirmClear) {
-        ConfirmDialog(
+    when (dialog) {
+        DataDialog.ClearCache -> ConfirmDialog(
             title = "Очистить кэш?",
             text = "Скачанные фото, видео и файлы будут удалены с устройства.",
             confirmLabel = "Очистить",
             onConfirm = {
                 viewModel.clearCache()
-                confirmClear = false
+                dialog = null
             },
-            onDismiss = { confirmClear = false },
+            onDismiss = { dialog = null },
         )
+        DataDialog.ResetAutoDownload -> ConfirmDialog(
+            title = "Сбросить настройки?",
+            text = "Параметры автозагрузки медиа вернутся к значениям по умолчанию.",
+            confirmLabel = "Сбросить",
+            onConfirm = {
+                settings.updateDataPrefs { it.copy(autoMobile = true, autoWifi = true, autoRoaming = true) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DataDialog.CallsSaving -> ChoiceDialog(
+            title = "Экономия трафика",
+            options = CallsSavingOptions.indices.toList(),
+            selected = prefs.callsDataSaving,
+            label = { CallsSavingOptions[it] },
+            onSelect = { v ->
+                settings.updateDataPrefs { it.copy(callsDataSaving = v) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DataDialog.Proxy -> EditDialog(
+            title = "Настройки прокси",
+            labels = listOf("Сервер", "Порт", "Логин", "Пароль или секрет"),
+            initial = listOf(prefs.proxyServer, prefs.proxyPort, prefs.proxyUser, prefs.proxyPass),
+            secretIndices = setOf(3),
+            onConfirm = { values ->
+                val port = values[1].filter(Char::isDigit).take(5)
+                val validPort = if (port.toIntOrNull() in 1..65535) port else ""
+                settings.updateDataPrefs {
+                    it.copy(
+                        proxyServer = values[0].trim(),
+                        proxyPort = validPort,
+                        proxyUser = values[2].trim(),
+                        proxyPass = values[3],
+                    )
+                }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DataDialog.Drafts -> ConfirmDialog(
+            title = "Удалить черновики?",
+            text = "Все несохранённые черновики сообщений будут удалены.",
+            confirmLabel = "Удалить",
+            onConfirm = {
+                Toast.makeText(context, "Удаление черновиков появится после интеграции с TDLib", Toast.LENGTH_SHORT).show()
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        null -> Unit
     }
 }

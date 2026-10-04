@@ -214,7 +214,7 @@ fun ChatScreen(viewModel: ChatViewModel, settings: SettingsRepository, onBack: (
                 } else {
                     "Вам запрещено писать здесь"
                 }
-                Surface(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { bottomBarHeightPx = it.height }
@@ -224,29 +224,16 @@ fun ChatScreen(viewModel: ChatViewModel, settings: SettingsRepository, onBack: (
                             end = 12.dp,
                             top = 8.dp,
                             bottom = 8.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                        ),
+                        )
+                        .heightIn(min = 52.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 52.dp),
-                        shape = RoundedCornerShape(26.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = restrictionText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                    }
+                    Text(
+                        text = restrictionText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             } else {
                 Row(
