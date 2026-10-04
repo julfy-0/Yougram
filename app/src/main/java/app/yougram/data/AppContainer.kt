@@ -14,11 +14,14 @@ class AppContainer(private val context: Context) {
     val appLock = AppLock(context.applicationContext)
     val telegram = TelegramClient(context.applicationContext, appScope)
     val authRepository = AuthRepository(telegram)
-    val chatRepository = ChatRepository(telegram, appScope)
+    val spy = SpyStore(context.applicationContext)
+    val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext)
     val accountRepository = AccountRepository(telegram)
+    val callManager = CallManager(telegram, appScope, chatRepository)
 
     fun start() {
         telegram.start()
         chatRepository.start()
+        callManager.start()
     }
 }

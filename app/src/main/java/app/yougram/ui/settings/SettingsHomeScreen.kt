@@ -1,5 +1,16 @@
 package app.yougram.ui.settings
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -31,9 +42,20 @@ import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -79,12 +101,23 @@ enum class SettingsPage(val title: String) {
     Language("Язык"),
     About("О приложении"),
     Blocked("Чёрный список"),
-    Websites("Авторизованные сайты");
+    Websites("Авторизованные сайты"),
+    Extras("Режим призрака и шпион"),
+    Ghost("Режим призрака"),
+    Spy("Шпион"),
+    MessageFilters("Фильтры сообщений"),
+    SharedFilters("Общие фильтры"),
+    ShadowBan("Теневой бан"),
+    Premium("Telegram Premium"),
+    Stars("Звёзды Telegram"),
+    Business("Telegram для бизнеса");
 
     /** Страница, на которую ведёт «Назад». */
     val parent: SettingsPage
         get() = when (this) {
             Blocked, Websites -> Privacy
+            Ghost, Spy, MessageFilters -> Extras
+            SharedFilters, ShadowBan -> MessageFilters
             else -> Home
         }
 }
@@ -95,10 +128,11 @@ fun SettingsHomeScreen(
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
     onOpenChat: (Long) -> Unit,
+    onGift: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val soon = { Toast.makeText(context, "Скоро", Toast.LENGTH_SHORT).show() }
+    var askDialog by remember { mutableStateOf(false) }
     val openUrl = { url: String ->
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -119,10 +153,27 @@ fun SettingsHomeScreen(
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ProfileHeader(state, viewModel)
+        val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri != null) {
+                val file = java.io.File(context.cacheDir, "avatar_${System.currentTimeMillis()}.jpg")
+                val ok = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        file.outputStream().use { input.copyTo(it) }
+                    } != null
+                }.getOrDefault(false)
+                if (ok) viewModel.setAvatar(file.absolutePath)
+                else Toast.makeText(context, "Не удалось прочитать изображение", Toast.LENGTH_SHORT).show()
+            }
+        }
+        ProfileHeader(
+            state,
+            viewModel,
+            onChangeAvatar = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        )
 
         SettingGroup {
             item { SettingRow("Настройки Yougram", subtitle = "Тема, цвета, панели", icon = Icons.Filled.Tune, onClick = { onNavigate(SettingsPage.Appearance) }) }
+            item { SettingRow("Призрак, шпион, фильтры", subtitle = "Скрытность и локальный архив", icon = Icons.Filled.VisibilityOff, onClick = { onNavigate(SettingsPage.Extras) }) }
         }
 
         SettingGroup {
@@ -139,15 +190,15 @@ fun SettingsHomeScreen(
         }
 
         SettingGroup {
-            item { SettingRow("Telegram Premium", icon = Icons.Filled.Star, onClick = soon) }
-            item { SettingRow("Звёзды Telegram", icon = Icons.Filled.Star, onClick = soon) }
-            item { SettingRow("Telegram для бизнеса", icon = Icons.Filled.Storefront, onClick = soon) }
-            item { SettingRow("Отправить подарок", icon = Icons.Filled.CardGiftcard, onClick = soon) }
+            item { SettingRow("Telegram Premium", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.Premium) }) }
+            item { SettingRow("Звёзды Telegram", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.Stars) }) }
+            item { SettingRow("Telegram для бизнеса", icon = Icons.Filled.Storefront, onClick = { onNavigate(SettingsPage.Business) }) }
+            item { SettingRow("Отправить подарок", icon = Icons.Filled.CardGiftcard, onClick = onGift) }
         }
 
         SectionLabel("Помощь")
         SettingGroup {
-            item { SettingRow("Задать вопрос", icon = Icons.Filled.ChatBubble, onClick = { viewModel.openSupport(onOpenChat) }) }
+            item { SettingRow("Задать вопрос", icon = Icons.Filled.ChatBubble, onClick = { askDialog = true }) }
             item { SettingRow("Вопросы о Telegram", icon = Icons.Filled.QuestionMark, onClick = { openUrl("https://telegram.org/faq") }) }
             item { SettingRow("Возможности Telegram", icon = Icons.Filled.Lightbulb, onClick = { openUrl("https://telegram.org/tour") }) }
             item { SettingRow("Политика конфиденциальности", icon = Icons.Filled.VerifiedUser, onClick = { openUrl("https://telegram.org/privacy") }) }
@@ -165,21 +216,63 @@ fun SettingsHomeScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+
+    if (askDialog) {
+        val linkColor = MaterialTheme.colorScheme.primary
+        AlertDialog(
+            onDismissRequest = { askDialog = false },
+            title = { Text("Задать вопрос") },
+            text = {
+                Text(
+                    buildAnnotatedString {
+                        append("Поддержкой Telegram занимаются волонтёры. Мы стараемся отвечать как можно быстрее, однако иногда приходится немного подождать.\n\nОзнакомьтесь с ")
+                        withLink(LinkAnnotation.Url("https://telegram.org/faq", TextLinkStyles(SpanStyle(color = linkColor)))) {
+                            append("частыми вопросами о Telegram")
+                        }
+                        append(": там есть важные советы по устранению неисправностей и ответы на подробные вопросы.")
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askDialog = false
+                    viewModel.openSupport(onOpenChat)
+                }) { Text("Спросить") }
+            },
+            dismissButton = { TextButton(onClick = { askDialog = false }) { Text("Отмена") } },
+        )
+    }
 }
 
 @Composable
-private fun ProfileHeader(state: SettingsHomeState, viewModel: SettingsHomeViewModel) {
+private fun ProfileHeader(state: SettingsHomeState, viewModel: SettingsHomeViewModel, onChangeAvatar: () -> Unit) {
     val profile = state.profile
     Column(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        FileAvatar(
-            title = profile?.name.orEmpty(),
-            fileId = profile?.avatarFileId,
-            fileState = viewModel::fileState,
-            size = 96.dp,
-        )
+        Box(Modifier.clickable(onClick = onChangeAvatar)) {
+            FileAvatar(
+                title = profile?.name.orEmpty(),
+                fileId = profile?.avatarFileId,
+                fileState = viewModel::fileState,
+                size = 96.dp,
+            )
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (state.avatarUpdating) {
+                    CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Filled.CameraAlt, contentDescription = "Изменить аватар", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Text(
             profile?.name.orEmpty(),
@@ -200,6 +293,7 @@ private fun ProfileHeader(state: SettingsHomeState, viewModel: SettingsHomeViewM
 data class SettingsHomeState(
     val profile: ProfileItem? = null,
     val devices: Int? = null,
+    val avatarUpdating: Boolean = false,
     val error: String? = null,
 )
 
@@ -219,6 +313,20 @@ class SettingsHomeViewModel(private val repository: ChatRepository) : ViewModel(
         viewModelScope.launch {
             val count = repository.activeSessionsCount()
             _state.update { it.copy(devices = count) }
+        }
+    }
+
+    fun setAvatar(path: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(avatarUpdating = true) }
+            try {
+                val profile = repository.setProfilePhoto(path)
+                _state.update { it.copy(profile = profile, avatarUpdating = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(avatarUpdating = false, error = e.message) }
+            } finally {
+                java.io.File(path).delete()
+            }
         }
     }
 

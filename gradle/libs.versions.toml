@@ -7,6 +7,8 @@ lifecycle = "2.9.4"
 navigationCompose = "2.9.5"
 coroutines = "1.10.2"
 coreKtx = "1.17.0"
+camerax = "1.4.2"
+ntgcalls = "3.0.1"
 # Проверьте актуальную версию на Maven Central: dev.g000sha256:tdl-coroutines
 tdlCoroutines = "13.0.0"
 
@@ -23,7 +25,13 @@ androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 tdl-coroutines = { module = "dev.g000sha256:tdl-coroutines", version.ref = "tdlCoroutines" }
+ntgcalls = { module = "io.github.pytgcalls:ntgcalls", version.ref = "ntgcalls" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

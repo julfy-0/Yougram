@@ -90,6 +90,8 @@ import app.yougram.ui.glass.rememberBackdropState
 import app.yougram.ui.settings.SettingsPage
 import app.yougram.ui.settings.SettingsPageContent
 import kotlin.math.roundToInt
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
 enum class MainTab(val title: String, val icon: ImageVector) {
     Contacts("Контакты", Icons.Filled.AccountCircle),
@@ -142,6 +144,14 @@ fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
     val glass by container.settings.glass.collectAsState()
     val chatPrefs by container.settings.chatPrefs.collectAsState()
     val backdrop = rememberBackdropState()
+    val badgeOn by container.settings.badge.collectAsState()
+    val badgeContext = LocalContext.current
+    LaunchedEffect(badgeOn) {
+        val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn) }.getOrDefault(false)
+        if (!ok && badgeOn) {
+            Toast.makeText(badgeContext, "Не удалось поставить метку Yougram в профиль", Toast.LENGTH_LONG).show()
+        }
+    }
 
     var tab by rememberSaveable { mutableStateOf(MainTab.Chats) }
     var searching by rememberSaveable { mutableStateOf(false) }

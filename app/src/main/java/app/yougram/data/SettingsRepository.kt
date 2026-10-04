@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Настройки «стеклянных» панелей. */
 data class GlassSettings(
@@ -129,6 +131,51 @@ data class DataPrefs(
     val proxyPort: String = "",
     val proxyUser: String = "",
     val proxyPass: String = "",
+)
+
+/** Режим призрака: не выдаём факт прочтения. */
+data class GhostPrefs(
+    val enabled: Boolean = false,
+    /** Прочитать чат автоматически, когда пользователь сам отправляет сообщение. */
+    val readOnAction: Boolean = true,
+)
+
+/** Режим шпиона: что сохранять локально. */
+data class SpyPrefs(
+    val saveDeleted: Boolean = true,
+    val saveEdits: Boolean = true,
+    val saveInBots: Boolean = true,
+    val saveReadDate: Boolean = false,
+    val saveLastOnline: Boolean = false,
+    val saveAttachments: Boolean = true,
+    /** Сохранять вложения из каналов (по умолчанию выключено — их слишком много). */
+    val attachmentsChannels: Boolean = false,
+    val folderName: String = DEFAULT_FOLDER,
+    /** Индекс в [MAX_FOLDER_LABELS]; последний — без ограничения. */
+    val maxFolderIndex: Int = MAX_FOLDER_LABELS.lastIndex,
+) {
+    /** Лимит размера папки в байтах или null — без ограничения. */
+    val maxFolderBytes: Long? get() = MAX_FOLDER_BYTES.getOrNull(maxFolderIndex)?.takeIf { it > 0 }
+
+    companion object {
+        const val DEFAULT_FOLDER = "Saved Attachments"
+        val MAX_FOLDER_LABELS = listOf("300 МБ", "1 ГБ", "2 ГБ", "5 ГБ", "16 ГБ", "∞")
+        val MAX_FOLDER_BYTES = listOf(300L shl 20, 1L shl 30, 2L shl 30, 5L shl 30, 16L shl 30, 0L)
+    }
+}
+
+/** Пользователь, чьи сообщения скрываются («теневой бан»). */
+data class ShadowBanned(val userId: Long, val name: String)
+
+/** Фильтры сообщений. */
+data class FilterPrefs(
+    val enabled: Boolean = false,
+    /** Применять общие фильтры ([patterns]) в чатах. */
+    val sharedInChats: Boolean = false,
+    /** Скрывать сообщения пользователей из чёрного списка. */
+    val hideBlocked: Boolean = false,
+    val patterns: List<String> = emptyList(),
+    val shadowBanned: List<ShadowBanned> = emptyList(),
 )
 
 class SettingsRepository(context: Context) {
@@ -366,6 +413,115 @@ class SettingsRepository(context: Context) {
         prefs.edit().putBoolean(KEY_POWER, enabled).apply()
     }
 
+    // Режим призрака.
+    private val _ghost = MutableStateFlow(
+        GhostPrefs(
+            enabled = prefs.getBoolean("g_enabled", false),
+            readOnAction = prefs.getBoolean("g_read_on_action", true),
+        )
+    )
+    val ghost: StateFlow<GhostPrefs> = _ghost.asStateFlow()
+
+    fun updateGhost(transform: (GhostPrefs) -> GhostPrefs) {
+        val g = transform(_ghost.value)
+        _ghost.value = g
+        prefs.edit()
+            .putBoolean("g_enabled", g.enabled)
+            .putBoolean("g_read_on_action", g.readOnAction)
+            .apply()
+    }
+
+    // Режим шпиона.
+    private val _spy = MutableStateFlow(
+        SpyPrefs(
+            saveDeleted = prefs.getBoolean("s_deleted", true),
+            saveEdits = prefs.getBoolean("s_edits", true),
+            saveInBots = prefs.getBoolean("s_bots", true),
+            saveReadDate = prefs.getBoolean("s_read_date", false),
+            saveLastOnline = prefs.getBoolean("s_last_online", false),
+            saveAttachments = prefs.getBoolean("s_attachments", true),
+            attachmentsChannels = prefs.getBoolean("s_attachments_channels", false),
+            folderName = prefs.getString("s_folder", SpyPrefs.DEFAULT_FOLDER).orEmpty().ifBlank { SpyPrefs.DEFAULT_FOLDER },
+            maxFolderIndex = prefs.getInt("s_max_folder", SpyPrefs.MAX_FOLDER_LABELS.lastIndex)
+                .coerceIn(0, SpyPrefs.MAX_FOLDER_LABELS.lastIndex),
+        )
+    )
+    val spyPrefs: StateFlow<SpyPrefs> = _spy.asStateFlow()
+
+    fun updateSpy(transform: (SpyPrefs) -> SpyPrefs) {
+        val s = transform(_spy.value)
+        _spy.value = s
+        prefs.edit()
+            .putBoolean("s_deleted", s.saveDeleted)
+            .putBoolean("s_edits", s.saveEdits)
+            .putBoolean("s_bots", s.saveInBots)
+            .putBoolean("s_read_date", s.saveReadDate)
+            .putBoolean("s_last_online", s.saveLastOnline)
+            .putBoolean("s_attachments", s.saveAttachments)
+            .putBoolean("s_attachments_channels", s.attachmentsChannels)
+            .putString("s_folder", s.folderName)
+            .putInt("s_max_folder", s.maxFolderIndex)
+            .apply()
+    }
+
+    // Фильтры сообщений.
+    private fun loadFilters(): FilterPrefs {
+        val patterns = runCatching {
+            val arr = JSONArray(prefs.getString("f_patterns", "[]"))
+            List(arr.length()) { arr.getString(it) }
+        }.getOrDefault(emptyList())
+        val banned = runCatching {
+            val arr = JSONArray(prefs.getString("f_banned", "[]"))
+            List(arr.length()) {
+                val o = arr.getJSONObject(it)
+                ShadowBanned(o.getLong("id"), o.optString("name"))
+            }
+        }.getOrDefault(emptyList())
+        return FilterPrefs(
+            enabled = prefs.getBoolean("f_enabled", false),
+            sharedInChats = prefs.getBoolean("f_shared", false),
+            hideBlocked = prefs.getBoolean("f_hide_blocked", false),
+            patterns = patterns,
+            shadowBanned = banned,
+        )
+    }
+
+    private val _filters = MutableStateFlow(loadFilters())
+    val filterPrefs: StateFlow<FilterPrefs> = _filters.asStateFlow()
+
+    fun updateFilters(transform: (FilterPrefs) -> FilterPrefs) {
+        val f = transform(_filters.value)
+        _filters.value = f
+        val bannedJson = JSONArray()
+        f.shadowBanned.forEach { bannedJson.put(JSONObject().put("id", it.userId).put("name", it.name)) }
+        prefs.edit()
+            .putBoolean("f_enabled", f.enabled)
+            .putBoolean("f_shared", f.sharedInChats)
+            .putBoolean("f_hide_blocked", f.hideBlocked)
+            .putString("f_patterns", JSONArray(f.patterns).toString())
+            .putString("f_banned", bannedJson.toString())
+            .apply()
+    }
+
+    fun addPattern(pattern: String) {
+        val p = pattern.trim()
+        if (p.isEmpty()) return
+        updateFilters { if (p in it.patterns) it else it.copy(patterns = it.patterns + p) }
+    }
+
+    fun removePattern(pattern: String) = updateFilters { it.copy(patterns = it.patterns - pattern) }
+
+    /** Добавляет пользователя в теневой бан и включает фильтры, иначе бан ничего бы не делал. */
+    fun addShadowBan(userId: Long, name: String) {
+        updateFilters { f ->
+            val rest = f.shadowBanned.filterNot { it.userId == userId }
+            f.copy(enabled = true, shadowBanned = rest + ShadowBanned(userId, name))
+        }
+    }
+
+    fun removeShadowBan(userId: Long) =
+        updateFilters { f -> f.copy(shadowBanned = f.shadowBanned.filterNot { it.userId == userId }) }
+
     private companion object {
         const val KEY_BLUR = "glass_blur"
         const val KEY_OPACITY = "glass_opacity"
@@ -374,5 +530,13 @@ class SettingsRepository(context: Context) {
         const val KEY_ACCENT = "theme_accent"
         const val KEY_POWER = "power_saving"
         const val KEY_POWER_PREV_BLUR = "power_prev_blur"
+    }
+    private val _badge = MutableStateFlow(prefs.getBoolean("yougram_badge", true))
+    /** Показывать значок Yougram и ставить метку в своём bio. */
+    val badge: StateFlow<Boolean> = _badge.asStateFlow()
+
+    fun setBadge(value: Boolean) {
+        _badge.value = value
+        prefs.edit().putBoolean("yougram_badge", value).apply()
     }
 }

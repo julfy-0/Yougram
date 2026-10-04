@@ -61,10 +61,11 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
             !full.active -> viewModel.download(media.fileId, 16)
         }
     }
-    if (media.kind == MediaKind.DOCUMENT) {
-        DocumentRow(media, full, onClick)
-    } else {
-        VisualMedia(media, viewModel, full, onClick)
+    when (media.kind) {
+        MediaKind.DOCUMENT -> DocumentRow(media, full, onClick)
+        MediaKind.VOICE -> VoiceNoteRow(media, viewModel, full)
+        MediaKind.VIDEO_NOTE -> VideoNoteView(media, viewModel, full)
+        else -> VisualMedia(media, viewModel, full, onClick)
     }
 }
 

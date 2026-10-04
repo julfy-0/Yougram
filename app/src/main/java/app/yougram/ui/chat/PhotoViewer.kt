@@ -1,5 +1,6 @@
 package app.yougram.ui.chat
 
+import app.yougram.ui.glass.SystemBarsGlass
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -60,7 +61,7 @@ fun PhotoViewer(media: MediaItem, viewModel: ChatViewModel, onDismiss: () -> Uni
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        SystemBarsGlass(Modifier.fillMaxSize(), background = Color.Black) {
             bitmap?.let {
                 Image(
                     bitmap = it,

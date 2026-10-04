@@ -2,6 +2,7 @@ package app.yougram.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,6 +23,12 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,10 @@ fun AboutScreen(contentPadding: PaddingValues) {
             Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
         }
     }
+
+    var taps by remember { mutableIntStateOf(0) }
+    var lastTap by remember { mutableLongStateOf(0L) }
+    var showPrime by remember { mutableStateOf(false) }
 
     SettingsPageColumn(contentPadding) {
         // Место под баннер
@@ -106,6 +117,16 @@ fun AboutScreen(contentPadding: PaddingValues) {
                     subtitle = "Код версии: ${BuildConfig.VERSION_CODE}",
                     value = "v${BuildConfig.VERSION_NAME}",
                     icon = Icons.Filled.Build,
+                    onClick = {
+                        val now = SystemClock.uptimeMillis()
+                        // Серия тапов обрывается, если пауза больше 1.5 секунд.
+                        taps = if (now - lastTap > 1500) 1 else taps + 1
+                        lastTap = now
+                        if (taps >= 5) {
+                            taps = 0
+                            showPrime = true
+                        }
+                    },
                 )
             }
         }
@@ -130,4 +151,6 @@ fun AboutScreen(contentPadding: PaddingValues) {
 
         SettingsFootnote("Баннер расположен в app/src/main/res/drawable/about_banner.png (рекомендуемые размеры: 1000×400 px, 2.5:1).")
     }
+
+    if (showPrime) PrimeEasterEgg(onDismiss = { showPrime = false })
 }

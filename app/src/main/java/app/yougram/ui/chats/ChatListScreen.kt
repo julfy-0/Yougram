@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.yougram.data.ChatItem
 import app.yougram.ui.Avatar
+import app.yougram.ui.YougramBadge
 import app.yougram.ui.settings.segmentShape
 import java.text.DateFormat
 import java.util.Date
@@ -162,7 +163,16 @@ private fun ChatRow(chat: ChatItem, lines: Int, onClick: () -> Unit) {
         Avatar(title = chat.title, path = chat.avatarPath)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    chat.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                YougramBadge(chat.id, Modifier.padding(start = 4.dp))
+            }
             Text(
                 chat.lastMessage,
                 style = MaterialTheme.typography.bodyMedium,

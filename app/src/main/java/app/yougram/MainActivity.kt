@@ -16,6 +16,10 @@ import app.yougram.ui.YougramNavHost
 import app.yougram.ui.security.LockGate
 import app.yougram.ui.theme.YougramTheme
 import app.yougram.ui.theme.isDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import app.yougram.ui.glass.LocalGlass
+import app.yougram.ui.LocalBadgeChecker
+import app.yougram.ui.LocalYougramUsers
 
 class MainActivity : ComponentActivity() {
     private val container by lazy { (application as YougramApp).container }
@@ -28,9 +32,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val theme by container.settings.theme.collectAsState()
+            val glass by container.settings.glass.collectAsState()
             val lock by container.appLock.settings.collectAsState()
             val dark = isDarkTheme(theme)
             val secure = lock.type != LockType.None && lock.secureScreen
+            val yougramUsers by container.chatRepository.yougramUsers.collectAsState()
 
             LaunchedEffect(secure) { applySecureFlag(secure) }
 
@@ -43,8 +49,14 @@ class MainActivity : ComponentActivity() {
             }
 
             YougramTheme(settings = theme) {
-                LockGate(container.appLock) {
-                    YougramNavHost(container = container)
+                CompositionLocalProvider(
+                    LocalGlass provides glass,
+                    LocalYougramUsers provides yougramUsers,
+                    LocalBadgeChecker provides container.chatRepository::checkBadge,
+                ) {
+                    LockGate(container.appLock) {
+                        YougramNavHost(container)
+                    }
                 }
             }
         }

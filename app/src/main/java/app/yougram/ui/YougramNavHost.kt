@@ -25,14 +25,18 @@ import app.yougram.data.AppContainer
 import app.yougram.data.AuthStep
 import app.yougram.ui.auth.AuthScreen
 import app.yougram.ui.auth.AuthViewModel
+import app.yougram.ui.calls.CallOverlay
 import app.yougram.ui.chat.ChatScreen
 import app.yougram.ui.chat.ChatViewModel
 import app.yougram.ui.main.MainScreen
+import app.yougram.ui.profile.ProfileScreen
+import app.yougram.ui.profile.ProfileViewModel
 
 private const val ROUTE_SPLASH = "splash"
 private const val ROUTE_AUTH = "auth"
 private const val ROUTE_CHATS = "chats"
 private const val ROUTE_CHAT = "chat/{chatId}"
+private const val ROUTE_PROFILE = "profile/{chatId}"
 
 private const val NavMillis = 320
 private const val FadeMillis = 220
@@ -46,7 +50,7 @@ fun YougramNavHost(container: AppContainer) {
     LaunchedEffect(step) {
         val current = navController.currentDestination?.route
         when (step) {
-            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT) {
+            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT && current != ROUTE_PROFILE) {
                 navController.navigate(ROUTE_CHATS) { popUpTo(0) { inclusive = true } }
             }
             AuthStep.Loading -> Unit
@@ -56,6 +60,7 @@ fun YougramNavHost(container: AppContainer) {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     NavHost(
         navController = navController,
         startDestination = ROUTE_SPLASH,
@@ -107,9 +112,46 @@ fun YougramNavHost(container: AppContainer) {
             val chatId = entry.arguments!!.getLong("chatId")
             val vm: ChatViewModel = viewModel(
                 key = "chat-$chatId",
-                factory = ChatViewModel.factory(container.chatRepository, chatId),
+                factory = ChatViewModel.factory(container.chatRepository, chatId, container.settings),
             )
-            ChatScreen(viewModel = vm, settings = container.settings, onBack = { navController.popBackStack() })
+            ChatScreen(
+                viewModel = vm,
+                settings = container.settings,
+                onBack = { navController.popBackStack() },
+                onOpenChatProfile = { navController.navigate("profile/$chatId") },
+                onOpenProfile = { id -> navController.navigate("profile/$id") },
+            )
         }
+        composable(
+            route = ROUTE_PROFILE,
+            arguments = listOf(navArgument("chatId") { type = NavType.LongType }),
+            enterTransition = {
+                slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
+                        fadeIn(tween(NavMillis / 2))
+            },
+            popExitTransition = {
+                slideOutHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
+                        fadeOut(tween(NavMillis / 2))
+            },
+        ) { entry ->
+            val chatId = entry.arguments!!.getLong("chatId")
+            val vm: ProfileViewModel = viewModel(
+                key = "profile-$chatId",
+                factory = ProfileViewModel.factory(container.chatRepository, chatId),
+            )
+            ProfileScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onOpenChat = {
+                    // Если профиль открыт из этого же чата — просто возвращаемся, иначе открываем чат.
+                    val previous = navController.previousBackStackEntry?.arguments?.getLong("chatId")
+                    if (previous == chatId) navController.popBackStack() else navController.navigate("chat/$chatId")
+                },
+                onLeft = { navController.popBackStack(ROUTE_CHATS, inclusive = false) },
+                onCall = { userId, video -> container.callManager.startCall(userId, video) },
+            )
+        }
+    }
+    CallOverlay(container.callManager, container.chatRepository)
     }
 }

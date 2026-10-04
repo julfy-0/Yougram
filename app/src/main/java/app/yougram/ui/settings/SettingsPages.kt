@@ -6,6 +6,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.yougram.data.AppContainer
@@ -24,6 +28,7 @@ fun SettingsPageContent(
         factory = SettingsDetailsViewModel.factory(container.accountRepository, container.chatRepository),
     )
     val state by details.state.collectAsState()
+    var showGift by remember { mutableStateOf(false) }
     LaunchedEffect(state.error) {
         state.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -37,6 +42,7 @@ fun SettingsPageContent(
             contentPadding = contentPadding,
             onNavigate = onNavigate,
             onOpenChat = onOpenChat,
+            onGift = { showGift = true },
         )
         SettingsPage.Appearance -> SettingsScreen(container.settings, contentPadding)
         SettingsPage.Account -> AccountScreen(details, contentPadding)
@@ -52,5 +58,21 @@ fun SettingsPageContent(
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
         SettingsPage.Language -> LanguageScreen(contentPadding)
         SettingsPage.About -> AboutScreen(contentPadding)
+        SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
+        SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)
+        SettingsPage.MessageFilters -> MessageFiltersScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.SharedFilters -> SharedFiltersScreen(container.settings, contentPadding)
+        SettingsPage.ShadowBan -> ShadowBanScreen(container.settings, contentPadding)
+        SettingsPage.Premium -> {
+            val premium by produceState<Boolean?>(null) { value = container.chatRepository.isPremium() }
+            PremiumScreen(premium, contentPadding)
+        }
+        SettingsPage.Stars -> StarsScreen(contentPadding, onGift = { showGift = true })
+        SettingsPage.Business -> BusinessScreen(contentPadding)
+    }
+
+    if (showGift) {
+        GiftSheet(container.chatRepository, onOpenChat = onOpenChat, onDismiss = { showGift = false })
     }
 }
