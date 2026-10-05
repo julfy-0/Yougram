@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.data.ChatRepository
 import app.yougram.data.EditRecord
 import app.yougram.data.SettingsRepository
+import app.yougram.data.StickerItem
 import app.yougram.data.FileState
 import app.yougram.data.MessageItem
 import app.yougram.data.ReplyPreview
@@ -202,6 +203,21 @@ class ChatViewModel(
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val _stickers = MutableStateFlow<List<StickerItem>>(emptyList())
+    val stickers: StateFlow<List<StickerItem>> = _stickers.asStateFlow()
+
+    private var stickerJob: Job? = null
+
+    /** Загружает стикеры по эмодзи/поисковому запросу для панели вложений. */
+    fun loadStickers(query: String = "") {
+        stickerJob?.cancel()
+        stickerJob = viewModelScope.launch {
+            runCatching { repository.loadStickers(query = query, chatId = chatId) }
+                .onSuccess { _stickers.value = it }
+                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: "Не удалось загрузить стикеры") } }
+        }
+    }
 
     private val _senders = MutableStateFlow<Map<Long, SenderInfo>>(emptyMap())
 
@@ -447,6 +463,15 @@ class ChatViewModel(
 
     fun sendVideoNote(path: String, duration: Int, length: Int) =
         sendMedia { repository.sendVideoNote(chatId, path, duration, length) }
+
+    fun sendAnimation(path: String, width: Int = 0, height: Int = 0, duration: Int = 0) =
+        sendMedia { repository.sendAnimation(chatId, path, width, height, duration) }
+
+    fun sendSticker(sticker: StickerItem) =
+        sendMedia { repository.sendSticker(chatId, sticker.fileId, sticker.width, sticker.height, sticker.emoji) }
+
+    fun sendStickerFile(path: String) =
+        sendMedia { repository.sendStickerFile(chatId, path) }
 
     private fun sendMedia(block: suspend () -> Unit) {
         viewModelScope.launch {

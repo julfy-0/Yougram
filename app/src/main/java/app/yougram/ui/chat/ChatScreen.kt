@@ -72,6 +72,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -113,6 +114,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -124,13 +126,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import app.yougram.ui.ChatWallpaper
 import app.yougram.data.EditRecord
+import app.yougram.data.FileState
 import app.yougram.data.MediaItem
 import app.yougram.data.MediaKind
 import app.yougram.data.SenderInfo
 import app.yougram.ui.FileAvatar
+import app.yougram.ui.rememberFileBitmap
 import app.yougram.data.MessageFilters
 import app.yougram.data.MessageItem
 import app.yougram.data.SettingsRepository
+import app.yougram.data.StickerItem
 import app.yougram.ui.Avatar
 import app.yougram.ui.YougramBadge
 import app.yougram.ui.glass.backdropSource
@@ -179,6 +184,8 @@ fun ChatScreen(
     var deleteMessage by remember { mutableStateOf<MessageItem?>(null) }
     var editsDialog by remember { mutableStateOf<List<EditRecord>?>(null) }
     var emojiSheet by remember { mutableStateOf(false) }
+    var attachmentTab by remember { mutableStateOf(0) } // 0 emoji, 1 stickers, 2 GIF
+    var stickerQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var highlightId by remember { mutableStateOf<Long?>(null) }
@@ -257,6 +264,20 @@ fun ChatScreen(
                 isImage -> viewModel.sendPhoto(path)
                 else -> viewModel.sendDocument(path)
             }
+        }
+    }
+    val stickerPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            copyToCache(context, uri)?.let { path ->
+                viewModel.sendStickerFile(path)
+            } ?: Toast.makeText(context, "Не удалось прочитать стикер", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val gifPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            copyToCache(context, uri)?.let { path ->
+                viewModel.sendAnimation(path)
+            } ?: Toast.makeText(context, "Не удалось прочитать GIF", Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(recording) {
@@ -687,7 +708,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .size(24.dp)
                                         .clip(CircleShape)
-                                        .clickable { emojiSheet = true },
+                                        .clickable { attachmentTab = 0; emojiSheet = true },
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Icon(
@@ -762,21 +783,108 @@ fun ChatScreen(
     }
 
     if (emojiSheet) {
-        ModalBottomSheet(onDismissRequest = { emojiSheet = false }) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(48.dp),
-                modifier = Modifier.fillMaxWidth().height(300.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                items(Emojis) { emoji ->
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape).clickable { input += emoji },
-                        contentAlignment = Alignment.Center,
-                    ) { Text(emoji, fontSize = 28.sp) }
-                }
+        val stickers by viewModel.stickers.collectAsState()
+        LaunchedEffect(attachmentTab, stickerQuery, emojiSheet) {
+            if (emojiSheet && attachmentTab == 1) {
+                delay(180)
+                viewModel.loadStickers(stickerQuery)
             }
         }
+        ModalBottomSheet(onDismissRequest = { emojiSheet = false }) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerTabButton(
+                    icon = "😀",
+                    title = "Эмодзи",
+                    selected = attachmentTab == 0,
+                    onClick = { attachmentTab = 0 },
+                    modifier = Modifier.weight(1f),
+                )
+                PickerTabButton(
+                    icon = "🎨",
+                    title = "Стикеры",
+                    selected = attachmentTab == 1,
+                    onClick = { attachmentTab = 1 },
+                    modifier = Modifier.weight(1f),
+                )
+                PickerTabButton(
+                    icon = "GIF",
+                    title = "GIF",
+                    selected = attachmentTab == 2,
+                    onClick = { attachmentTab = 2 },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            when (attachmentTab) {
+                0 -> LazyVerticalGrid(
+                    columns = GridCells.Adaptive(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    items(Emojis) { emoji ->
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape).clickable { input += emoji },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(emoji, fontSize = 28.sp) }
+                    }
+                }
+                1 -> Column(Modifier.fillMaxWidth()) {
+                    TextField(
+                        value = stickerQuery,
+                        onValueChange = { stickerQuery = it },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        singleLine = true,
+                        placeholder = { Text("Поиск стикеров или эмодзи") },
+                    )
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        TextButton(onClick = { stickerPicker.launch(arrayOf("image/webp", "image/png")) }) {
+                            Text("Стикер из файла")
+                        }
+                    }
+                    if (stickers.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Стикеры не найдены",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(76.dp),
+                            modifier = Modifier.fillMaxWidth().height(280.dp),
+                            contentPadding = PaddingValues(12.dp),
+                        ) {
+                            items(stickers, key = { it.fileId }) { sticker ->
+                                StickerPickerItem(
+                                    sticker = sticker,
+                                    viewModel = viewModel,
+                                    onClick = {
+                                        viewModel.sendSticker(sticker)
+                                        emojiSheet = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                else -> Column(
+                    Modifier.fillMaxWidth().height(280.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text("GIF отправляются как нативные Telegram-анимации", textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) }) {
+                        Text("Выбрать GIF / MP4")
+                    }
+                }
+            }
+            Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))
+        }
     }
+
 
     viewerMedia?.let { media ->
         PhotoViewer(media = media, viewModel = viewModel, onDismiss = { viewerMedia = null })
@@ -792,7 +900,7 @@ fun ChatScreen(
             message = message,
             isRead = state.readAt[message.id] != null,
             canEdit = message.isOutgoing && message.media == null && message.call == null && message.id !in state.deletedIds,
-            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.ANIMATION || it == MediaKind.DOCUMENT },
+            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.ANIMATION || it == MediaKind.STICKER || it == MediaKind.DOCUMENT },
             canShadowBan = sender != null && !message.isOutgoing,
             reactions = available,
             onDismiss = { actionMessage = null },
@@ -1186,6 +1294,45 @@ private fun ReactionRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PickerTabButton(
+    icon: String,
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(icon)
+            Spacer(Modifier.width(6.dp))
+            Text(title, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun StickerPickerItem(sticker: StickerItem, viewModel: ChatViewModel, onClick: () -> Unit) {
+    val state by viewModel.fileState(sticker.fileId).collectAsState(FileState())
+    LaunchedEffect(sticker.fileId) { viewModel.download(sticker.fileId, 8) }
+    val bitmap = rememberFileBitmap(state.path, 256)
+    Box(
+        Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        bitmap?.let { Image(it, null, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit) }
+            ?: CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
     }
 }
 

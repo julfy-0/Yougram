@@ -38,3 +38,29 @@ TDLib в минорных релизах меняет сигнатуры мет�
 - **Звонки**: `NTgCallsEngine` теперь реально подключён в `AppContainer` (раньше стоял `NoCallEngine` и звука не было). Добавлены маршрут звука (динамик / громкая связь / Bluetooth, `CallAudio`), фоновая служба с уведомлением и рингтоном (`CallService`), гашение экрана у уха, запрос микрофона при ответе на входящий.
 - **Встроенный браузер**: `ui/browser/BrowserScreen.kt` (WebView). Ссылки в сообщениях кликабельны (`ui/Links.kt`), переключатель в «Режим призрака и шпион». Только http(s), http поднимается до https.
 - **Баннеры профиля**: 12 бит (палитра, узор, градиент) лежат в bio сразу после невидимой метки Yougram (`data/YougramBanner.kt`). Другие клиенты Telegram их не видят и не рисуют. Редактор: «Режим призрака и шпион» → «Баннер профиля».
+
+## Lua plugin message API
+
+Plugins receive structured Telegram messages through `events.on("message_received", ...)`.
+The `message.type` value is derived from the TDLib `MessageContent` class and is not limited to text/media. `message.content` contains a recursively converted TDLib object, so new TDLib message types can be exposed without changing the Lua API.
+
+Supported message families include text, photo, video, animation/GIF, audio, voice note, video note, document, sticker, contact, location, venue, poll, dice, game, invoice, story, call, service/system messages, and any additional `MessageContent` type provided by the installed TDLib version.
+
+Example:
+
+```lua
+events.on("message_received", function(message)
+    print(message.type)
+    print(message.chat_id)
+    print(message.text)
+    print(message.content)
+end)
+
+events.on("message_edited", function(message)
+    print("edited:", message.type, message.message_id)
+end)
+
+events.on("message_deleted", function(event)
+    print("deleted in chat", event.chat_id)
+end)
+```

@@ -5,6 +5,7 @@ import app.yougram.data.PlateArea
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,10 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import app.yougram.data.ChatItem
 import app.yougram.ui.Avatar
 import app.yougram.ui.YougramBadge
-import app.yougram.ui.settings.segmentShape
 import java.text.DateFormat
 import java.util.Date
 
@@ -121,14 +124,39 @@ fun ChatListScreen(
                 itemsIndexed(visible, key = { _, chat -> chat.id }) { index, chat ->
                     // animateItem — плавная перестановка при обновлении порядка чатов;
                     // appearOnEnter — анимация, когда строка появляется при прокрутке.
+                    val interaction = remember(chat.id) { MutableInteractionSource() }
+                    val pressed by interaction.collectIsPressedAsState()
+                    val selected = chat.id == selectedChatId
+                    val topBase = if (index == 0) 24.dp else 6.dp
+                    val bottomBase = if (index == visible.size - 1) 24.dp else 6.dp
+                    val radiusBoost by animateDpAsState(
+                        targetValue = if (pressed || selected) 30.dp else 0.dp,
+                        animationSpec = tween(180),
+                        label = "chatCornerBoost",
+                    )
+                    val topRadius = (topBase + radiusBoost).coerceAtMost(32.dp)
+                    val bottomRadius = (bottomBase + radiusBoost).coerceAtMost(32.dp)
                     Surface(
-                        modifier = Modifier.fillMaxWidth().animateItem().appearOnEnter(),
-                        shape = segmentShape(index, visible.size),
-                        color = if (chat.id == selectedChatId) {
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem()
+                            .appearOnEnter(),
+                        shape = RoundedCornerShape(
+                            topStart = topRadius,
+                            topEnd = topRadius,
+                            bottomStart = bottomRadius,
+                            bottomEnd = bottomRadius,
+                        ),
+                        color = if (selected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                         } else plateColor(PlateArea.Chats),
                     ) {
-                        ChatRow(chat, lines, onClick = { onOpenChat(chat.id) })
+                        ChatRow(
+                            chat,
+                            lines,
+                            onClick = { onOpenChat(chat.id) },
+                            interactionSource = interaction,
+                        )
                     }
                 }
             }
@@ -158,11 +186,20 @@ private fun Modifier.appearOnEnter(): Modifier {
 }
 
 @Composable
-private fun ChatRow(chat: ChatItem, lines: Int, onClick: () -> Unit) {
+private fun ChatRow(
+    chat: ChatItem,
+    lines: Int,
+    onClick: () -> Unit,
+    interactionSource: MutableInteractionSource,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

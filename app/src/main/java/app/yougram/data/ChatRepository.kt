@@ -24,8 +24,14 @@ import dev.g000sha256.tdl.dto.FormattedText
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
 import dev.g000sha256.tdl.dto.InputFileLocal
+import dev.g000sha256.tdl.dto.InputAnimation
 import dev.g000sha256.tdl.dto.InputMessageContent
 import dev.g000sha256.tdl.dto.InputMessageDocument
+import dev.g000sha256.tdl.dto.InputMessageAnimation
+import dev.g000sha256.tdl.dto.InputMessageSticker
+import dev.g000sha256.tdl.dto.InputFileId
+import dev.g000sha256.tdl.dto.StickerTypeRegular
+import dev.g000sha256.tdl.dto.MessageSticker
 import dev.g000sha256.tdl.dto.InputMessageReplyToMessage
 import dev.g000sha256.tdl.dto.ReactionTypeEmoji
 import dev.g000sha256.tdl.dto.InputMessagePhoto
@@ -55,6 +61,8 @@ import dev.g000sha256.tdl.dto.UserStatusOffline
 import dev.g000sha256.tdl.dto.UserStatusOnline
 import dev.g000sha256.tdl.dto.UserStatusRecently
 import dev.g000sha256.tdl.dto.UserTypeBot
+import app.yougram.plugin.LuaPluginManager
+import app.yougram.plugin.PluginMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -146,6 +154,7 @@ enum class MediaKind(val label: String) {
     PHOTO("Фото"),
     VIDEO("Видео"),
     ANIMATION("GIF"),
+    STICKER("Стикер"),
     DOCUMENT("Файл"),
     VOICE("Голосовое сообщение"),
     VIDEO_NOTE("Видеосообщение"),
@@ -169,6 +178,21 @@ data class MediaItem(
     val duration: Int = 0,
     /** Сжатая форма волны голосового (5 бит на отсчёт) или null. */
     val waveform: ByteArray? = null,
+)
+
+/** Стикер для панели выбора: файл TDLib уже можно скачать и отправить обратно по id. */
+data class StickerItem(
+    val fileId: Int,
+    val width: Int,
+    val height: Int,
+    val emoji: String,
+)
+
+/** Состояние панели вложений. */
+data class StickerPanelState(
+    val items: List<StickerItem> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
 )
 
 /** Состояние скачивания файла TDLib. */
@@ -322,6 +346,7 @@ class ChatRepository(
     private val settings: SettingsRepository,
     private val spy: SpyStore,
     private val context: Context,
+    private val plugins: LuaPluginManager? = null,
 ) {
     private val client get() = telegram.client
 
@@ -555,6 +580,7 @@ class ChatRepository(
             client.newMessageUpdates.collect { update ->
                 val item = update.message.toItem()
                 _newMessages.tryEmit(item)
+                plugins?.emitMessageReceived(PluginMessage.from(item, update.message.content))
                 onSpyMessage(item)
             }
         }
@@ -577,6 +603,7 @@ class ChatRepository(
                     io { spy.markDeleted(update.chatId, rest, now()) }
                 } else emptySet()
                 _deletions.tryEmit(DeleteEvent(update.chatId, kept, ids.toSet() - kept))
+                plugins?.emitMessageDeleted(update.chatId, ids)
             }
         }
         scope.launch {
@@ -590,6 +617,14 @@ class ChatRepository(
                     spy.recordEdit(update.chatId, update.messageId, text, summary, at, settings.spyPrefs.value.saveEdits)
                 }
                 _contentUpdates.tryEmit(ContentEvent(update.chatId, update.messageId, text, media, summary, old, at))
+                plugins?.events?.emit("message_edited", linkedMapOf(
+                    "chat_id" to update.chatId,
+                    "message_id" to update.messageId,
+                    "text" to text,
+                    "type" to content.javaClass.simpleName.removePrefix("Message"),
+                    "content" to app.yougram.plugin.TdObjectMapper.toMap(content),
+                    "media" to media?.let { m -> linkedMapOf("kind" to m.kind.name, "file_id" to m.fileId, "preview_file_id" to m.previewFileId, "width" to m.width, "height" to m.height, "name" to m.name, "mime_type" to m.mimeType, "size" to m.size, "duration" to m.duration) },
+                ))
             }
         }
         scope.launch {
@@ -1288,6 +1323,67 @@ class ChatRepository(
         ).getOrThrow()
     }
 
+    /** Отправляет GIF/MP4-анимацию как нативное animation-сообщение Telegram. */
+    suspend fun sendAnimation(chatId: Long, path: String, width: Int = 0, height: Int = 0, duration: Int = 0) = sendContent(
+        chatId,
+        InputMessageAnimation(
+            animation = InputAnimation(
+                animation = InputFileLocal(path = path),
+                thumbnail = null,
+                addedStickerFileIds = IntArray(0),
+                duration = duration.coerceAtLeast(0),
+                width = width.coerceAtLeast(0),
+                height = height.coerceAtLeast(0),
+            ),
+            caption = null,
+            showCaptionAboveMedia = false,
+            hasSpoiler = false,
+        ),
+    )
+
+    /** Отправляет уже известный TDLib-стикер по его file id. */
+    suspend fun sendSticker(chatId: Long, fileId: Int, width: Int, height: Int, emoji: String) = sendContent(
+        chatId,
+        InputMessageSticker(
+            sticker = InputFileId(id = fileId),
+            thumbnail = null,
+            width = width.coerceAtLeast(1),
+            height = height.coerceAtLeast(1),
+            emoji = emoji,
+        ),
+    )
+
+    /** Отправляет локальный WEBP/PNG как нативный Telegram-стикер. */
+    suspend fun sendStickerFile(chatId: Long, path: String, width: Int = 512, height: Int = 512, emoji: String = "🙂") = sendContent(
+        chatId,
+        InputMessageSticker(
+            sticker = InputFileLocal(path = path),
+            thumbnail = null,
+            width = width.coerceIn(1, 512),
+            height = height.coerceIn(1, 512),
+            emoji = emoji,
+        ),
+    )
+
+    /** Загружает первые 100 обычных стикеров, соответствующих запросу/эмодзи. */
+    suspend fun loadStickers(query: String = "", limit: Int = 100, chatId: Long = 0L): List<StickerItem> = withContext(Dispatchers.IO) {
+        val result = client.getStickers(
+            stickerType = StickerTypeRegular(),
+            query = query,
+            limit = limit.coerceIn(1, 100),
+            chatId = chatId,
+        ).getOrThrow()
+        result.stickers.orEmpty().filterNotNull().map { sticker ->
+            track(sticker.sticker)
+            StickerItem(
+                fileId = sticker.sticker.id,
+                width = sticker.width,
+                height = sticker.height,
+                emoji = sticker.emoji,
+            )
+        }
+    }
+
     /** Отправляет фото из локального файла. */
     suspend fun sendPhoto(chatId: Long, path: String) = sendContent(
         chatId,
@@ -1565,6 +1661,7 @@ class ChatRepository(
         is MessagePhoto -> c.caption.text
         is MessageVideo -> c.caption.text
         is MessageAnimation -> c.caption.text
+        is MessageSticker -> ""
         is MessageDocument -> c.caption.text
         is MessageVoiceNote -> c.caption.text
         is MessageVideoNote -> ""
@@ -1733,6 +1830,24 @@ class ChatRepository(
                 mimeType = animation.mimeType,
                 size = sizeOf(animation.animation),
                 miniThumb = animation.minithumbnail?.data,
+            )
+        }
+        is MessageSticker -> {
+            track(sticker.sticker)
+            MediaItem(
+                kind = MediaKind.STICKER,
+                fileId = sticker.sticker.id,
+                previewFileId = sticker.sticker.id,
+                width = sticker.width,
+                height = sticker.height,
+                name = "sticker",
+                mimeType = when (sticker.format::class.simpleName) {
+                    "StickerFormatTgs" -> "application/x-tgsticker"
+                    "StickerFormatWebm" -> "video/webm"
+                    else -> "image/webp"
+                },
+                size = sizeOf(sticker.sticker),
+                miniThumb = null,
             )
         }
         is MessageDocument -> {

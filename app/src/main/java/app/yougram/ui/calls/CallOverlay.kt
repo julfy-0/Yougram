@@ -109,6 +109,8 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
         }
     }
 
+    // Ошибка медиа-соединения показывается отдельным сообщением ниже.
+    // Нельзя использовать c.message здесь же: иначе ошибка дублируется на экране.
     val status = when {
         c.phase == CallPhase.ACTIVE -> "%d:%02d".format(elapsed / 60, elapsed % 60)
         c.phase == CallPhase.RINGING && !c.isOutgoing -> if (c.isVideo) "Входящий видеозвонок" else "Входящий звонок"
@@ -142,7 +144,7 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
                 Text(c.title.ifEmpty { "Звонок" }, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(6.dp))
                 Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if ((c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) && c.emojis.isNotEmpty()) {
+                if ((c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) && c.message == null && c.emojis.isNotEmpty()) {
                     Spacer(Modifier.height(24.dp))
                     Text(c.emojis.joinToString("  "), fontSize = 32.sp)
                     Spacer(Modifier.height(4.dp))

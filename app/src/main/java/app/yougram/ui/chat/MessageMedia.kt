@@ -100,7 +100,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         previewBitmap?.let {
             Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
-        if (media.kind != MediaKind.PHOTO) {
+        if (media.kind != MediaKind.PHOTO && media.kind != MediaKind.STICKER) {
             Box(
                 Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,
