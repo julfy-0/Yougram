@@ -49,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.dto.OptionValueString
+import app.yougram.data.getOrThrow
 
 @Composable
 fun AboutScreen(contentPadding: PaddingValues, updater: AppUpdater, client: TdlClient) {

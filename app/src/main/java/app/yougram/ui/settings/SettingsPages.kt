@@ -1,153 +1,139 @@
-package app.yougram
+package app.yougram.ui.settings
 
-import app.yougram.ui.glass.LocalPlates
-import app.yougram.ui.LocalYougramBanners
-import app.yougram.ui.LocalOwnCustomBanner
-import app.yougram.ui.OwnCustomBanner
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Color
-import android.os.Bundle
-import android.view.WindowManager
-import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
-import androidx.activity.compose.setContent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import app.yougram.data.AuthStep
-import app.yougram.data.ConnectionService
-import app.yougram.data.NotificationCenter
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import java.io.File
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import app.yougram.data.LockType
-import app.yougram.ui.YougramNavHost
-import app.yougram.ui.security.LockGate
-import app.yougram.ui.theme.YougramTheme
-import app.yougram.ui.theme.isDarkTheme
-import androidx.compose.runtime.CompositionLocalProvider
-import app.yougram.ui.glass.LocalGlass
-import app.yougram.ui.LocalBadgeChecker
-import app.yougram.ui.LocalCreatorUsers
-import app.yougram.ui.LocalGoldUsers
-import app.yougram.ui.LocalYougramUsers
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.yougram.data.AppContainer
 
-class MainActivity : ComponentActivity() {
-    private val container by lazy { (application as YougramApp).container }
-
-    private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
-    /** Тап по уведомлению несёт id чата: передаём его навигации. */
-    private fun handleIntent(intent: Intent?) {
-        if (intent == null || !intent.hasExtra(NotificationCenter.EXTRA_CHAT_ID)) return
-        val chatId = intent.getLongExtra(NotificationCenter.EXTRA_CHAT_ID, 0L)
-        intent.removeExtra(NotificationCenter.EXTRA_CHAT_ID)
-        if (chatId == 0L) return
-        container.notificationCenter.forgetChat(chatId)
-        container.pendingOpenChat.value = chatId
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        // Флаг защиты ставим до первого кадра, чтобы превью в «Недавних» не успело показать содержимое.
-        applySecureFlag(container.appLock.settings.value.let { it.type != LockType.None && it.secureScreen })
-
-        if (savedInstanceState == null) handleIntent(intent)
-
-        setContent {
-            val theme by container.settings.theme.collectAsState()
-            val glass by container.settings.glass.collectAsState()
-            val plates by container.plates.plates.collectAsState()
-            val lock by container.appLock.settings.collectAsState()
-            val dark = isDarkTheme(theme)
-            val secure = lock.type != LockType.None && lock.secureScreen
-            val yougramUsers by container.chatRepository.yougramUsers.collectAsState()
-            val goldUsers by container.chatRepository.goldUsers.collectAsState()
-            val creatorUsers by container.chatRepository.creatorUsers.collectAsState()
-            val yougramBanners by container.chatRepository.banners.collectAsState()
-            val ownUserId by container.chatRepository.ownUserId.collectAsState()
-            val customBannerVersion by container.settings.customBanner.collectAsState()
-            val inCall by container.callManager.call.collectAsState()
-            val authStep by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
-            val notifPrefs by container.settings.notifications.collectAsState()
-
-            // После входа: запрашиваем разрешение на уведомления и поднимаем фоновое соединение.
-            LaunchedEffect(authStep == AuthStep.Ready, notifPrefs.backgroundConnection) {
-                if (authStep != AuthStep.Ready) return@LaunchedEffect
-                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) !=
-                    PackageManager.PERMISSION_GRANTED
-                ) {
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                if (notifPrefs.backgroundConnection) ConnectionService.start(this@MainActivity)
-            }
-
-            LaunchedEffect(secure) { applySecureFlag(secure) }
-
-            // Входящий звонок должен быть виден и на заблокированном экране.
-            LaunchedEffect(inCall != null) {
-                setShowWhenLocked(inCall != null)
-                setTurnScreenOn(inCall != null)
-            }
-
-            // Иконки статус-бара и навигации должны быть контрастны выбранной теме,
-            // даже если она отличается от системной.
-            DisposableEffect(dark) {
-                val style = if (dark) {
-                    SystemBarStyle.dark(Color.TRANSPARENT)
-                } else {
-                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                }
-                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
-                onDispose {}
-            }
-
-            YougramTheme(settings = theme) {
-                CompositionLocalProvider(
-                    LocalGlass provides glass,
-                    LocalPlates provides plates,
-                    LocalYougramUsers provides yougramUsers,
-                    LocalGoldUsers provides goldUsers,
-                    LocalCreatorUsers provides creatorUsers,
-                    LocalYougramBanners provides yougramBanners,
-                    LocalOwnCustomBanner provides
-                            if (ownUserId != 0L && customBannerVersion > 0L) OwnCustomBanner(ownUserId, customBannerVersion) else null,
-                    LocalBadgeChecker provides container.chatRepository::checkBadge,
-                ) {
-                    LockGate(container.appLock) {
-                        YougramNavHost(container)
-                    }
-                }
-            }
+/** Выбирает, какой экран настроек показать для текущей страницы. */
+@Composable
+fun SettingsPageContent(
+    page: SettingsPage,
+    container: AppContainer,
+    contentPadding: PaddingValues,
+    onNavigate: (SettingsPage) -> Unit,
+    onOpenChat: (Long) -> Unit,
+) {
+    val context = LocalContext.current
+    val details: SettingsDetailsViewModel = viewModel(
+        factory = SettingsDetailsViewModel.factory(container.accountRepository, container.chatRepository),
+    )
+    val state by details.state.collectAsState()
+    var showGift by remember { mutableStateOf(false) }
+    LaunchedEffect(state.error) {
+        state.error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            details.dismissError()
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        container.notificationCenter.appVisible = true
-        container.appLock.onForeground()
+    when (page) {
+        SettingsPage.Home -> SettingsHomeScreen(
+            viewModel = viewModel<SettingsHomeViewModel>(factory = SettingsHomeViewModel.factory(container.chatRepository)),
+            accountManager = container.accountManager,
+            settings = container.settings,
+            contentPadding = contentPadding,
+            onNavigate = onNavigate,
+            onOpenChat = onOpenChat,
+            onGift = { showGift = true },
+        )
+        SettingsPage.Appearance -> SettingsScreen(container.settings, container.plates, contentPadding)
+        SettingsPage.Account -> AccountScreen(details, container.accountManager, contentPadding)
+        SettingsPage.ChatSettings -> ChatSettingsScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.Privacy -> PrivacyScreen(details, container.appLock, container.settings, contentPadding, onNavigate)
+        SettingsPage.Blocked -> BlockedScreen(details, contentPadding)
+        SettingsPage.Websites -> WebsitesScreen(details, contentPadding)
+        SettingsPage.Security -> SecurityScreen(container.appLock, contentPadding)
+        SettingsPage.Notifications -> NotificationsScreen(container.settings, contentPadding)
+        SettingsPage.DataStorage -> DataStorageScreen(details, container.settings, contentPadding)
+        SettingsPage.Plugins -> PluginsScreen(container.plugins, contentPadding)
+        SettingsPage.Folders -> FoldersScreen(details, contentPadding)
+        SettingsPage.Devices -> DevicesScreen(details, contentPadding)
+        SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
+        SettingsPage.Language -> LanguageScreen(contentPadding)
+        SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client)
+        SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
+        SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)
+        SettingsPage.Banner -> BannerScreen(container.settings, contentPadding)
+        SettingsPage.MessageFilters -> MessageFiltersScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.SharedFilters -> SharedFiltersScreen(container.settings, contentPadding)
+        SettingsPage.ShadowBan -> ShadowBanScreen(container.settings, contentPadding)
+        SettingsPage.Premium -> {
+            val real by produceState<Boolean?>(null) { value = container.chatRepository.isPremium() }
+            val local by container.settings.localPremium.collectAsState()
+            PremiumScreen(if (local) true else real, contentPadding)
+        }
+        SettingsPage.Stars -> StarsScreen(contentPadding, onGift = { showGift = true })
+        SettingsPage.Business -> BusinessScreen(contentPadding)
     }
 
-    override fun onStop() {
-        super.onStop()
-        container.notificationCenter.appVisible = false
-        // Поворот экрана тоже вызывает onStop, но это не уход из приложения.
-        if (!isChangingConfigurations) container.appLock.onBackground()
+    if (showGift) {
+        GiftSheet(container.chatRepository, onOpenChat = onOpenChat, onDismiss = { showGift = false })
+    }
+}
+
+@Composable
+private fun PluginsScreen(manager: app.yougram.plugin.LuaPluginManager, contentPadding: PaddingValues) {
+    val context = LocalContext.current
+    var installed by remember { mutableStateOf(manager.installedPlugins()) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val result = runCatching {
+            val file = File(context.cacheDir, "plugin_${System.currentTimeMillis()}.ygplugin")
+            context.contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyTo(it) } }
+                ?: error("Не удалось открыть файл")
+            val name = manager.installPackage(file).getOrThrow()
+            file.delete()
+            name
+        }
+        result.onSuccess {
+            installed = manager.installedPlugins()
+            Toast.makeText(context, "Плагин «$it» установлен", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(context, "Ошибка установки: ${it.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
-    private fun applySecureFlag(secure: Boolean) {
-        // Разрешаем скриншоты и запись экрана во всех режимах.
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(contentPadding).padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Плагины", style = MaterialTheme.typography.headlineSmall)
+        Text("Lua-плагины расширяют возможности Yougram и работают в отдельной песочнице.", style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }) {
+            Icon(Icons.Filled.Extension, contentDescription = null)
+            Text("  Установить .ygplugin")
+        }
+        if (installed.isEmpty()) {
+            Text("Пока нет установленных плагинов.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text("Установленные", style = MaterialTheme.typography.titleMedium)
+            installed.forEach { Text("• $it", style = MaterialTheme.typography.bodyLarge) }
+        }
     }
 }
