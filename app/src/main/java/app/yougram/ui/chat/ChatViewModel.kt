@@ -13,13 +13,18 @@ import app.yougram.data.MessageItem
 import app.yougram.data.ReplyPreview
 import app.yougram.data.ReplyRef
 import app.yougram.data.SenderInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class ChatUiState(
     val title: String = "",
@@ -42,11 +47,158 @@ data class ChatUiState(
     val blockedUserIds: Set<Long> = emptySet(),
 )
 
+/** Состояние поиска внутри чата. */
+data class ChatSearchState(
+    val query: String = "",
+    /** Найденные сообщения: от новых к старым. */
+    val ids: List<Long> = emptyList(),
+    val total: Int = 0,
+    /** Позиция текущего результата в [ids]; -1, если результата нет. */
+    val index: Int = -1,
+    val loading: Boolean = false,
+    val notFound: Boolean = false,
+    val nextFrom: Long = 0L,
+)
+
 class ChatViewModel(
     private val repository: ChatRepository,
     val chatId: Long,
     private val settings: SettingsRepository,
+    /** Если не 0 — после загрузки истории прокрутить к этому сообщению (переход из глобального поиска). */
+    val initialMessageId: Long = 0L,
 ) : ViewModel() {
+
+    private val _search = MutableStateFlow(ChatSearchState())
+    val search: StateFlow<ChatSearchState> = _search.asStateFlow()
+
+    private val _jump = MutableStateFlow<Long?>(null)
+    /** Сообщение, к которому нужно прокрутить; экран сбрасывает его через [consumeJump]. */
+    val pendingJump: StateFlow<Long?> = _jump.asStateFlow()
+
+    fun consumeJump() {
+        _jump.value = null
+    }
+
+    private var searchJob: Job? = null
+    private var moreJob: Job? = null
+    private var jumpJob: Job? = null
+
+    /** Новый запрос поиска по чату (с небольшой задержкой, пока пользователь печатает). */
+    fun search(query: String) {
+        searchJob?.cancel()
+        moreJob?.cancel()
+        val q = query.trim()
+        if (q.isEmpty()) {
+            _search.value = ChatSearchState()
+            return
+        }
+        _search.value = ChatSearchState(query = q, loading = true)
+        searchJob = viewModelScope.launch {
+            delay(350)
+            try {
+                val page = repository.searchInChat(chatId, q)
+                _search.value = ChatSearchState(
+                    query = q,
+                    ids = page.ids,
+                    total = maxOf(page.total, page.ids.size),
+                    index = if (page.ids.isEmpty()) -1 else 0,
+                    notFound = page.ids.isEmpty(),
+                    nextFrom = page.nextFromMessageId,
+                )
+                page.ids.firstOrNull()?.let { jumpTo(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _search.update { it.copy(loading = false) }
+                _state.update { it.copy(error = e.message ?: "Не удалось выполнить поиск") }
+            }
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        moreJob?.cancel()
+        _search.value = ChatSearchState()
+    }
+
+    /** К более старому результату (стрелка вверх). */
+    fun searchOlder() {
+        val s = _search.value
+        if (s.ids.isEmpty()) return
+        val next = s.index + 1
+        if (next < s.ids.size) {
+            selectResult(next)
+            if (next >= s.ids.size - 3) loadMoreResults(selectNext = false)
+        } else {
+            loadMoreResults(selectNext = true)
+        }
+    }
+
+    /** К более новому результату (стрелка вниз). */
+    fun searchNewer() {
+        val s = _search.value
+        if (s.index > 0) selectResult(s.index - 1)
+    }
+
+    private fun selectResult(index: Int) {
+        val id = _search.value.ids.getOrNull(index) ?: return
+        _search.update { it.copy(index = index) }
+        jumpTo(id)
+    }
+
+    private fun loadMoreResults(selectNext: Boolean) {
+        val s = _search.value
+        if (moreJob?.isActive == true || s.nextFrom == 0L || s.query.isEmpty()) return
+        val q = s.query
+        moreJob = viewModelScope.launch {
+            try {
+                val page = repository.searchInChat(chatId, q, fromMessageId = s.nextFrom)
+                if (_search.value.query != q) return@launch
+                _search.update { cur ->
+                    cur.copy(
+                        ids = (cur.ids + page.ids).distinct(),
+                        total = maxOf(cur.total, cur.ids.size + page.ids.size),
+                        nextFrom = page.nextFromMessageId,
+                    )
+                }
+                if (selectNext) {
+                    val cur = _search.value
+                    if (cur.index + 1 < cur.ids.size) selectResult(cur.index + 1)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Не удалось загрузить результаты") }
+            }
+        }
+    }
+
+    /** Догружает историю до сообщения [messageId] и просит экран прокрутить к нему. */
+    private fun jumpTo(messageId: Long) {
+        jumpJob?.cancel()
+        jumpJob = viewModelScope.launch {
+            if (ensureLoaded(messageId)) _jump.value = messageId
+            else _state.update { it.copy(error = "Сообщение слишком далеко в истории") }
+        }
+    }
+
+    /** Подгружает старые сообщения, пока нужное не окажется в списке (не больше 30 порций по 100). */
+    private suspend fun ensureLoaded(messageId: Long): Boolean {
+        _state.first { !it.loading }
+        repeat(MAX_JUMP_ROUNDS) {
+            val s = _state.value
+            if (s.messages.any { it.id == messageId }) return true
+            if (historyEnd || s.messages.isEmpty() || s.messages.last().id < messageId) return false
+            try {
+                if (!fetchOlder(100)) return false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return false
+            }
+        }
+        return _state.value.messages.any { it.id == messageId }
+    }
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
@@ -97,23 +249,39 @@ class ChatViewModel(
 
     private fun deletedFrom(lowBound: Long) = deletedStore.filter { it.id >= lowBound }
 
+    private val olderMutex = Mutex()
+
+    /** Подгружает порцию сообщений старше самого старого из загруженных; false — загружать нечего. */
+    private suspend fun fetchOlder(limit: Int): Boolean = olderMutex.withLock {
+        val s = _state.value
+        if (historyEnd || s.loading || s.messages.isEmpty()) return@withLock false
+        val oldestId = s.messages.last().id
+        _state.update { it.copy(loadingOlder = true) }
+        try {
+            val older = repository.loadOlder(chatId, oldestId, limit)
+            if (older.isEmpty()) historyEnd = true
+            val low = if (older.isEmpty()) 0L else older.minOf { it.id }
+            _state.update { cur ->
+                val merged = (cur.messages + older.asReversed() + deletedFrom(low)).distinctBy { it.id }.sortedByDescending { it.id }
+                cur.copy(messages = merged)
+            }
+            older.isNotEmpty()
+        } finally {
+            _state.update { it.copy(loadingOlder = false) }
+        }
+    }
+
     /** Подгружает сообщения старше самого старого из загруженных. */
     fun loadOlder() {
         val s = _state.value
         if (olderJob?.isActive == true || historyEnd || s.loading || s.messages.isEmpty()) return
-        val oldestId = s.messages.last().id
         olderJob = viewModelScope.launch {
-            _state.update { it.copy(loadingOlder = true) }
             try {
-                val older = repository.loadOlder(chatId, oldestId)
-                if (older.isEmpty()) historyEnd = true
-                val low = if (older.isEmpty()) 0L else older.minOf { it.id }
-                _state.update { cur ->
-                    val merged = (cur.messages + older.asReversed() + deletedFrom(low)).distinctBy { it.id }.sortedByDescending { it.id }
-                    cur.copy(messages = merged, loadingOlder = false)
-                }
+                fetchOlder(40)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _state.update { it.copy(loadingOlder = false, error = e.message) }
+                _state.update { it.copy(error = e.message) }
             }
         }
     }
@@ -206,6 +374,11 @@ class ChatViewModel(
                     )
                 }
                 repository.markRead(chatId, history.filter { !it.isOutgoing }.map { it.id })
+                if (initialMessageId != 0L) {
+                    // Даём списку примениться и закончить стартовую прокрутку вниз.
+                    delay(250)
+                    jumpTo(initialMessageId)
+                }
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message) }
             }
@@ -303,8 +476,15 @@ class ChatViewModel(
     fun dismissError() = _state.update { it.copy(error = null) }
 
     companion object {
-        fun factory(repository: ChatRepository, chatId: Long, settings: SettingsRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatViewModel(repository, chatId, settings) }
+        private const val MAX_JUMP_ROUNDS = 30
+
+        fun factory(
+            repository: ChatRepository,
+            chatId: Long,
+            settings: SettingsRepository,
+            initialMessageId: Long = 0L,
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ChatViewModel(repository, chatId, settings, initialMessageId) }
         }
     }
 }

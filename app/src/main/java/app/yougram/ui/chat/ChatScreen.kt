@@ -26,6 +26,19 @@ import android.content.pm.PackageManager
 import android.content.Context
 import android.Manifest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import app.yougram.ui.highlightMatches
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.foundation.background
@@ -164,6 +177,11 @@ fun ChatScreen(
     var deleteMessage by remember { mutableStateOf<MessageItem?>(null) }
     var editsDialog by remember { mutableStateOf<List<EditRecord>?>(null) }
     var emojiSheet by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var searchText by remember { mutableStateOf("") }
+    var highlightId by remember { mutableStateOf<Long?>(null) }
+    val search by viewModel.search.collectAsState()
+    val jump by viewModel.pendingJump.collectAsState()
     var recording by remember { mutableStateOf(false) }
     var recordSeconds by remember { mutableStateOf(0) }
     var videoMode by remember { mutableStateOf(false) }
@@ -251,6 +269,39 @@ fun ChatScreen(
     val visibleMessages = remember(state.messages, filters, state.blockedUserIds) {
         state.messages.filterNot { MessageFilters.isHidden(it, filters, state.blockedUserIds) }
     }
+    val visibleState = rememberUpdatedState(visibleMessages)
+
+    fun closeSearch() {
+        searchOpen = false
+        searchText = ""
+        highlightId = null
+        viewModel.clearSearch()
+    }
+
+    BackHandler(enabled = searchOpen) { closeSearch() }
+
+    // Переход к сообщению: из результатов поиска (в чате и глобального). Подсветка снимается сама,
+    // если поиск в чате не открыт.
+    LaunchedEffect(jump) {
+        val id = jump ?: return@LaunchedEffect
+        highlightId = id
+        val list = withTimeoutOrNull(2000) {
+            snapshotFlow { visibleState.value }.first { l -> l.any { it.id == id } }
+        }
+        val idx = list?.indexOfFirst { it.id == id } ?: -1
+        if (idx >= 0) {
+            listState.animateScrollToItem(idx, -(listState.layoutInfo.viewportSize.height / 3))
+            if (!searchOpen) {
+                scope.launch {
+                    delay(2000)
+                    if (highlightId == id) highlightId = null
+                }
+            }
+        } else {
+            scope.launch { snackbar.showSnackbar("Сообщение не найдено в истории") }
+        }
+        viewModel.consumeJump()
+    }
 
     val density = LocalDensity.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -275,8 +326,13 @@ fun ChatScreen(
         }
     }
     // При появлении нового сообщения прокручиваем вниз (в reverseLayout это индекс 0).
+    // Если чат открыт на конкретном сообщении (из поиска), стартовую прокрутку вниз пропускаем.
+    var skipInitialScroll by remember { mutableStateOf(viewModel.initialMessageId != 0L) }
     LaunchedEffect(state.messages.firstOrNull()?.id) {
-        if (state.messages.isNotEmpty()) listState.animateScrollToItem(0)
+        if (state.messages.isNotEmpty()) {
+            if (skipInitialScroll) skipInitialScroll = false
+            else if (!searchOpen) listState.animateScrollToItem(0)
+        }
     }
 
     // reverseLayout: старые сообщения — в конце списка; у верхнего края просим следующую порцию.
@@ -338,11 +394,19 @@ fun ChatScreen(
                                 val target = message.reply?.messageId
                                 val idx = visibleMessages.indexOfFirst { it.id == target }
                                 scope.launch {
-                                    if (idx >= 0) listState.animateScrollToItem(idx)
-                                    else snackbar.showSnackbar("Исходное сообщение не загружено")
+                                    if (idx >= 0) {
+                                        listState.animateScrollToItem(idx)
+                                        highlightId = target
+                                        delay(1500)
+                                        if (!searchOpen && highlightId == target) highlightId = null
+                                    } else {
+                                        snackbar.showSnackbar("Исходное сообщение не загружено")
+                                    }
                                 }
                             },
                             onReact = { emoji -> viewModel.react(message.id, emoji) },
+                            highlighted = message.id == highlightId,
+                            searchQuery = if (searchOpen) search.query else "",
                         )
                     }
                     if (state.loadingOlder) {
@@ -364,42 +428,99 @@ fun ChatScreen(
                 .height(topInset + TopBarContentHeight)
                 .glass(backdrop, glass, RectangleShape),
         ) {
-            Row(
-                Modifier
-                    .padding(top = topInset)
-                    .height(TopBarContentHeight)
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                }
+            if (searchOpen) {
+                val focusRequester = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focusRequester.requestFocus() }
                 Row(
                     Modifier
-                        .weight(1f)
+                        .padding(top = topInset)
                         .height(TopBarContentHeight)
-                        .clickable(onClick = onOpenChatProfile),
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FileAvatar(title = state.title, fileId = state.avatarFileId, fileState = viewModel::fileState, size = 40.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        state.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
-                }
-                // Звонки доступны только в личных чатах (id чата = id пользователя).
-                if (!state.isGroup && !state.isChannel && viewModel.chatId > 0L) {
-                    IconButton(onClick = { startCall(false) }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок", modifier = Modifier.size(20.dp))
+                    IconButton(onClick = { closeSearch() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
                     }
-                    IconButton(onClick = { startCall(true) }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок", modifier = Modifier.size(22.dp))
+                    TextField(
+                        value = searchText,
+                        onValueChange = {
+                            searchText = it
+                            viewModel.search(it)
+                        },
+                        placeholder = { Text("Поиск в чате") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { viewModel.searchOlder() }),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                    )
+                    val counter = when {
+                        search.loading -> "…"
+                        search.notFound -> "0"
+                        search.index >= 0 -> "${search.index + 1}/${search.total}"
+                        else -> ""
+                    }
+                    if (counter.isNotEmpty()) {
+                        Text(
+                            counter,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { viewModel.searchOlder() }, enabled = search.ids.isNotEmpty()) {
+                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Предыдущее (старее)")
+                    }
+                    IconButton(onClick = { viewModel.searchNewer() }, enabled = search.index > 0) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Следующее (новее)")
+                    }
+                }
+            } else {
+                Row(
+                    Modifier
+                        .padding(top = topInset)
+                        .height(TopBarContentHeight)
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .height(TopBarContentHeight)
+                            .clickable(onClick = onOpenChatProfile),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FileAvatar(title = state.title, fileId = state.avatarFileId, fileState = viewModel::fileState, size = 40.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            state.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
+                    }
+                    IconButton(onClick = { searchOpen = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Search, contentDescription = "Поиск в чате", modifier = Modifier.size(22.dp))
+                    }
+                    // Звонки доступны только в личных чатах (id чата = id пользователя).
+                    if (!state.isGroup && !state.isChannel && viewModel.chatId > 0L) {
+                        IconButton(onClick = { startCall(false) }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { startCall(true) }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок", modifier = Modifier.size(22.dp))
+                        }
                     }
                 }
             }
@@ -812,6 +933,8 @@ private fun MessageBubble(
     reply: ReplyPreview?,
     onReplyClick: () -> Unit,
     onReact: (String) -> Unit,
+    highlighted: Boolean,
+    searchQuery: String,
 ) {
     val mine = message.isOutgoing
     val media = message.media
@@ -839,6 +962,14 @@ private fun MessageBubble(
     } else {
         RoundedCornerShape(topStart = top, topEnd = cornerRadius, bottomEnd = cornerRadius, bottomStart = bottom)
     }
+
+    val baseColor = if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+    val bubbleColor by animateColorAsState(
+        targetValue = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else baseColor,
+        animationSpec = tween(250),
+        label = "bubbleHighlight",
+    )
+    val matchColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
 
     Row(
         Modifier
@@ -872,15 +1003,11 @@ private fun MessageBubble(
                 Surface(
                     modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) },
                     shape = shape,
-                    color = if (mine) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
-                    contentColor = if (mine) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
+                    color = bubbleColor,
+                    contentColor = when {
+                        highlighted -> MaterialTheme.colorScheme.onTertiaryContainer
+                        mine -> MaterialTheme.colorScheme.onPrimaryContainer
+                        else -> MaterialTheme.colorScheme.onSurface
                     },
                 ) {
                     Column(Modifier.widthIn(max = if (showSenderUi) 290.dp else 320.dp)) {
@@ -902,12 +1029,16 @@ private fun MessageBubble(
                             Box(Modifier.padding(4.dp)) { MessageMedia(media, viewModel, onOpenPhoto) }
                         }
                         if (message.text.isNotEmpty()) {
+                            val linked = rememberLinkified(
+                                message.text,
+                                if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                LocalOpenLink.current,
+                            )
+                            val shown = remember(linked, searchQuery, matchColor) {
+                                linked.highlightMatches(searchQuery, matchColor)
+                            }
                             Text(
-                                rememberLinkified(
-                                    message.text,
-                                    if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
-                                    LocalOpenLink.current,
-                                ),
+                                shown,
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = textSize.sp,

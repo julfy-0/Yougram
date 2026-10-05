@@ -1,35 +1,41 @@
 package app.yougram.ui.settings
 
-import androidx.compose.ui.draw.clip
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.background
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -37,35 +43,48 @@ import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -73,6 +92,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.BuildConfig
+import app.yougram.data.AccountManager
 import app.yougram.data.ChatRepository
 import app.yougram.data.FileState
 import app.yougram.data.ProfileItem
@@ -126,6 +146,7 @@ enum class SettingsPage(val title: String) {
 @Composable
 fun SettingsHomeScreen(
     viewModel: SettingsHomeViewModel,
+    accountManager: AccountManager,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
     onOpenChat: (Long) -> Unit,
@@ -134,6 +155,8 @@ fun SettingsHomeScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     var askDialog by remember { mutableStateOf(false) }
+    var accountSheetOpen by remember { mutableStateOf(false) }
+
     val openUrl = { url: String ->
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -167,9 +190,11 @@ fun SettingsHomeScreen(
             }
         }
         ProfileHeader(
-            state,
-            viewModel,
+            state = state,
+            viewModel = viewModel,
+            accountManager = accountManager,
             onChangeAvatar = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onOpenAccountManager = { accountSheetOpen = true },
         )
 
         SettingGroup {
@@ -218,6 +243,14 @@ fun SettingsHomeScreen(
         )
     }
 
+    if (accountSheetOpen) {
+        AccountManagerSheet(
+            accountManager = accountManager,
+            fileState = viewModel::fileState,
+            onDismiss = { accountSheetOpen = false },
+        )
+    }
+
     if (askDialog) {
         val linkColor = MaterialTheme.colorScheme.primary
         AlertDialog(
@@ -246,8 +279,16 @@ fun SettingsHomeScreen(
 }
 
 @Composable
-private fun ProfileHeader(state: SettingsHomeState, viewModel: SettingsHomeViewModel, onChangeAvatar: () -> Unit) {
+private fun ProfileHeader(
+    state: SettingsHomeState,
+    viewModel: SettingsHomeViewModel,
+    accountManager: AccountManager,
+    onChangeAvatar: () -> Unit,
+    onOpenAccountManager: () -> Unit,
+) {
     val profile = state.profile
+    val accounts by accountManager.accounts.collectAsState()
+
     Column(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -287,6 +328,159 @@ private fun ProfileHeader(state: SettingsHomeState, viewModel: SettingsHomeViewM
         ).joinToString(" • ")
         if (sub.isNotEmpty()) {
             Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Row(
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                .clickable(onClick = onOpenAccountManager)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(6.dp))
+            Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AccountManagerSheet(
+    accountManager: AccountManager,
+    fileState: (Int) -> Flow<FileState>,
+    onDismiss: () -> Unit,
+) {
+    val accounts by accountManager.accounts.collectAsState()
+    val activeId by accountManager.activeAccountId.collectAsState()
+    val context = LocalContext.current
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Управление аккаунтами",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Закрыть")
+                }
+            }
+
+            Text(
+                text = "Переключайтесь между аккаунтами или добавьте новый:",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                items(accounts, key = { it.id }) { acc ->
+                    val isActive = acc.id == activeId
+                    Surface(
+                        onClick = {
+                            if (!isActive) {
+                                accountManager.switchAccount(acc.id)
+                                onDismiss()
+                                (context as? Activity)?.recreate()
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            FileAvatar(
+                                title = acc.name.ifEmpty { "Аккаунт" },
+                                fileId = acc.avatarFileId,
+                                fileState = fileState,
+                                size = 44.dp,
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = acc.name.ifEmpty { "Аккаунт" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (acc.phone.isNotEmpty() || !acc.username.isNullOrEmpty()) {
+                                    Text(
+                                        text = listOfNotNull(acc.phone.takeIf { it.isNotEmpty() }, acc.username?.let { "@$it" }).joinToString(" • "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                            if (isActive) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Активен",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            } else if (accounts.size > 1) {
+                                IconButton(
+                                    onClick = { accountManager.removeAccount(acc.id) },
+                                ) {
+                                    Icon(
+                                        Icons.Filled.DeleteOutline,
+                                        contentDescription = "Удалить аккаунт",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Button(
+                onClick = {
+                    accountManager.createNewAccount()
+                    onDismiss()
+                    (context as? Activity)?.recreate()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = CircleShape,
+            ) {
+                Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Добавить аккаунт", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

@@ -2,6 +2,14 @@ package app.yougram.ui.security
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +68,13 @@ fun LockGate(appLock: AppLock, content: @Composable () -> Unit) {
                 .fillMaxSize()
                 .then(if (locked) Modifier.clearAndSetSemantics {} else Modifier),
         ) { content() }
-        if (locked) LockScreen(appLock)
+        AnimatedVisibility(
+            visible = locked,
+            enter = fadeIn(tween(300)) + scaleIn(initialScale = 0.94f, animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow)),
+            exit = fadeOut(tween(250)) + scaleOut(targetScale = 0.94f, animationSpec = tween(250)),
+        ) {
+            LockScreen(appLock)
+        }
     }
 }
 

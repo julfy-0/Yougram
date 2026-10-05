@@ -23,6 +23,7 @@ import java.util.Locale
 class TelegramClient(
     private val context: Context,
     private val scope: CoroutineScope,
+    val accountDirName: String = "tdlib",
 ) {
     val client: TdlClient = TdlClient.create()
 
@@ -61,8 +62,8 @@ class TelegramClient(
             _credentialsMissing.value = true
             return
         }
-        val dbDir = File(context.filesDir, "tdlib").apply { mkdirs() }
-        val filesDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "tdlib_files")
+        val dbDir = File(context.filesDir, accountDirName).apply { mkdirs() }
+        val filesDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "${accountDirName}_files")
             .apply { mkdirs() }
         client.setTdlibParameters(
             useTestDc = false,

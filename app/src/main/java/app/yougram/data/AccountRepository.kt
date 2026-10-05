@@ -107,7 +107,10 @@ data class BlockedItem(val userId: Long, val chatId: Long, val title: String)
 data class WebsiteItem(val id: Long, val domain: String, val subtitle: String)
 
 /** Аккаунт, сеансы, конфиденциальность и память: всё, что нужно подэкранам настроек. */
-class AccountRepository(private val telegram: TelegramClient) {
+class AccountRepository(
+    private val telegram: TelegramClient,
+    private val accountManager: AccountManager? = null,
+) {
     private val client get() = telegram.client
 
     suspend fun loadAccount(): AccountInfo {
@@ -117,11 +120,24 @@ class AccountRepository(private val telegram: TelegramClient) {
         val personalTitle = if (personalId != 0L) {
             runCatching { client.getChat(chatId = personalId).getOrThrow().title }.getOrNull()
         } else null
+        val phoneStr = if (me.phoneNumber.isEmpty()) "" else "+${me.phoneNumber}"
+        val nameStr = "${me.firstName} ${me.lastName}".trim().ifEmpty { "Аккаунт" }
+        val avatarId = me.profilePhoto?.small?.id
+
+        accountManager?.updateAccountDetails(
+            id = telegram.accountDirName,
+            userId = me.id,
+            name = nameStr,
+            phone = phoneStr,
+            username = me.usernames?.activeUsernames?.firstOrNull(),
+            avatarFileId = avatarId,
+        )
+
         return AccountInfo(
             firstName = me.firstName,
             lastName = me.lastName,
             username = me.usernames?.activeUsernames?.firstOrNull(),
-            phone = if (me.phoneNumber.isEmpty()) "" else "+${me.phoneNumber}",
+            phone = phoneStr,
             birthdate = full?.birthdate?.let { BirthdateInfo(day = it.day, month = it.month, year = it.year) },
             bio = full?.bio?.text.orEmpty(),
             personalChatId = personalId,

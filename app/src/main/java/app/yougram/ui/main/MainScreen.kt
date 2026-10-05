@@ -81,6 +81,8 @@ import app.yougram.ui.calls.CallsScreen
 import app.yougram.ui.calls.CallsViewModel
 import app.yougram.ui.chats.ChatListScreen
 import app.yougram.ui.chats.ChatListViewModel
+import app.yougram.ui.chats.GlobalSearchScreen
+import app.yougram.ui.chats.GlobalSearchViewModel
 import app.yougram.ui.contacts.ContactsScreen
 import app.yougram.ui.contacts.ContactsViewModel
 import app.yougram.ui.glass.BackdropState
@@ -140,7 +142,12 @@ private class HideOnScrollConnection(
 }
 
 @Composable
-fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
+fun MainScreen(
+    container: AppContainer,
+    onOpenChat: (Long) -> Unit,
+    /** Открыть чат и прокрутить к сообщению (из результатов поиска). */
+    onOpenMessage: (chatId: Long, messageId: Long) -> Unit,
+) {
     val glass by container.settings.glass.collectAsState()
     val chatPrefs by container.settings.chatPrefs.collectAsState()
     val backdrop = rememberBackdropState()
@@ -162,6 +169,9 @@ fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
 
     val chatListViewModel: ChatListViewModel = viewModel(
         factory = ChatListViewModel.factory(container.chatRepository),
+    )
+    val searchViewModel: GlobalSearchViewModel = viewModel(
+        factory = GlobalSearchViewModel.factory(container.chatRepository),
     )
 
     val density = LocalDensity.current
@@ -246,13 +256,27 @@ fun MainScreen(container: AppContainer, onOpenChat: (Long) -> Unit) {
                 label = "mainScreen",
             ) { (currentTab, currentPage) ->
                 when (currentTab) {
-                    MainTab.Chats -> ChatListScreen(
-                        viewModel = chatListViewModel,
-                        query = query,
-                        contentPadding = chatsPadding,
-                        onOpenChat = onOpenChat,
-                        lines = chatPrefs.listLines,
-                    )
+                    MainTab.Chats -> Box(Modifier.fillMaxSize()) {
+                        // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
+                        ChatListScreen(
+                            viewModel = chatListViewModel,
+                            query = "",
+                            contentPadding = chatsPadding,
+                            onOpenChat = onOpenChat,
+                            lines = chatPrefs.listLines,
+                        )
+                        if (searching && query.isNotBlank()) {
+                            GlobalSearchScreen(
+                                viewModel = searchViewModel,
+                                query = query,
+                                contentPadding = chatsPadding,
+                                fileState = container.chatRepository::fileState,
+                                onOpenChat = onOpenChat,
+                                onOpenMessage = onOpenMessage,
+                                modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                            )
+                        }
+                    }
                     MainTab.Contacts -> ContactsScreen(
                         viewModel = viewModel<ContactsViewModel>(factory = ContactsViewModel.factory(container.chatRepository)),
                         contentPadding = contentPadding,
@@ -363,7 +387,7 @@ private fun GlassTopBar(
                 TextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    placeholder = { Text("Поиск по чатам") },
+                    placeholder = { Text("Чаты, контакты, сообщения") },
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,

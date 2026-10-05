@@ -39,6 +39,7 @@ fun SettingsPageContent(
     when (page) {
         SettingsPage.Home -> SettingsHomeScreen(
             viewModel = viewModel<SettingsHomeViewModel>(factory = SettingsHomeViewModel.factory(container.chatRepository)),
+            accountManager = container.accountManager,
             contentPadding = contentPadding,
             onNavigate = onNavigate,
             onOpenChat = onOpenChat,

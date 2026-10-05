@@ -132,10 +132,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applySecureFlag(secure: Boolean) {
-        if (secure) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        // Разрешаем скриншоты и запись экрана во всех режимах.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 }

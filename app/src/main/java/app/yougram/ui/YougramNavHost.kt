@@ -42,7 +42,7 @@ import app.yougram.ui.profile.ProfileViewModel
 private const val ROUTE_SPLASH = "splash"
 private const val ROUTE_AUTH = "auth"
 private const val ROUTE_CHATS = "chats"
-private const val ROUTE_CHAT = "chat/{chatId}"
+private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}"
 private const val ROUTE_PROFILE = "profile/{chatId}"
 private const val ROUTE_BROWSER = "browser/{url}"
 
@@ -127,11 +127,20 @@ fun YougramNavHost(container: AppContainer) {
                     MainScreen(
                         container = container,
                         onOpenChat = { chatId -> navController.navigate("chat/$chatId") },
+                        onOpenMessage = { chatId, messageId ->
+                            navController.navigate("chat/$chatId?messageId=$messageId")
+                        },
                     )
                 }
                 composable(
                     route = ROUTE_CHAT,
-                    arguments = listOf(navArgument("chatId") { type = NavType.LongType }),
+                    arguments = listOf(
+                        navArgument("chatId") { type = NavType.LongType },
+                        navArgument("messageId") {
+                            type = NavType.LongType
+                            defaultValue = 0L
+                        },
+                    ),
                     // Чат выезжает справа и уезжает обратно вправо.
                     enterTransition = {
                         slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
@@ -143,9 +152,10 @@ fun YougramNavHost(container: AppContainer) {
                     },
                 ) { entry ->
                     val chatId = entry.arguments!!.getLong("chatId")
+                    val messageId = entry.arguments!!.getLong("messageId")
                     val vm: ChatViewModel = viewModel(
-                        key = "chat-$chatId",
-                        factory = ChatViewModel.factory(container.chatRepository, chatId, container.settings),
+                        key = "chat-$chatId-$messageId",
+                        factory = ChatViewModel.factory(container.chatRepository, chatId, container.settings, messageId),
                     )
                     ChatScreen(
                         viewModel = vm,

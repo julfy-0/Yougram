@@ -47,6 +47,7 @@ import dev.g000sha256.tdl.dto.MessageText
 import dev.g000sha256.tdl.dto.MessageVideo
 import dev.g000sha256.tdl.dto.MessageVideoNote
 import dev.g000sha256.tdl.dto.MessageVoiceNote
+import dev.g000sha256.tdl.dto.SearchMessagesFilterEmpty
 import dev.g000sha256.tdl.dto.User
 import dev.g000sha256.tdl.dto.UserStatusLastMonth
 import dev.g000sha256.tdl.dto.UserStatusLastWeek
@@ -106,6 +107,40 @@ data class ChatItem(
 
 /** Папка с чатами. */
 data class ChatFolderItem(val id: Int, val title: String)
+
+/** Чат, контакт или публичный чат в результатах поиска. */
+data class SearchChatHit(
+    val chatId: Long,
+    val title: String,
+    /** @username, «Канал» или «Группа»; может быть пустым. */
+    val subtitle: String,
+    val avatarFileId: Int?,
+)
+
+/** Результаты поиска людей и чатов: свои чаты, контакты и публичные чаты по всему Telegram. */
+data class PeopleSearch(
+    val chats: List<SearchChatHit>,
+    val contacts: List<SearchChatHit>,
+    val global: List<SearchChatHit>,
+)
+
+/** Найденное сообщение в глобальном поиске. */
+data class SearchMessageHit(
+    val chatId: Long,
+    val messageId: Long,
+    val chatTitle: String,
+    val avatarFileId: Int?,
+    /** «Вы» или имя автора в группе; пусто в личных чатах и каналах. */
+    val author: String,
+    val text: String,
+    val date: Int,
+)
+
+/** Страница глобального поиска сообщений; пустой [nextOffset] — результатов больше нет. */
+data class MessageSearchPage(val hits: List<SearchMessageHit>, val nextOffset: String, val total: Int)
+
+/** Страница поиска внутри чата: id сообщений от новых к старым; [nextFromMessageId] == 0 — конец. */
+data class ChatSearchPage(val ids: List<Long>, val nextFromMessageId: Long, val total: Int)
 
 enum class MediaKind(val label: String) {
     PHOTO("Фото"),
@@ -795,6 +830,127 @@ class ChatRepository(
         is ChatMemberStatusRestricted -> status.isMember && !isChannel && status.permissions.canSendBasicMessages
         is ChatMemberStatusLeft, is ChatMemberStatusBanned -> false
         else -> false
+    }
+
+    // ---------- Поиск ----------
+
+    private suspend fun chatHit(chatId: Long): SearchChatHit? {
+        val chat = (client.getChat(chatId = chatId) as? TdlResult.Success)?.result ?: return null
+        val avatar = chat.photo?.small
+        avatar?.let { prepareAvatar(it) }
+        val subtitle = when (val type = chat.type) {
+            is ChatTypePrivate -> (client.getUser(userId = type.userId) as? TdlResult.Success)?.result
+                ?.usernames?.activeUsernames?.firstOrNull()?.let { "@$it" }.orEmpty()
+            is ChatTypeSupergroup -> {
+                val group = (client.getSupergroup(supergroupId = type.supergroupId) as? TdlResult.Success)?.result
+                group?.usernames?.activeUsernames?.firstOrNull()?.let { "@$it" }
+                    ?: if (type.isChannel) "Канал" else "Группа"
+            }
+            is ChatTypeBasicGroup -> "Группа"
+            else -> ""
+        }
+        return SearchChatHit(chatId = chatId, title = chat.title, subtitle = subtitle, avatarFileId = avatar?.id)
+    }
+
+    private suspend fun chatHits(ids: List<Long>): List<SearchChatHit> = coroutineScope {
+        ids.distinct().map { id -> async { chatHit(id) } }.awaitAll().filterNotNull()
+    }
+
+    /** Быстрая часть поиска: уже известные чаты (searchChats) и контакты (searchContacts). */
+    suspend fun searchPeopleLocal(query: String): PeopleSearch = coroutineScope {
+        val q = query.trim()
+        val chatIds = async {
+            runCatching { client.searchChats(query = q, typeFilter = null, limit = 20).getOrThrow().chatIds.toList() }
+                .getOrDefault(emptyList())
+        }
+        val contactIds = async {
+            runCatching { client.searchContacts(query = q, limit = 20).getOrThrow().userIds.toList() }
+                .getOrDefault(emptyList())
+        }
+        val chats = chatHits(chatIds.await())
+        val contacts = chatHits(contactIds.await().mapNotNull { runCatching { openPrivateChat(it) }.getOrNull() })
+        PeopleSearch(chats = chats, contacts = contacts, global = emptyList())
+    }
+
+    /** Серверная часть поиска: свои чаты через сервер (searchChatsOnServer) и публичные чаты по всему Telegram. */
+    suspend fun searchPeopleRemote(query: String): PeopleSearch = coroutineScope {
+        val q = query.trim()
+        val serverIds = async {
+            runCatching { client.searchChatsOnServer(query = q, typeFilter = null, limit = 20).getOrThrow().chatIds.toList() }
+                .getOrDefault(emptyList())
+        }
+        val publicIds = async {
+            runCatching { client.searchPublicChats(query = q, typeFilter = null).getOrThrow().chatIds.toList() }
+                .getOrDefault(emptyList())
+        }
+        PeopleSearch(chats = chatHits(serverIds.await()), contacts = emptyList(), global = chatHits(publicIds.await()))
+    }
+
+    /** Поиск сообщений по всем чатам; для первой страницы передайте пустой [offset]. */
+    suspend fun searchMessages(query: String, offset: String = "", limit: Int = 30): MessageSearchPage {
+        val found = client.searchMessages(
+            chatList = ChatListMain(),
+            query = query.trim(),
+            offset = offset,
+            limit = limit,
+            filter = SearchMessagesFilterEmpty(),
+            chatTypeFilter = null,
+            minDate = 0,
+            maxDate = 0,
+        ).getOrThrow()
+        val hits = coroutineScope {
+            found.messages.orEmpty().filterNotNull().map { message ->
+                async {
+                    val item = message.toItem()
+                    val chat = (client.getChat(chatId = message.chatId) as? TdlResult.Success)?.result
+                    val avatar = chat?.photo?.small
+                    avatar?.let { prepareAvatar(it) }
+                    val author = when {
+                        item.isOutgoing -> "Вы"
+                        message.chatId < 0 && item.senderUserId != null -> sender(item.senderUserId)?.name.orEmpty()
+                        else -> ""
+                    }
+                    SearchMessageHit(
+                        chatId = message.chatId,
+                        messageId = message.id,
+                        chatTitle = chat?.title.orEmpty(),
+                        avatarFileId = avatar?.id,
+                        author = author,
+                        text = item.summary.ifEmpty { "Сообщение" },
+                        date = message.date,
+                    )
+                }
+            }.awaitAll()
+        }
+        return MessageSearchPage(hits = hits, nextOffset = found.nextOffset, total = found.totalCount)
+    }
+
+    /**
+     * Поиск внутри чата (searchChatMessages): id от новых к старым. Для следующей страницы передайте
+     * [fromMessageId] из [ChatSearchPage.nextFromMessageId]. TDLib может вернуть пустую порцию,
+     * хотя результаты есть, поэтому пустые ответы с продолжением повторяем.
+     */
+    suspend fun searchInChat(chatId: Long, query: String, fromMessageId: Long = 0L, limit: Int = 50): ChatSearchPage {
+        var from = fromMessageId
+        var attempts = 0
+        while (true) {
+            val found = client.searchChatMessages(
+                chatId = chatId,
+                topicId = null,
+                query = query.trim(),
+                senderId = null,
+                fromMessageId = from,
+                offset = 0,
+                limit = limit,
+                filter = SearchMessagesFilterEmpty(),
+            ).getOrThrow()
+            val ids = found.messages.orEmpty().filterNotNull().map { it.id }
+            attempts++
+            if (ids.isNotEmpty() || found.nextFromMessageId == 0L || attempts >= 3) {
+                return ChatSearchPage(ids = ids, nextFromMessageId = found.nextFromMessageId, total = found.totalCount)
+            }
+            from = found.nextFromMessageId
+        }
     }
 
     /** Последние сообщения чата в порядке от старых к новым. */

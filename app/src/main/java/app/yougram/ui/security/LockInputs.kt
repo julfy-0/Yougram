@@ -1,16 +1,29 @@
 package app.yougram.ui.security
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -31,16 +45,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 private const val MaxPinLength = 16
 private val KeySize = 64.dp
 
-/** Цифровая клавиатура с точками-индикатором. Значение хранит вызывающий код. */
+/** Цифровая клавиатура с пружинящими точками-индикаторами и анимацией встряхивания при ошибке. */
 @Composable
 fun PinEntry(
     value: String,
@@ -52,15 +69,42 @@ fun PinEntry(
     minLength: Int = 4,
     extraKey: (@Composable () -> Unit)? = null,
 ) {
+    val shakeOffset = remember { Animatable(0f) }
+    LaunchedEffect(isError) {
+        if (isError) {
+            shakeOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 400
+                    0f at 0
+                    (-24f) at 50
+                    24f at 100
+                    (-18f) at 150
+                    18f at 200
+                    (-12f) at 250
+                    12f at 300
+                    (-6f) at 350
+                    0f at 400
+                },
+            )
+        }
+    }
+
     val dotColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     Column(
-        modifier,
+        modifier = modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            repeat(value.length) {
-                Box(Modifier.size(14.dp).clip(CircleShape).background(dotColor))
+            for (i in 0 until MaxPinLength) {
+                AnimatedVisibility(
+                    visible = i < value.length,
+                    enter = scaleIn(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                ) {
+                    Box(Modifier.size(14.dp).clip(CircleShape).background(dotColor))
+                }
             }
         }
         listOf("123", "456", "789").forEach { row ->
@@ -87,20 +131,28 @@ fun PinEntry(
 
 @Composable
 private fun PinKey(enabled: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
+        label = "keyScale",
+    )
+
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.size(KeySize),
+        interactionSource = interactionSource,
+        modifier = Modifier.size(KeySize).scale(scale),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
     }
 }
 
 /**
- * Поле 3×3 для графического ключа. По окончании жеста отдаёт номера точек (0..8) через запятую.
- * Проверку минимальной длины делает вызывающий код.
+ * Поле 3×3 для графического ключа с анимацией дрожания при ошибке.
  */
 @Composable
 fun PatternPad(
@@ -110,6 +162,27 @@ fun PatternPad(
     isError: Boolean = false,
     onStart: () -> Unit = {},
 ) {
+    val shakeOffset = remember { Animatable(0f) }
+    LaunchedEffect(isError) {
+        if (isError) {
+            shakeOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 400
+                    0f at 0
+                    (-24f) at 50
+                    24f at 100
+                    (-18f) at 150
+                    18f at 200
+                    (-12f) at 250
+                    12f at 300
+                    (-6f) at 350
+                    0f at 400
+                },
+            )
+        }
+    }
+
     val selected = remember { mutableStateListOf<Int>() }
     var finger by remember { mutableStateOf<Offset?>(null) }
     var widthPx by remember { mutableFloatStateOf(1f) }
@@ -135,6 +208,7 @@ fun PatternPad(
 
     Canvas(
         modifier
+            .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
