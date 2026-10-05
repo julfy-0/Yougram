@@ -37,6 +37,19 @@ import app.yougram.ui.BannerPatternNames
 import app.yougram.ui.BannerShapeNames
 import app.yougram.ui.ProfileBanner
 
+private data class BannerPreset(val name: String, val banner: YougramBanner)
+
+private val Presets = listOf(
+    BannerPreset("Закат", YougramBanner(palette = 1, pattern = 4, shape = 0)),
+    BannerPreset("Неон", YougramBanner(palette = 4, pattern = 1, shape = 3)),
+    BannerPreset("Изумруд", YougramBanner(palette = 2, pattern = 3, shape = 0)),
+    BannerPreset("Космос", YougramBanner(palette = 14, pattern = 1, shape = 3)),
+    BannerPreset("Огонь", YougramBanner(palette = 11, pattern = 2, shape = 1)),
+    BannerPreset("Золото", YougramBanner(palette = 3, pattern = 5, shape = 0)),
+    BannerPreset("Киберпанк", YougramBanner(palette = 8, pattern = 1, shape = 2)),
+    BannerPreset("Минимализм", YougramBanner(palette = 9, pattern = 0, shape = 0)),
+)
+
 /** Редактор баннера профиля. Баннер увидят только пользователи Yougram. */
 @Composable
 fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
@@ -46,7 +59,18 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
     var draft by remember { mutableStateOf(saved ?: YougramBanner()) }
 
     SettingsPageColumn(contentPadding) {
-        ProfileBanner(draft, Modifier.fillMaxWidth().height(120.dp))
+        ProfileBanner(draft, Modifier.fillMaxWidth().height(140.dp))
+
+        SectionLabel("Быстрые шаблоны")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Presets.forEach { preset ->
+                FilterChip(
+                    selected = draft == preset.banner,
+                    onClick = { draft = preset.banner },
+                    label = { Text(preset.name) },
+                )
+            }
+        }
 
         SectionLabel("Цвет")
         BannerPalettes.withIndex().chunked(8).forEach { row ->

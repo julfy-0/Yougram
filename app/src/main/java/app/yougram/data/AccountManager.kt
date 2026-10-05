@@ -126,10 +126,14 @@ class AccountManager(context: Context) {
 
     /** Перезапуск процесса: TDLib-клиент привязан к аккаунту, выбранному при старте. */
     fun restartApp() {
-        appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)?.let {
-            appContext.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            appContext.startActivity(launchIntent)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                Process.killProcess(Process.myPid())
+            }, 300)
         }
-        Process.killProcess(Process.myPid())
     }
 
     private fun deleteData(id: String) {

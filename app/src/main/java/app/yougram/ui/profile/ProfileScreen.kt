@@ -356,10 +356,10 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
         if (banner != null) {
             // Баннер видят только пользователи Yougram; аватар наполовину заходит на него.
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                ProfileBanner(banner, Modifier.fillMaxWidth().height(120.dp).fadeInOnce(500))
+                ProfileBanner(banner, Modifier.fillMaxWidth().height(150.dp).fadeInOnce(500))
                 Box(
                     Modifier
-                        .padding(top = 72.dp)
+                        .padding(top = 90.dp)
                         .popIn(entered)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
@@ -369,7 +369,7 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
                         title = details.title,
                         fileId = details.avatarFileId,
                         fileState = viewModel::fileState,
-                        size = 96.dp,
+                        size = 100.dp,
                     )
                 }
             }

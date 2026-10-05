@@ -29,6 +29,8 @@ import app.yougram.ui.theme.isDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import app.yougram.ui.glass.LocalGlass
 import app.yougram.ui.LocalBadgeChecker
+import app.yougram.ui.LocalCreatorUsers
+import app.yougram.ui.LocalGoldUsers
 import app.yougram.ui.LocalYougramUsers
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +71,8 @@ class MainActivity : ComponentActivity() {
             val dark = isDarkTheme(theme)
             val secure = lock.type != LockType.None && lock.secureScreen
             val yougramUsers by container.chatRepository.yougramUsers.collectAsState()
+            val goldUsers by container.chatRepository.goldUsers.collectAsState()
+            val creatorUsers by container.chatRepository.creatorUsers.collectAsState()
             val yougramBanners by container.chatRepository.banners.collectAsState()
             val inCall by container.callManager.call.collectAsState()
             val authStep by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
@@ -110,6 +114,8 @@ class MainActivity : ComponentActivity() {
                     LocalGlass provides glass,
                     LocalPlates provides plates,
                     LocalYougramUsers provides yougramUsers,
+                    LocalGoldUsers provides goldUsers,
+                    LocalCreatorUsers provides creatorUsers,
                     LocalYougramBanners provides yougramBanners,
                     LocalBadgeChecker provides container.chatRepository::checkBadge,
                 ) {

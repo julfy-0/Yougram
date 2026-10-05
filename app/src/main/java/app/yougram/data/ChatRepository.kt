@@ -377,6 +377,14 @@ class ChatRepository(
     /** Пользователи, у которых найдена метка Yougram. */
     val yougramUsers: StateFlow<Set<Long>> = _yougramUsers.asStateFlow()
 
+    private val _goldUsers = MutableStateFlow<Set<Long>>(YougramBadge.GOLD_USER_IDS)
+    /** Пользователи с золотым значком помощника проекта. */
+    val goldUsers: StateFlow<Set<Long>> = _goldUsers.asStateFlow()
+
+    private val _creatorUsers = MutableStateFlow<Set<Long>>(setOf(YougramBadge.CREATOR_USER_ID))
+    /** Пользователи с синим значком создателя Yougram. */
+    val creatorUsers: StateFlow<Set<Long>> = _creatorUsers.asStateFlow()
+
     private val _banners = MutableStateFlow<Map<Long, YougramBanner>>(emptyMap())
     /** Баннеры профилей пользователей Yougram (userId -> баннер). */
     val banners: StateFlow<Map<Long, YougramBanner>> = _banners.asStateFlow()
@@ -384,7 +392,11 @@ class ChatRepository(
     /** Обновляет метку и баннер пользователя по его актуальному bio. */
     private fun noteBio(userId: Long, bio: String) {
         val marked = YougramBadge.hasMarker(bio)
+        val isGold = YougramBadge.isGoldUser(userId, bio)
+        val isCreator = YougramBadge.isCreatorUser(userId, bio)
         _yougramUsers.update { if (marked) it + userId else it - userId }
+        _goldUsers.update { if (isGold) it + userId else it - userId }
+        _creatorUsers.update { if (isCreator) it + userId else it - userId }
         val banner = if (marked) YougramBadge.bannerOf(bio) else null
         _banners.update { if (banner != null) it + (userId to banner) else it - userId }
     }
@@ -794,6 +806,10 @@ class ChatRepository(
     /** Поток состояния файла (путь, прогресс) для UI. */
     fun fileState(fileId: Int): Flow<FileState> =
         fileStates.map { it[fileId] ?: FileState() }.distinctUntilChanged()
+
+    suspend fun getLastReadOutboxMessageId(chatId: Long): Long = runCatching {
+        client.getChat(chatId = chatId).getOrThrow().lastReadOutboxMessageId
+    }.getOrDefault(0L)
 
     /** Запускает загрузку файла; прогресс и путь придут через [fileState]. */
     fun download(fileId: Int, priority: Int = 8) {

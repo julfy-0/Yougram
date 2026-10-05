@@ -29,6 +29,8 @@ import kotlinx.coroutines.sync.withLock
 
 data class ChatUiState(
     val title: String = "",
+    val subtitle: String = "",
+    val isOnline: Boolean = false,
     /** Порядок: новые сообщения в начале списка (для LazyColumn с reverseLayout). */
     val messages: List<MessageItem> = emptyList(),
     val loading: Boolean = true,
@@ -371,9 +373,13 @@ class ChatViewModel(
                 val chatInfo = repository.getChatInfo(chatId)
                 val history = repository.loadHistory(chatId) // от старых к новым
                 val snapshot = repository.spySnapshot(chatId)
+                val lastRead = repository.getLastReadOutboxMessageId(chatId)
                 deletedStore = snapshot.deleted
                 // Если история короткая, она загружена целиком — показываем все сохранённые удалённые.
                 val low = if (history.size < 50) 0L else history.minOf { it.id }
+                val initialReadAt = snapshot.readAt + if (lastRead > 0L) {
+                    history.filter { it.isOutgoing && it.id <= lastRead }.associate { it.id to it.date }
+                } else emptyMap()
                 _state.update { s ->
                     val merged = (history.asReversed() + s.messages + deletedFrom(low)).distinctBy { it.id }.sortedByDescending { it.id }
                     s.copy(
@@ -386,10 +392,18 @@ class ChatViewModel(
                         avatarFileId = chatInfo.avatarFileId,
                         deletedIds = s.deletedIds + deletedFrom(low).map { it.id },
                         edits = snapshot.edits + s.edits,
-                        readAt = snapshot.readAt + s.readAt,
+                        readAt = initialReadAt + s.readAt,
                     )
                 }
                 repository.markRead(chatId, history.filter { !it.isOutgoing }.map { it.id })
+                runCatching { repository.loadProfileDetails(chatId) }.onSuccess { details ->
+                    _state.update {
+                        it.copy(
+                            subtitle = details.subtitle,
+                            isOnline = details.subtitle.contains("в сети"),
+                        )
+                    }
+                }
                 if (initialMessageId != 0L) {
                     // Даём списку примениться и закончить стартовую прокрутку вниз.
                     delay(250)

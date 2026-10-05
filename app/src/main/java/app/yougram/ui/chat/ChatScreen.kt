@@ -41,6 +41,8 @@ import androidx.compose.ui.focus.focusRequester
 import app.yougram.ui.highlightMatches
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -528,14 +530,28 @@ fun ChatScreen(
                     ) {
                         FileAvatar(title = state.title, fileId = state.avatarFileId, fileState = viewModel::fileState, size = 40.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            state.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    state.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
+                            }
+                            if (state.subtitle.isNotEmpty()) {
+                                Text(
+                                    state.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (state.isOnline) androidx.compose.ui.graphics.Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                     IconButton(onClick = { searchOpen = true }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Filled.Search, contentDescription = "Поиск в чате", modifier = Modifier.size(22.dp))
@@ -1217,8 +1233,23 @@ private fun MessageFooter(
             Text("удалено · ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }
         Text(formatTime(message.date), style = MaterialTheme.typography.labelSmall, color = muted)
-        if (mine && readAt != null) {
-            Text(" · прочитано ${formatTime(readAt)}", style = MaterialTheme.typography.labelSmall, color = muted)
+        if (mine) {
+            Spacer(Modifier.width(4.dp))
+            if (readAt != null) {
+                Icon(
+                    Icons.Filled.DoneAll,
+                    contentDescription = "Прочитано",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Done,
+                    contentDescription = "Отправлено",
+                    tint = muted,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }

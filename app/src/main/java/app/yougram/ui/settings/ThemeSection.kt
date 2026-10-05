@@ -14,6 +14,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +85,28 @@ fun ThemeSection(settings: SettingsRepository) {
                         },
                     )
                 }
+            }
+        }
+
+        SettingGroup {
+            item {
+                var selectedIcon by remember { mutableIntStateOf(0) }
+                val icons = listOf("Yougram", "Тёмная", "Золотая", "Классика", "Неон")
+                SettingRow(
+                    title = "Иконка приложения",
+                    subtitle = "Смена стиля значка на рабочем столе",
+                    below = {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(icons.size) { index ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = selectedIcon == index,
+                                    onClick = { selectedIcon = index },
+                                    label = { androidx.compose.material3.Text(icons[index]) },
+                                )
+                            }
+                        }
+                    },
+                )
             }
         }
     }

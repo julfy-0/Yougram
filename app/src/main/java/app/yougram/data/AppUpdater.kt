@@ -129,7 +129,10 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
                         if (n < 0) break
                         out.write(buf, 0, n)
                         done += n
-                        if (total > 0) _state.value = UpdateState.Downloading(info, done.toFloat() / total)
+                        if (total > 0L) {
+                            val progress = (done.toFloat() / total).coerceIn(0f, 1f)
+                            _state.value = UpdateState.Downloading(info, progress)
+                        }
                     }
                 }
             }
