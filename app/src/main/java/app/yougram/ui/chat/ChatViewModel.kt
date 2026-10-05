@@ -8,7 +8,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.data.ChatRepository
 import app.yougram.data.EditRecord
 import app.yougram.data.SettingsRepository
+import app.yougram.data.GifItem
 import app.yougram.data.StickerItem
+import app.yougram.data.StickerSetItem
 import app.yougram.data.FileState
 import app.yougram.data.MessageItem
 import app.yougram.data.ReplyPreview
@@ -69,7 +71,18 @@ class ChatViewModel(
     private val settings: SettingsRepository,
     /** Если не 0 — после загрузки истории прокрутить к этому сообщению (переход из глобального поиска). */
     val initialMessageId: Long = 0L,
+    /** Тема форума, в которой открыт чат; 0 — обычный чат. */
+    val topicId: Int = 0,
 ) : ViewModel() {
+
+    init {
+        repository.setActiveTopic(chatId, topicId)
+    }
+
+    override fun onCleared() {
+        if (topicId != 0) repository.setActiveTopic(chatId, 0)
+        super.onCleared()
+    }
 
     private val _search = MutableStateFlow(ChatSearchState())
     val search: StateFlow<ChatSearchState> = _search.asStateFlow()
@@ -220,6 +233,37 @@ class ChatViewModel(
                 .onFailure { _state.update { cur -> cur.copy(error = it.message ?: "Не удалось загрузить стикеры") } }
         }
     }
+
+    private val _stickerSets = MutableStateFlow<List<StickerSetItem>>(emptyList())
+    val stickerSets: StateFlow<List<StickerSetItem>> = _stickerSets.asStateFlow()
+
+    private val _gifs = MutableStateFlow<List<GifItem>>(emptyList())
+    val gifs: StateFlow<List<GifItem>> = _gifs.asStateFlow()
+
+    fun loadStickerSets() {
+        viewModelScope.launch {
+            runCatching { repository.loadStickerSets() }.onSuccess { _stickerSets.value = it }
+        }
+    }
+
+    /** setId == 0 — недавние и избранные. */
+    fun openStickerSet(setId: Long) {
+        stickerJob?.cancel()
+        stickerJob = viewModelScope.launch {
+            runCatching {
+                if (setId == 0L) repository.loadRecentStickers() else repository.loadStickerSetStickers(setId)
+            }.onSuccess { _stickers.value = it }
+                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: "Не удалось загрузить стикеры") } }
+        }
+    }
+
+    fun loadGifs() {
+        viewModelScope.launch {
+            runCatching { repository.loadSavedGifs() }.onSuccess { _gifs.value = it }
+        }
+    }
+
+    fun sendGif(gif: GifItem) = sendMedia { repository.sendAnimationById(chatId, gif) }
 
     private val _senders = MutableStateFlow<Map<Long, SenderInfo>>(emptyMap())
 
@@ -522,8 +566,9 @@ class ChatViewModel(
             chatId: Long,
             settings: SettingsRepository,
             initialMessageId: Long = 0L,
+            topicId: Int = 0,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatViewModel(repository, chatId, settings, initialMessageId) }
+            initializer { ChatViewModel(repository, chatId, settings, initialMessageId, topicId) }
         }
     }
 }

@@ -34,6 +34,7 @@ class AppContainer(private val context: Context) {
     val pendingOpenChat = MutableStateFlow<Long?>(null)
 
     fun start() {
+        CallLog.init(context.applicationContext)
         plugins.loadAll()
         telegram.start()
         chatRepository.start()
@@ -43,6 +44,8 @@ class AppContainer(private val context: Context) {
         appScope.launch {
             authRepository.step.first { it == AuthStep.Ready }
             runCatching { accountRepository.loadAccount() }
+            // Соединение поднимаем здесь, а не только из Activity: так оно работает и после перезапуска процесса системой.
+            if (settings.notifications.value.backgroundConnection) ConnectionService.start(context.applicationContext)
         }
     }
 }

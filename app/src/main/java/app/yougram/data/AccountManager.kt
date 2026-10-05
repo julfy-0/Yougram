@@ -126,14 +126,16 @@ class AccountManager(context: Context) {
 
     /** Перезапуск процесса: TDLib-клиент привязан к аккаунту, выбранному при старте. */
     fun restartApp() {
-        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
-        if (launchIntent != null) {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            appContext.startActivity(launchIntent)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                Process.killProcess(Process.myPid())
-            }, 300)
-        }
+        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName) ?: return
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        // Запуск идёт через RestartActivity в отдельном процессе: так новая MainActivity поднимается
+        // в свежем процессе, а не в том, который мы убиваем (иначе приложение «вылетает» при смене аккаунта).
+        val restart = Intent(appContext, app.yougram.RestartActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            .putExtra(app.yougram.RestartActivity.EXTRA_INTENT, launchIntent)
+        runCatching { appContext.stopService(Intent(appContext, ConnectionService::class.java)) }
+        appContext.startActivity(restart)
+        Runtime.getRuntime().exit(0)
     }
 
     private fun deleteData(id: String) {

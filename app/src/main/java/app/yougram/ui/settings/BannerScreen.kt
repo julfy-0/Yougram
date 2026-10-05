@@ -1,6 +1,14 @@
 package app.yougram.ui.settings
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import app.yougram.ui.CustomBannerImage
+import app.yougram.ui.deleteCustomBanner
+import app.yougram.ui.saveCustomBanner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,11 +63,49 @@ private val Presets = listOf(
 fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
     val saved by settings.banner.collectAsState()
     val badge by settings.badge.collectAsState()
+    val customVersion by settings.customBanner.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf(saved ?: YougramBanner()) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            if (saveCustomBanner(context, uri)) {
+                settings.setCustomBanner(System.currentTimeMillis())
+            } else {
+                Toast.makeText(context, "Не удалось загрузить картинку", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     SettingsPageColumn(contentPadding) {
-        ProfileBanner(draft, Modifier.fillMaxWidth().height(140.dp))
+        if (customVersion > 0L) {
+            CustomBannerImage(customVersion, Modifier.fillMaxWidth().height(140.dp))
+        } else {
+            ProfileBanner(draft, Modifier.fillMaxWidth().height(140.dp))
+        }
+
+        SectionLabel("Своя картинка")
+        OutlinedButton(
+            onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (customVersion > 0L) "Заменить картинку" else "Выбрать картинку") }
+        if (customVersion > 0L) {
+            OutlinedButton(
+                onClick = {
+                    deleteCustomBanner(context)
+                    settings.setCustomBanner(0L)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Вернуться к шаблонам") }
+        }
+        Text(
+            "Картинка хранится только на этом устройстве и заменяет шаблон в вашем профиле. " +
+                    "Другим пользователям Yougram по-прежнему виден выбранный ниже шаблон: в «О себе» помещаются только 12 бит.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
 
         SectionLabel("Быстрые шаблоны")
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -30,14 +30,14 @@ import androidx.compose.ui.unit.dp
 sealed interface DetailRoute {
     val chatId: Long
 
-    data class Chat(override val chatId: Long, val messageId: Long = 0L) : DetailRoute
+    data class Chat(override val chatId: Long, val messageId: Long = 0L, val topicId: Int = 0) : DetailRoute
     data class Profile(override val chatId: Long) : DetailRoute
 }
 
 /** Стек хранится строкой, чтобы переживать пересоздание Activity через rememberSaveable. */
 fun List<DetailRoute>.encodeDetail(): String = joinToString(";") {
     when (it) {
-        is DetailRoute.Chat -> "c:${it.chatId}:${it.messageId}"
+        is DetailRoute.Chat -> "c:${it.chatId}:${it.messageId}:${it.topicId}"
         is DetailRoute.Profile -> "p:${it.chatId}"
     }
 }
@@ -46,7 +46,7 @@ fun decodeDetail(raw: String): List<DetailRoute> =
     raw.split(';').mapNotNull { part ->
         val p = part.split(':')
         when {
-            p.size == 3 && p[0] == "c" -> DetailRoute.Chat(p[1].toLongOrNull() ?: return@mapNotNull null, p[2].toLongOrNull() ?: 0L)
+            p.size >= 3 && p[0] == "c" -> DetailRoute.Chat(p[1].toLongOrNull() ?: return@mapNotNull null, p[2].toLongOrNull() ?: 0L, p.getOrNull(3)?.toIntOrNull() ?: 0)
             p.size == 2 && p[0] == "p" -> DetailRoute.Profile(p[1].toLongOrNull() ?: return@mapNotNull null)
             else -> null
         }

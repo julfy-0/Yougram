@@ -167,6 +167,8 @@ fun ChatScreen(
     onOpenProfile: (Long) -> Unit = {},
     /** Звонок собеседнику в личном чате: (userId, видео). */
     onCall: (Long, Boolean) -> Unit = { _, _ -> },
+    /** Заголовок вместо названия чата (имя темы форума). */
+    titleOverride: String? = null,
 ) {
     val state by viewModel.state.collectAsState()
     val senders by viewModel.senders.collectAsState()
@@ -533,7 +535,7 @@ fun ChatScreen(
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    state.title,
+                                    titleOverride?.takeIf { it.isNotEmpty() } ?: state.title,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
@@ -799,13 +801,6 @@ fun ChatScreen(
     }
 
     if (emojiSheet) {
-        val stickers by viewModel.stickers.collectAsState()
-        LaunchedEffect(attachmentTab, stickerQuery, emojiSheet) {
-            if (emojiSheet && attachmentTab == 1) {
-                delay(180)
-                viewModel.loadStickers(stickerQuery)
-            }
-        }
         ModalBottomSheet(onDismissRequest = { emojiSheet = false }) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -846,56 +841,18 @@ fun ChatScreen(
                         ) { Text(emoji, fontSize = 28.sp) }
                     }
                 }
-                1 -> Column(Modifier.fillMaxWidth()) {
-                    TextField(
-                        value = stickerQuery,
-                        onValueChange = { stickerQuery = it },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                        singleLine = true,
-                        placeholder = { Text("Поиск стикеров или эмодзи") },
-                    )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        TextButton(onClick = { stickerPicker.launch(arrayOf("image/webp", "image/png")) }) {
-                            Text("Стикер из файла")
-                        }
-                    }
-                    if (stickers.isEmpty()) {
-                        Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                "Стикеры не найдены",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(76.dp),
-                            modifier = Modifier.fillMaxWidth().height(280.dp),
-                            contentPadding = PaddingValues(12.dp),
-                        ) {
-                            items(stickers, key = { it.fileId }) { sticker ->
-                                StickerPickerItem(
-                                    sticker = sticker,
-                                    viewModel = viewModel,
-                                    onClick = {
-                                        viewModel.sendSticker(sticker)
-                                        emojiSheet = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-                else -> Column(
-                    Modifier.fillMaxWidth().height(280.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text("GIF отправляются как нативные Telegram-анимации", textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) }) {
-                        Text("Выбрать GIF / MP4")
-                    }
-                }
+                1 -> StickerTab(
+                    viewModel = viewModel,
+                    query = stickerQuery,
+                    onQueryChange = { stickerQuery = it },
+                    onPickFile = { stickerPicker.launch(arrayOf("image/webp", "image/png")) },
+                    onSent = { emojiSheet = false },
+                )
+                else -> GifTab(
+                    viewModel = viewModel,
+                    onPickFile = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) },
+                    onSent = { emojiSheet = false },
+                )
             }
             Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))
         }
@@ -1032,6 +989,7 @@ private fun SenderName(key: Long, sender: SenderInfo?, onClick: () -> Unit, modi
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        YougramBadge(key, Modifier.padding(start = 4.dp), size = 14.dp)
         sender?.username?.let {
             Text(
                 "  @$it",

@@ -20,6 +20,8 @@ import kotlinx.coroutines.delay
 import app.yougram.ui.LocalOpenLink
 import app.yougram.ui.LocalYougramBanners
 import app.yougram.ui.ProfileBanner
+import app.yougram.ui.CustomBannerImage
+import app.yougram.ui.LocalOwnCustomBanner
 import app.yougram.ui.glass.SystemBarsGlass
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -353,10 +355,15 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val banner = if (details.kind == ProfileKind.USER) LocalYougramBanners.current[details.id] else null
-        if (banner != null) {
+        val custom = LocalOwnCustomBanner.current?.takeIf { details.kind == ProfileKind.USER && it.userId == details.id }
+        if (banner != null || custom != null) {
             // Баннер видят только пользователи Yougram; аватар наполовину заходит на него.
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                ProfileBanner(banner, Modifier.fillMaxWidth().height(150.dp).fadeInOnce(500))
+                if (custom != null) {
+                    CustomBannerImage(custom.version, Modifier.fillMaxWidth().height(150.dp).fadeInOnce(500))
+                } else if (banner != null) {
+                    ProfileBanner(banner, Modifier.fillMaxWidth().height(150.dp).fadeInOnce(500))
+                }
                 Box(
                     Modifier
                         .padding(top = 90.dp)

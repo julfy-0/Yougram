@@ -10,6 +10,8 @@ class YougramApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Служебный процесс перезапуска не должен поднимать TDLib: база аккаунта занята основным процессом.
+        if (getProcessName().endsWith(":restart")) return
         container = AppContainer(this)
         container.start()
     }

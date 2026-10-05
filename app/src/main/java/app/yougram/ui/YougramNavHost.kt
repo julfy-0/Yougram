@@ -51,6 +51,7 @@ import app.yougram.data.AuthStep
 import app.yougram.ui.auth.AuthScreen
 import app.yougram.ui.auth.AuthViewModel
 import app.yougram.ui.calls.CallOverlay
+import app.yougram.ui.chat.ChatOrTopics
 import app.yougram.ui.chat.ChatScreen
 import app.yougram.ui.chat.ChatViewModel
 import app.yougram.ui.main.MainScreen
@@ -60,7 +61,7 @@ import app.yougram.ui.profile.ProfileViewModel
 private const val ROUTE_SPLASH = "splash"
 private const val ROUTE_AUTH = "auth"
 private const val ROUTE_CHATS = "chats"
-private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}"
+private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}&topicId={topicId}"
 private const val ROUTE_PROFILE = "profile/{chatId}"
 private const val ROUTE_BROWSER = "browser/{url}"
 
@@ -105,7 +106,7 @@ fun YougramNavHost(container: AppContainer) {
                 items.forEach { r ->
                     navController.navigate(
                         when (r) {
-                            is DetailRoute.Chat -> if (r.messageId != 0L) "chat/${r.chatId}?messageId=${r.messageId}" else "chat/${r.chatId}"
+                            is DetailRoute.Chat -> "chat/${r.chatId}?messageId=${r.messageId}&topicId=${r.topicId}"
                             is DetailRoute.Profile -> "profile/${r.chatId}"
                         },
                     )
@@ -217,6 +218,10 @@ fun YougramNavHost(container: AppContainer) {
                             type = NavType.LongType
                             defaultValue = 0L
                         },
+                        navArgument("topicId") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        },
                     ),
                     // Чат выезжает справа и уезжает обратно вправо.
                     enterTransition = {
@@ -230,14 +235,14 @@ fun YougramNavHost(container: AppContainer) {
                 ) { entry ->
                     val chatId = entry.arguments!!.getLong("chatId")
                     val messageId = entry.arguments!!.getLong("messageId")
-                    val vm: ChatViewModel = viewModel(
-                        key = "chat-$chatId-$messageId",
-                        factory = ChatViewModel.factory(container.chatRepository, chatId, container.settings, messageId),
-                    )
-                    ChatScreen(
-                        viewModel = vm,
-                        settings = container.settings,
+                    val topicId = entry.arguments!!.getInt("topicId")
+                    ChatOrTopics(
+                        container = container,
+                        chatId = chatId,
+                        messageId = messageId,
+                        topicId = topicId,
                         onBack = { navController.popBackStack() },
+                        onOpenTopic = { id -> navController.navigate("chat/$chatId?topicId=$id") },
                         onOpenChatProfile = { navController.navigate("profile/$chatId") },
                         onOpenProfile = { id -> navController.navigate("profile/$id") },
                         onCall = { userId, video -> container.callManager.startCall(userId, video) },
@@ -298,7 +303,7 @@ fun YougramNavHost(container: AppContainer) {
 private fun NavBackStackEntry.toDetailRoute(): DetailRoute? {
     val id = arguments?.getLong("chatId") ?: return null
     return when (destination.route) {
-        ROUTE_CHAT -> DetailRoute.Chat(id, arguments?.getLong("messageId") ?: 0L)
+        ROUTE_CHAT -> DetailRoute.Chat(id, arguments?.getLong("messageId") ?: 0L, arguments?.getInt("topicId") ?: 0)
         ROUTE_PROFILE -> DetailRoute.Profile(id)
         else -> null
     }
@@ -314,16 +319,15 @@ private fun DetailPane(
 ) {
     when (route) {
         is DetailRoute.Chat -> {
-            val vm: ChatViewModel = viewModel(
-                key = "chat-${route.chatId}-${route.messageId}",
-                factory = ChatViewModel.factory(container.chatRepository, route.chatId, container.settings, route.messageId),
-            )
-            ChatScreen(
-                viewModel = vm,
-                settings = container.settings,
+            ChatOrTopics(
+                container = container,
+                chatId = route.chatId,
+                messageId = route.messageId,
+                topicId = route.topicId,
                 onBack = { setStack(stack.dropLast(1)) },
                 // Корневой чат правой панели не имеет «Назад»; чат, открытый из профиля, — имеет.
                 showBack = stack.size > 1,
+                onOpenTopic = { id -> setStack(stack + DetailRoute.Chat(route.chatId, 0L, id)) },
                 onOpenChatProfile = { setStack(stack + DetailRoute.Profile(route.chatId)) },
                 onOpenProfile = { id -> setStack(stack + DetailRoute.Profile(id)) },
                 onCall = { userId, video -> container.callManager.startCall(userId, video) },

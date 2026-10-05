@@ -564,6 +564,15 @@ class SettingsRepository(context: Context) {
         prefs.edit().putInt("yougram_banner", packed).apply()
     }
 
+    private val _customBanner = MutableStateFlow(prefs.getLong("yougram_banner_custom", 0L))
+    /** Версия своей картинки-баннера (0 — нет). Картинка видна только на этом устройстве. */
+    val customBanner: StateFlow<Long> = _customBanner.asStateFlow()
+
+    fun setCustomBanner(version: Long) {
+        _customBanner.value = version
+        prefs.edit().putLong("yougram_banner_custom", version).apply()
+    }
+
     private val _inAppBrowser = MutableStateFlow(prefs.getBoolean("in_app_browser", true))
     /** Открывать ссылки из чатов во встроенном браузере. */
     val inAppBrowser: StateFlow<Boolean> = _inAppBrowser.asStateFlow()

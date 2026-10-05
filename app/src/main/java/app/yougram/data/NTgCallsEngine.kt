@@ -48,6 +48,16 @@ class NTgCallsEngine : CallEngine {
             )
         }.getOrNull()
 
+    private inline fun <T> step(name: String, block: () -> T): T {
+        CallLog.d(TAG, "-> $name")
+        return try {
+            block().also { CallLog.d(TAG, "<- $name ok") }
+        } catch (t: Throwable) {
+            CallLog.e(TAG, "<- $name FAILED", t)
+            throw t
+        }
+    }
+
     override fun start(
         userId: Long,
         state: CallStateReady,
@@ -57,6 +67,7 @@ class NTgCallsEngine : CallEngine {
         onLink: (EngineLink) -> Unit,
     ) {
         val gen = generation.incrementAndGet()
+        CallLog.d(TAG, "start user=$userId outgoing=$isOutgoing video=$isVideo gen=$gen")
         worker.execute {
             if (gen != generation.get()) return@execute
             release()
@@ -76,49 +87,60 @@ class NTgCallsEngine : CallEngine {
         this.userId = userId
         ntg = instance
         try {
-            instance.onSignalingData { _, data -> sendSignaling(data) }
+            instance.onSignalingData { _, data ->
+                CallLog.d(TAG, "signaling out ${data.size}B")
+                sendSignaling(data)
+            }
             instance.onConnectionChange { _, info ->
-                Log.d(TAG, "connection: $info")
+                CallLog.d(TAG, "connection: $info")
                 if (gen == generation.get()) onLink(linkOf(info))
             }
 
-            instance.createP2pCall(userId)
+            step("createP2pCall") { instance.createP2pCall(userId) }
             // Ключ уже согласован TDLib — обмен ключами внутри NTgCalls пропускаем.
-            instance.skipExchange(userId, state.encryptionKey, isOutgoing)
+            step("skipExchange") { instance.skipExchange(userId, state.encryptionKey, isOutgoing) }
 
             // Звук: микрофон на захват, динамик на воспроизведение (устройства по умолчанию).
-            instance.setStreamSources(
-                userId,
-                StreamMode.CAPTURE,
-                MediaDescription(AudioDescription(MediaSource.DEVICE, 48000, 1, "", false), null, null, null),
-            )
-            instance.setStreamSources(
-                userId,
-                StreamMode.PLAYBACK,
-                MediaDescription(null, AudioDescription(MediaSource.DEVICE, 48000, 1, "", false), null, null),
-            )
+            // На Android (Oboe) input обязан быть JSON с is_microphone, иначе "Invalid device metadata".
+            step("setStreamSources CAPTURE") {
+                instance.setStreamSources(
+                    userId,
+                    StreamMode.CAPTURE,
+                    MediaDescription(AudioDescription(MediaSource.DEVICE, 48000, 1, MIC_METADATA, false), null, null, null),
+                )
+            }
+            step("setStreamSources PLAYBACK") {
+                instance.setStreamSources(
+                    userId,
+                    StreamMode.PLAYBACK,
+                    MediaDescription(null, AudioDescription(MediaSource.DEVICE, 48000, 1, SPEAKER_METADATA, false), null, null),
+                )
+            }
 
-            instance.connectP2p(
-                userId,
-                state.servers.map(::toRtcServer),
-                state.protocol.libraryVersions.toList(),
-                state.allowP2p,
-                state.customParameters.ifEmpty { null },
-            )
+            step("connectP2p") {
+                instance.connectP2p(
+                    userId,
+                    state.servers.map(::toRtcServer),
+                    state.protocol.libraryVersions.toList(),
+                    state.allowP2p,
+                    state.customParameters.ifEmpty { null },
+                )
+            }
             if (muted) runCatching { instance.mute(userId) }
 
             synchronized(lock) {
                 if (gen == generation.get()) {
                     active = true
+                    CallLog.d(TAG, "active, flushing ${pending.size} queued signaling packets")
                     while (pending.isNotEmpty()) {
                         val data = pending.removeFirst()
                         runCatching { instance.sendSignalingData(userId, data) }
-                            .onFailure { Log.e(TAG, "signaling", it) }
+                            .onFailure { CallLog.e(TAG, "signaling", it) }
                     }
                 }
             }
         } catch (e: Throwable) {
-            Log.e(TAG, "start failed", e)
+            CallLog.e(TAG, "start failed", e)
             release()
             if (gen == generation.get()) onLink(EngineLink.FAILED)
         }
@@ -132,8 +154,10 @@ class NTgCallsEngine : CallEngine {
                 if (pending.size < MAX_PENDING) pending.addLast(data)
                 null
             }
-        } ?: return
-        runCatching { instance.sendSignalingData(userId, data) }.onFailure { Log.e(TAG, "signaling", it) }
+        }
+        CallLog.d(TAG, "signaling in ${data.size}B ${if (instance != null) "delivered" else "queued"}")
+        if (instance == null) return
+        runCatching { instance.sendSignalingData(userId, data) }.onFailure { CallLog.e(TAG, "signaling", it) }
     }
 
     override fun setMuted(muted: Boolean) {
@@ -147,6 +171,7 @@ class NTgCallsEngine : CallEngine {
 
     override fun stop() {
         generation.incrementAndGet()
+        CallLog.d(TAG, "stop")
         synchronized(lock) {
             active = false
             pending.clear()
@@ -165,12 +190,20 @@ class NTgCallsEngine : CallEngine {
 
     /** Достаёт состояние из NetworkInfo без привязки к точным именам полей библиотеки. */
     private fun linkOf(info: Any): EngineLink {
-        val raw = runCatching { info.javaClass.getField("state").get(info).toString() }
-            .getOrElse { info.toString() }
-            .uppercase()
+        val raw = buildString {
+            append(info.toString())
+            info.javaClass.fields.forEach { f ->
+                runCatching { append(' ').append(f.name).append('=').append(f.get(info)) }
+            }
+            info.javaClass.methods
+                .filter { it.parameterCount == 0 && it.name.startsWith("get") && it.name != "getClass" }
+                .forEach { m -> runCatching { append(' ').append(m.invoke(info)) } }
+        }.uppercase()
+        CallLog.d(TAG, "link raw: $raw")
         return when {
-            "FAIL" in raw || "TIMEOUT" in raw || "CLOSED" in raw || "DISCONNECT" in raw -> EngineLink.FAILED
-            "CONNECTED" in raw -> EngineLink.CONNECTED
+            "FAIL" in raw || "TIMEOUT" in raw || "CLOSED" in raw -> EngineLink.FAILED
+            "DISCONNECTED" in raw -> EngineLink.FAILED
+            Regex("\\bCONNECTED\\b").containsMatchIn(raw) -> EngineLink.CONNECTED
             else -> EngineLink.CONNECTING
         }
     }
@@ -193,5 +226,7 @@ class NTgCallsEngine : CallEngine {
     private companion object {
         const val TAG = "NTgCallsEngine"
         const val MAX_PENDING = 256
+        const val MIC_METADATA = """{"is_microphone":true}"""
+        const val SPEAKER_METADATA = """{"is_microphone":false}"""
     }
 }

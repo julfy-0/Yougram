@@ -87,21 +87,21 @@ fun VideoNoteRecorderDialog(
         val view = previewView ?: return@LaunchedEffect
         val provider = ProcessCameraProvider.getInstance(context)
         provider.addListener({
-            val cameraProvider = provider.get()
-            val preview = Preview.Builder().build().also { it.surfaceProvider = view.surfaceProvider }
-            val recorder = Recorder.Builder()
-                .setQualitySelector(
-                    QualitySelector.from(Quality.SD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)),
-                )
-                .build()
-            val capture = VideoCapture.withOutput(recorder)
-            val group = UseCaseGroup.Builder()
-                .setViewPort(ViewPort.Builder(Rational(1, 1), view.display.rotation).build())
-                .addUseCase(preview)
-                .addUseCase(capture)
-                .build()
-            val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
             runCatching {
+                val cameraProvider = provider.get()
+                val preview = Preview.Builder().build().also { it.surfaceProvider = view.surfaceProvider }
+                val recorder = Recorder.Builder()
+                    .setQualitySelector(
+                        QualitySelector.from(Quality.SD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)),
+                    )
+                    .build()
+                val capture = VideoCapture.withOutput(recorder)
+                val group = UseCaseGroup.Builder()
+                    .setViewPort(ViewPort.Builder(Rational(1, 1), view.display?.rotation ?: android.view.Surface.ROTATION_0).build())
+                    .addUseCase(preview)
+                    .addUseCase(capture)
+                    .build()
+                val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(lifecycleOwner, selector, group)
                 videoCapture = capture

@@ -1,12 +1,22 @@
 package app.yougram.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import app.yougram.BuildConfig
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.TdlResult
 import dev.g000sha256.tdl.dto.AuthorizationState
 import dev.g000sha256.tdl.dto.AuthorizationStateWaitTdlibParameters
+import dev.g000sha256.tdl.dto.NetworkType
+import dev.g000sha256.tdl.dto.NetworkTypeMobile
+import dev.g000sha256.tdl.dto.NetworkTypeMobileRoaming
+import dev.g000sha256.tdl.dto.NetworkTypeNone
+import dev.g000sha256.tdl.dto.NetworkTypeOther
+import dev.g000sha256.tdl.dto.NetworkTypeWiFi
+import dev.g000sha256.tdl.dto.OptionValueInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +44,39 @@ class TelegramClient(
     private val _credentialsMissing = MutableStateFlow(false)
     val credentialsMissing: StateFlow<Boolean> = _credentialsMissing.asStateFlow()
 
+    /**
+     * TDLib сам не видит смену сети на Android: без setNetworkType после перехода Wi-Fi/моб. сеть или выхода из
+     * режима сна соединение может «зависнуть», и новые сообщения (а с ними и уведомления) не приходят.
+     */
+    private fun registerNetworkMonitor() {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+        fun push(type: NetworkType) {
+            scope.launch { runCatching { client.setNetworkType(type = type) } }
+        }
+        runCatching {
+            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                    push(
+                        when {
+                            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkTypeWiFi()
+                            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ->
+                                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)) NetworkTypeMobile()
+                                else NetworkTypeMobileRoaming()
+                            else -> NetworkTypeOther()
+                        },
+                    )
+                }
+
+                override fun onLost(network: Network) {
+                    push(NetworkTypeNone())
+                }
+            })
+        }
+    }
+
     fun start() {
+        registerNetworkMonitor()
         // ВАЖНО: подписка на обновления должна начаться до первого запроса.
         scope.launch {
             client.authorizationStateUpdates.collect { update ->
@@ -81,6 +123,8 @@ class TelegramClient(
             systemVersion = Build.VERSION.RELEASE,
             applicationVersion = BuildConfig.VERSION_NAME,
         )
+        client.setOption(name = "notification_group_count_max", value = OptionValueInteger(value = 25L))
+        client.setOption(name = "notification_group_size_max", value = OptionValueInteger(value = 10L))
     }
 }
 

@@ -100,11 +100,13 @@ class CallManager(
     /** Исходящий звонок пользователю [userId]. */
     fun startCall(userId: Long, video: Boolean) {
         if (_call.value != null || dialing) return
+        CallLog.d("CallManager", "startCall user=$userId video=$video")
         dialing = true
         scope.launch {
             try {
                 val result = client.createCall(userId = userId, protocol = protocol, isVideo = video)
                 if (result is TdlResult.Failure) {
+                    CallLog.e("CallManager", "createCall failed code=${result.code} message=${result.message}")
                     val text = if (result.code == 403) "Пользователь не принимает звонки" else result.message
                     showEnded(userId, video, text)
                 }
@@ -118,6 +120,7 @@ class CallManager(
     fun accept() {
         val c = _call.value ?: return
         if (c.isOutgoing || c.phase != CallPhase.RINGING) return
+        CallLog.d("CallManager", "accept id=${c.id}")
         scope.launch { client.acceptCall(callId = c.id, protocol = protocol) }
     }
 
@@ -125,6 +128,7 @@ class CallManager(
     fun hangUp(disconnected: Boolean = false) {
         val c = _call.value ?: return
         if (c.phase == CallPhase.ENDED) return
+        CallLog.d("CallManager", "hangUp id=${c.id} disconnected=$disconnected phase=${c.phase} msg=${c.message} caller=${Throwable().stackTrace.drop(1).take(3).joinToString { it.methodName }}")
         markFinished(c.id)
         val duration = c.startedAtMillis?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
         engine.stop()
@@ -151,6 +155,7 @@ class CallManager(
     private suspend fun onCallUpdate(call: Call) = mutex.withLock {
         if (isFinished(call.id)) return@withLock
         val state = call.state
+        CallLog.d("CallManager", "update id=${call.id} user=${call.userId} out=${call.isOutgoing} video=${call.isVideo} state=${state::class.simpleName}")
         // Уже завершённый звонок на экране не мешает новому.
         val current = _call.value?.takeUnless { it.phase == CallPhase.ENDED && it.id != call.id }
 
@@ -169,6 +174,7 @@ class CallManager(
         }
 
         val isNew = current == null
+        if (isNew) CallLog.header(call.id, call.isOutgoing, call.isVideo)
         val base = current ?: run {
             val info = runCatching { chats.userCardInfo(call.userId) }.getOrNull()
             ActiveCall(
@@ -189,6 +195,15 @@ class CallManager(
             is CallStateExchangingKeys -> _call.value = base.copy(phase = CallPhase.CONNECTING, message = "Обмен ключами…")
             is CallStateReady -> {
                 val first = engineCallId != call.id
+                CallLog.d(
+                    "CallManager",
+                    "ready first=$first engine=${engine::class.simpleName} available=${engine.isAvailable} allowP2p=${state.allowP2p} " +
+                            "versions=${state.protocol.libraryVersions.toList()} layers=${state.protocol.minLayer}..${state.protocol.maxLayer} " +
+                            "customParams=${state.customParameters.length} emojis=${state.emojis.orEmpty().toList()} servers=${state.servers.size}",
+                )
+                if (first) state.servers.forEach { sv ->
+                    CallLog.d("CallManager", "server id=${sv.id} type=${sv.type::class.simpleName} ip=${sv.ipAddress} ipv6=${sv.ipv6Address} port=${sv.port}")
+                }
                 val linked = current?.phase == CallPhase.ACTIVE || !engine.isAvailable
                 _call.value = base.copy(
                     phase = if (linked) CallPhase.ACTIVE else CallPhase.CONNECTING,
@@ -201,7 +216,10 @@ class CallManager(
                     engineCallId = call.id
                     audio.start(call.isVideo)
                     engine.start(call.userId, state, call.isOutgoing, call.isVideo, { data ->
-                        scope.launch { client.sendCallSignalingData(callId = call.id, data = data) }
+                        scope.launch {
+                            val sent = client.sendCallSignalingData(callId = call.id, data = data)
+                            if (sent is TdlResult.Failure) CallLog.e("CallManager", "sendCallSignalingData failed code=${sent.code} message=${sent.message}")
+                        }
                     }) { link -> onLink(call.id, link) }
                     if (base.muted) engine.setMuted(true)
                     watchdog(call.id)
@@ -214,7 +232,10 @@ class CallManager(
                 clearLater(base.id, 5000)
             }
             is CallStateDiscarded -> finish(base, "Звонок завершён")
-            is CallStateError -> finish(base, state.error.message.ifEmpty { "Ошибка звонка" })
+            is CallStateError -> {
+                CallLog.e("CallManager", "call error code=${state.error.code} message=${state.error.message}")
+                finish(base, state.error.message.ifEmpty { "Ошибка звонка" })
+            }
             else -> Unit
         }
 
@@ -224,6 +245,7 @@ class CallManager(
 
     /** Реальное состояние медиа-соединения: таймер и «активный» режим только после CONNECTED. */
     private fun onLink(id: Int, link: EngineLink) {
+        CallLog.d("CallManager", "engine link id=$id -> $link")
         scope.launch {
             mutex.withLock {
                 _call.update { c ->
@@ -244,11 +266,15 @@ class CallManager(
         scope.launch {
             delay(30_000)
             val c = _call.value
-            if (c != null && c.id == id && c.phase == CallPhase.CONNECTING) hangUp(disconnected = true)
+            if (c != null && c.id == id && c.phase == CallPhase.CONNECTING) {
+                CallLog.e("CallManager", "watchdog: media link not up after 30s, hanging up")
+                hangUp(disconnected = true)
+            }
         }
     }
 
     private fun finish(base: ActiveCall, text: String) {
+        CallLog.d("CallManager", "finish id=${base.id} text=$text")
         markFinished(base.id)
         engine.stop()
         audio.stop()

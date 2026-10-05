@@ -89,5 +89,6 @@ dependencies {
 
     implementation(libs.tdl.coroutines)
     implementation(libs.ntgcalls)
+    implementation("com.airbnb.android:lottie-compose:6.6.7")
     implementation("org.luaj:luaj-jse:3.0.1")
 }

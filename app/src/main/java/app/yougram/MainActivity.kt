@@ -2,6 +2,8 @@ package app.yougram
 
 import app.yougram.ui.glass.LocalPlates
 import app.yougram.ui.LocalYougramBanners
+import app.yougram.ui.LocalOwnCustomBanner
+import app.yougram.ui.OwnCustomBanner
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -74,6 +76,8 @@ class MainActivity : ComponentActivity() {
             val goldUsers by container.chatRepository.goldUsers.collectAsState()
             val creatorUsers by container.chatRepository.creatorUsers.collectAsState()
             val yougramBanners by container.chatRepository.banners.collectAsState()
+            val ownUserId by container.chatRepository.ownUserId.collectAsState()
+            val customBannerVersion by container.settings.customBanner.collectAsState()
             val inCall by container.callManager.call.collectAsState()
             val authStep by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
             val notifPrefs by container.settings.notifications.collectAsState()
@@ -86,7 +90,10 @@ class MainActivity : ComponentActivity() {
                 ) {
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                if (notifPrefs.backgroundConnection) ConnectionService.start(this@MainActivity)
+                if (notifPrefs.backgroundConnection) {
+                    ConnectionService.start(this@MainActivity)
+                    askIgnoreBatteryOptimizations()
+                }
             }
 
             LaunchedEffect(secure) { applySecureFlag(secure) }
@@ -117,6 +124,8 @@ class MainActivity : ComponentActivity() {
                     LocalGoldUsers provides goldUsers,
                     LocalCreatorUsers provides creatorUsers,
                     LocalYougramBanners provides yougramBanners,
+                    LocalOwnCustomBanner provides
+                            if (ownUserId != 0L && customBannerVersion > 0L) OwnCustomBanner(ownUserId, customBannerVersion) else null,
                     LocalBadgeChecker provides container.chatRepository::checkBadge,
                 ) {
                     LockGate(container.appLock) {
@@ -124,6 +133,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /** Без исключения из оптимизации батареи система усыпляет сеть, и сообщения приходят с большой задержкой. Спрашиваем один раз. */
+    private fun askIgnoreBatteryOptimizations() {
+        val pm = getSystemService(android.os.PowerManager::class.java) ?: return
+        val misc = getSharedPreferences("yougram_misc", MODE_PRIVATE)
+        if (pm.isIgnoringBatteryOptimizations(packageName) || misc.getBoolean("battery_prompted", false)) return
+        misc.edit().putBoolean("battery_prompted", true).apply()
+        runCatching {
+            startActivity(
+                Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:$packageName"),
+                ),
+            )
         }
     }
 

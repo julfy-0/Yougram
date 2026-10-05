@@ -20,6 +20,8 @@ import dev.g000sha256.tdl.dto.ChatNotificationSettings
 import dev.g000sha256.tdl.dto.ChatTypeBasicGroup
 import dev.g000sha256.tdl.dto.ChatTypePrivate
 import dev.g000sha256.tdl.dto.ChatTypeSupergroup
+import dev.g000sha256.tdl.dto.MessageTopic
+import dev.g000sha256.tdl.dto.MessageTopicForum
 import dev.g000sha256.tdl.dto.FormattedText
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
@@ -31,6 +33,7 @@ import dev.g000sha256.tdl.dto.InputMessageAnimation
 import dev.g000sha256.tdl.dto.InputMessageSticker
 import dev.g000sha256.tdl.dto.InputFileId
 import dev.g000sha256.tdl.dto.StickerTypeRegular
+import dev.g000sha256.tdl.dto.Sticker as TdSticker
 import dev.g000sha256.tdl.dto.MessageSticker
 import dev.g000sha256.tdl.dto.InputMessageReplyToMessage
 import dev.g000sha256.tdl.dto.ReactionTypeEmoji
@@ -181,12 +184,20 @@ data class MediaItem(
 )
 
 /** Стикер для панели выбора: файл TDLib уже можно скачать и отправить обратно по id. */
+enum class StickerFmt { STATIC, TGS, WEBM }
+
 data class StickerItem(
     val fileId: Int,
     val width: Int,
     val height: Int,
     val emoji: String,
+    val thumbFileId: Int? = null,
+    val format: StickerFmt = StickerFmt.STATIC,
 )
+
+data class StickerSetItem(val id: Long, val title: String, val cover: StickerItem?)
+
+data class GifItem(val fileId: Int, val thumbFileId: Int?, val width: Int, val height: Int, val duration: Int)
 
 /** Состояние панели вложений. */
 data class StickerPanelState(
@@ -231,6 +242,8 @@ data class MessageItem(
     val senderUserId: Long? = null,
     /** Автор-чат (канал или анонимный админ группы); null — автор пользователь. */
     val senderChatId: Long? = null,
+    /** Тема форума, в которой написано сообщение; 0 — вне тем. */
+    val topicId: Int = 0,
     /** Сообщение, на которое это — ответ; null, если не ответ. */
     val reply: ReplyRef? = null,
     /** Реакции под сообщением. */
@@ -239,6 +252,21 @@ data class MessageItem(
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
 }
+
+/** Тема форума для списка тем. */
+data class ForumTopicItem(
+    val id: Int,
+    val name: String,
+    /** Цвет значка темы (RGB). */
+    val color: Int,
+    val isGeneral: Boolean,
+    val isClosed: Boolean,
+    val isPinned: Boolean,
+    val unread: Int,
+    val lastSender: String,
+    val lastText: String,
+    val lastDate: Int,
+)
 
 /** Автор сообщения для шапки в группах. */
 data class SenderInfo(val key: Long, val name: String, val username: String?, val avatarFileId: Int?)
@@ -385,6 +413,10 @@ class ChatRepository(
     /** Пользователи с синим значком создателя Yougram. */
     val creatorUsers: StateFlow<Set<Long>> = _creatorUsers.asStateFlow()
 
+    private val _ownUserId = MutableStateFlow(0L)
+    /** Id текущего пользователя (0, пока не известен). */
+    val ownUserId: StateFlow<Long> = _ownUserId.asStateFlow()
+
     private val _banners = MutableStateFlow<Map<Long, YougramBanner>>(emptyMap())
     /** Баннеры профилей пользователей Yougram (userId -> баннер). */
     val banners: StateFlow<Map<Long, YougramBanner>> = _banners.asStateFlow()
@@ -428,6 +460,7 @@ class ChatRepository(
      */
     suspend fun syncOwnBadge(enabled: Boolean, banner: YougramBanner? = null): Boolean {
         val me = client.getMe().getOrThrow()
+        _ownUserId.value = me.id
         val bio = client.getUserFullInfo(userId = me.id).getOrThrow().bio?.text.orEmpty()
         val desired = if (enabled) YougramBadge.MARKER + banner?.encode().orEmpty() else ""
         if (YougramBadge.tail(bio) != desired) {
@@ -1038,13 +1071,14 @@ class ChatRepository(
         val collected = LinkedHashMap<Long, MessageItem>()
         var attempts = 0
         while (collected.size < limit && attempts < 3) {
-            val batch = client.getChatHistory(
-                chatId = chatId,
-                fromMessageId = from,
-                offset = 0,
-                limit = limit - collected.size + (if (from != 0L) 1 else 0),
-                onlyLocal = false,
-            ).getOrThrow().messages.orEmpty().filterNotNull()
+            val pageLimit = limit - collected.size + (if (from != 0L) 1 else 0)
+            val topic = topicOf(chatId)
+            val page = if (topic != 0) {
+                client.getForumTopicHistory(chatId = chatId, forumTopicId = topic, fromMessageId = from, offset = 0, limit = pageLimit)
+            } else {
+                client.getChatHistory(chatId = chatId, fromMessageId = from, offset = 0, limit = pageLimit, onlyLocal = false)
+            }
+            val batch = page.getOrThrow().messages.orEmpty().filterNotNull()
             val fresh = batch.filter { it.id != fromMessageId && !collected.containsKey(it.id) }
             if (fresh.isEmpty()) break
             fresh.forEach { collected[it.id] = it.toItem() }
@@ -1055,12 +1089,68 @@ class ChatRepository(
         return collected.values.toList()
     }
 
-    fun incomingFor(chatId: Long): Flow<MessageItem> = newMessages.filter { it.chatId == chatId }
+    fun incomingFor(chatId: Long): Flow<MessageItem> = newMessages.filter {
+        it.chatId == chatId && (topicOf(chatId) == 0 || it.topicId == topicOf(chatId))
+    }
+
+    // ---- Форумы (группы с темами) ----
+
+    private val forumCache = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+    private val activeTopics = java.util.concurrent.ConcurrentHashMap<Long, Int>()
+
+    /** Тема, открытая сейчас в чате [chatId] (0 — без темы): в неё идут отправка и загрузка истории. */
+    fun setActiveTopic(chatId: Long, topicId: Int) {
+        if (topicId == 0) activeTopics.remove(chatId) else activeTopics[chatId] = topicId
+    }
+
+    private fun topicOf(chatId: Long): Int = activeTopics[chatId] ?: 0
+
+    private fun topicParam(chatId: Long): MessageTopic? =
+        topicOf(chatId).takeIf { it != 0 }?.let { MessageTopicForum(forumTopicId = it) }
+
+    suspend fun isForum(chatId: Long): Boolean {
+        forumCache[chatId]?.let { return it }
+        val forum = runCatching {
+            val type = client.getChat(chatId = chatId).getOrThrow().type
+            type is ChatTypeSupergroup && client.getSupergroup(supergroupId = type.supergroupId).getOrThrow().isForum
+        }.getOrNull() ?: return false
+        forumCache[chatId] = forum
+        return forum
+    }
+
+    suspend fun forumTopicName(chatId: Long, topicId: Int): String =
+        runCatching { client.getForumTopic(chatId = chatId, forumTopicId = topicId).getOrThrow().info.name }.getOrDefault("")
+
+    suspend fun loadForumTopics(chatId: Long): List<ForumTopicItem> {
+        val result = client.getForumTopics(
+            chatId = chatId,
+            query = "",
+            offsetDate = 0,
+            offsetMessageId = 0L,
+            offsetForumTopicId = 0,
+            limit = 100,
+        ).getOrThrow()
+        return result.topics.orEmpty().filterNotNull().map { t ->
+            val last = t.lastMessage?.toItem()
+            ForumTopicItem(
+                id = t.info.forumTopicId,
+                name = t.info.name,
+                color = t.info.icon.color,
+                isGeneral = t.info.isGeneral,
+                isClosed = t.info.isClosed,
+                isPinned = t.isPinned,
+                unread = t.unreadCount,
+                lastSender = last?.senderKey?.let { runCatching { sender(it)?.name }.getOrNull() }.orEmpty(),
+                lastText = last?.summary.orEmpty(),
+                lastDate = last?.date ?: 0,
+            )
+        }
+    }
 
     suspend fun sendText(chatId: Long, text: String, replyToId: Long? = null) {
         client.sendMessage(
             chatId = chatId,
-            topicId = null,
+            topicId = topicParam(chatId),
             replyTo = replyToId?.let { InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "") },
             options = null,
             replyMarkup = null,
@@ -1331,7 +1421,7 @@ class ChatRepository(
     private suspend fun sendContent(chatId: Long, content: InputMessageContent) {
         client.sendMessage(
             chatId = chatId,
-            topicId = null,
+            topicId = topicParam(chatId),
             replyTo = null,
             options = null,
             replyMarkup = null,
@@ -1381,24 +1471,87 @@ class ChatRepository(
         ),
     )
 
-    /** Загружает первые 100 обычных стикеров, соответствующих запросу/эмодзи. */
+    private fun mapSticker(s: TdSticker): StickerItem {
+        track(s.sticker)
+        track(s.thumbnail?.file)
+        return StickerItem(
+            fileId = s.sticker.id,
+            width = s.width,
+            height = s.height,
+            emoji = s.emoji,
+            thumbFileId = s.thumbnail?.file?.id,
+            format = when (s.format::class.simpleName) {
+                "StickerFormatTgs" -> StickerFmt.TGS
+                "StickerFormatWebm" -> StickerFmt.WEBM
+                else -> StickerFmt.STATIC
+            },
+        )
+    }
+
+    /** Поиск стикеров по эмодзи/запросу. */
     suspend fun loadStickers(query: String = "", limit: Int = 100, chatId: Long = 0L): List<StickerItem> = withContext(Dispatchers.IO) {
-        val result = client.getStickers(
+        client.getStickers(
             stickerType = StickerTypeRegular(),
             query = query,
             limit = limit.coerceIn(1, 100),
             chatId = chatId,
-        ).getOrThrow()
-        result.stickers.orEmpty().filterNotNull().map { sticker ->
-            track(sticker.sticker)
-            StickerItem(
-                fileId = sticker.sticker.id,
-                width = sticker.width,
-                height = sticker.height,
-                emoji = sticker.emoji,
+        ).getOrThrow().stickers.orEmpty().filterNotNull().map(::mapSticker)
+    }
+
+    /** Установленные наборы стикеров пользователя. */
+    suspend fun loadStickerSets(): List<StickerSetItem> = withContext(Dispatchers.IO) {
+        client.getInstalledStickerSets(stickerType = StickerTypeRegular()).getOrThrow()
+            .sets.orEmpty().filterNotNull().map { info ->
+                StickerSetItem(
+                    id = info.id,
+                    title = info.title,
+                    cover = info.covers.orEmpty().filterNotNull().firstOrNull()?.let(::mapSticker),
+                )
+            }
+    }
+
+    suspend fun loadStickerSetStickers(setId: Long): List<StickerItem> = withContext(Dispatchers.IO) {
+        client.getStickerSet(setId = setId).getOrThrow().stickers.orEmpty().filterNotNull().map(::mapSticker)
+    }
+
+    suspend fun loadRecentStickers(): List<StickerItem> = withContext(Dispatchers.IO) {
+        val recent = client.getRecentStickers(isAttached = false).getOrThrow().stickers.orEmpty().filterNotNull()
+        val favorite = runCatching { client.getFavoriteStickers().getOrThrow().stickers.orEmpty().filterNotNull() }
+            .getOrDefault(emptyList())
+        (favorite + recent).distinctBy { it.sticker.id }.map(::mapSticker)
+    }
+
+    /** Сохранённые GIF пользователя из Telegram. */
+    suspend fun loadSavedGifs(): List<GifItem> = withContext(Dispatchers.IO) {
+        client.getSavedAnimations().getOrThrow().animations.orEmpty().filterNotNull().map { a ->
+            track(a.animation)
+            track(a.thumbnail?.file)
+            GifItem(
+                fileId = a.animation.id,
+                thumbFileId = a.thumbnail?.file?.id,
+                width = a.width,
+                height = a.height,
+                duration = a.duration,
             )
         }
     }
+
+    suspend fun sendAnimationById(chatId: Long, gif: GifItem) = sendContent(
+        chatId,
+        InputMessageAnimation(
+            animation = InputAnimation(
+                animation = InputFileId(id = gif.fileId),
+                thumbnail = null,
+                addedStickerFileIds = IntArray(0),
+                duration = gif.duration.coerceAtLeast(0),
+                width = gif.width.coerceAtLeast(0),
+                height = gif.height.coerceAtLeast(0),
+            ),
+            caption = null,
+            showCaptionAboveMedia = false,
+            hasSpoiler = false,
+        ),
+    )
 
     /** Отправляет фото из локального файла. */
     suspend fun sendPhoto(chatId: Long, path: String) = sendContent(
@@ -1781,6 +1934,7 @@ class ChatRepository(
             summary = summaryOf(body, media),
             senderUserId = (senderId as? MessageSenderUser)?.userId,
             senderChatId = (senderId as? MessageSenderChat)?.chatId,
+            topicId = (topicId as? MessageTopicForum)?.forumTopicId ?: 0,
             reply = (replyTo as? MessageReplyToMessage)
                 ?.takeIf { it.messageId != 0L }
                 ?.let { ReplyRef(it.chatId, it.messageId) },
@@ -1850,10 +2004,11 @@ class ChatRepository(
         }
         is MessageSticker -> {
             track(sticker.sticker)
+            track(sticker.thumbnail?.file)
             MediaItem(
                 kind = MediaKind.STICKER,
                 fileId = sticker.sticker.id,
-                previewFileId = sticker.sticker.id,
+                previewFileId = sticker.thumbnail?.file?.id ?: sticker.sticker.id,
                 width = sticker.width,
                 height = sticker.height,
                 name = "sticker",

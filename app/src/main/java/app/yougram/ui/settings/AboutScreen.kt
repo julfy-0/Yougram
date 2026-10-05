@@ -46,12 +46,20 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
+import dev.g000sha256.tdl.TdlClient
+import dev.g000sha256.tdl.dto.OptionValueString
 
 @Composable
-fun AboutScreen(contentPadding: PaddingValues, updater: AppUpdater) {
+fun AboutScreen(contentPadding: PaddingValues, updater: AppUpdater, client: TdlClient) {
     val context = LocalContext.current
     val update by updater.state.collectAsState()
     LaunchedEffect(Unit) { updater.check() }
+    val tdlibVersion by produceState("…", client) {
+        value = runCatching {
+            (client.getOption(name = "version").getOrThrow() as? OptionValueString)?.value
+        }.getOrNull() ?: "—"
+    }
     val openUrl = { url: String ->
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -116,6 +124,14 @@ fun AboutScreen(contentPadding: PaddingValues, updater: AppUpdater) {
                     title = "Версия Yougram",
                     subtitle = "Текущий релиз",
                     value = BuildConfig.VERSION_NAME,
+                    icon = Icons.Filled.Info,
+                )
+            }
+            item {
+                SettingRow(
+                    title = "Версия API",
+                    subtitle = "Telegram API (TDLib)",
+                    value = tdlibVersion,
                     icon = Icons.Filled.Info,
                 )
             }
