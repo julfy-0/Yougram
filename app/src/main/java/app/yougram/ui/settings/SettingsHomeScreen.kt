@@ -1,6 +1,5 @@
 package app.yougram.ui.settings
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -92,6 +91,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.BuildConfig
+import app.yougram.data.AccountEntry
 import app.yougram.data.AccountManager
 import app.yougram.data.ChatRepository
 import app.yougram.data.FileState
@@ -357,7 +357,7 @@ fun AccountManagerSheet(
 ) {
     val accounts by accountManager.accounts.collectAsState()
     val activeId by accountManager.activeAccountId.collectAsState()
-    val context = LocalContext.current
+    var removeTarget by remember { mutableStateOf<AccountEntry?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -400,9 +400,8 @@ fun AccountManagerSheet(
                     Surface(
                         onClick = {
                             if (!isActive) {
-                                accountManager.switchAccount(acc.id)
                                 onDismiss()
-                                (context as? Activity)?.recreate()
+                                accountManager.switchAndRestart(acc.id)
                             }
                         },
                         shape = RoundedCornerShape(16.dp),
@@ -418,7 +417,8 @@ fun AccountManagerSheet(
                         ) {
                             FileAvatar(
                                 title = acc.name.ifEmpty { "Аккаунт" },
-                                fileId = acc.avatarFileId,
+                                // id файла принадлежит базе своего аккаунта: у неактивных аватарку показать нельзя.
+                                fileId = if (isActive) acc.avatarFileId else null,
                                 fileState = fileState,
                                 size = 44.dp,
                             )
@@ -449,7 +449,7 @@ fun AccountManagerSheet(
                                 )
                             } else if (accounts.size > 1) {
                                 IconButton(
-                                    onClick = { accountManager.removeAccount(acc.id) },
+                                    onClick = { removeTarget = acc },
                                 ) {
                                     Icon(
                                         Icons.Filled.DeleteOutline,
@@ -468,9 +468,8 @@ fun AccountManagerSheet(
 
             Button(
                 onClick = {
-                    accountManager.createNewAccount()
                     onDismiss()
-                    (context as? Activity)?.recreate()
+                    accountManager.addAndRestart()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = CircleShape,
@@ -482,6 +481,26 @@ fun AccountManagerSheet(
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    removeTarget?.let { acc ->
+        AlertDialog(
+            onDismissRequest = { removeTarget = null },
+            title = { Text("Убрать аккаунт?") },
+            text = {
+                Text(
+                    "«${acc.name.ifEmpty { "Аккаунт" }}» будет убран из списка, локальные данные удалятся. " +
+                            "Сеанс в Telegram останется активным, его можно закрыть в разделе «Устройства».",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    accountManager.removeAccount(acc.id)
+                    removeTarget = null
+                }) { Text("Убрать") }
+            },
+            dismissButton = { TextButton(onClick = { removeTarget = null }) { Text("Отмена") } },
+        )
     }
 }
 

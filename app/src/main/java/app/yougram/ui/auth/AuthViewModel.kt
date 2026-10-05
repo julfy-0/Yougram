@@ -29,6 +29,11 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun submitCode(code: String) = run { repository.sendCode(code) }
     fun submitPassword(password: String) = run { repository.sendPassword(password) }
 
+    /** Ошибка исчезает, как только пользователь начинает править поле. */
+    fun clearError() {
+        _ui.update { if (it.error != null) it.copy(error = null) else it }
+    }
+
     private fun run(block: suspend () -> Unit) {
         viewModelScope.launch {
             _ui.update { Ui(busy = true) }
@@ -36,8 +41,22 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
                 block()
                 _ui.update { Ui() }
             } catch (e: Exception) {
-                _ui.update { Ui(error = e.message ?: "Неизвестная ошибка") }
+                _ui.update { Ui(error = humanize(e.message)) }
             }
+        }
+    }
+
+    private fun humanize(raw: String?): String {
+        val m = raw.orEmpty()
+        return when {
+            m.contains("PHONE_NUMBER_INVALID", true) -> "Неверный номер телефона"
+            m.contains("PHONE_NUMBER_BANNED", true) -> "Этот номер заблокирован в Telegram"
+            m.contains("PHONE_CODE_INVALID", true) -> "Неверный код"
+            m.contains("PHONE_CODE_EXPIRED", true) -> "Код устарел, запросите новый"
+            m.contains("PASSWORD_HASH_INVALID", true) -> "Неверный пароль"
+            m.contains("FLOOD", true) || m.contains("Too Many Requests", true) -> "Слишком много попыток, подождите немного"
+            m.isBlank() -> "Неизвестная ошибка"
+            else -> m
         }
     }
 

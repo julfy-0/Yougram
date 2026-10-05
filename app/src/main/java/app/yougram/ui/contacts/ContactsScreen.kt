@@ -1,5 +1,7 @@
 package app.yougram.ui.contacts
 
+import app.yougram.ui.glass.plateColor
+import app.yougram.data.PlateArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +60,7 @@ fun ContactsScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = segmentShape(index, state.contacts.size),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        color = plateColor(PlateArea.Contacts),
                     ) {
                         ContactRow(contact, viewModel) { viewModel.openChat(contact.id, onOpenChat) }
                     }

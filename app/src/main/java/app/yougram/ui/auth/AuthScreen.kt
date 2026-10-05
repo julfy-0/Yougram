@@ -1,38 +1,46 @@
 package app.yougram.ui.auth
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.yougram.data.AuthStep
 
@@ -41,113 +49,121 @@ fun AuthScreen(viewModel: AuthViewModel) {
     val step by viewModel.step.collectAsState()
     val ui by viewModel.ui.collectAsState()
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("Yougram", style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(32.dp))
+    // Последний текст ошибки остаётся на экране, пока плашка плавно скрывается.
+    var lastError by remember { mutableStateOf("") }
+    LaunchedEffect(ui.error) { ui.error?.let { lastError = it } }
 
-            AnimatedContent(
-                targetState = step,
-                transitionSpec = {
-                    (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(250)))
-                        .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it / 3 } + fadeOut(tween(200)))
-                },
-                label = "authStepTransition",
-            ) { s ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    when (s) {
-                        AuthStep.Loading, AuthStep.Ready -> CircularProgressIndicator()
+    Box(Modifier.fillMaxSize()) {
+        AuthBackground()
 
-                        AuthStep.MissingCredentials -> Text(
-                            "Не заданы TG_API_ID и TG_API_HASH.\n\n" +
-                                "1. Получите их на my.telegram.org (API development tools).\n" +
-                                "2. Впишите в файл local.properties в корне проекта:\n" +
-                                "TG_API_ID=123456\nTG_API_HASH=abcdef...\n" +
-                                "3. Пересоберите и запустите приложение.",
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+            val minHeight = maxHeight
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = minHeight)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AuthLogo()
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "Yougram",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Telegram, настроенный под вас",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(32.dp))
 
-                        AuthStep.EnterPhone -> InputStep(
-                            title = "Введите номер телефона",
-                            label = "Номер (например, +380...)",
-                            keyboardType = KeyboardType.Phone,
-                            busy = ui.busy,
-                            onSubmit = viewModel::submitPhone,
-                        )
+                AuthGlassCard {
+                    AnimatedContent(
+                        targetState = step,
+                        transitionSpec = {
+                            (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(250)))
+                                .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it / 3 } + fadeOut(tween(200)))
+                        },
+                        label = "authStepTransition",
+                    ) { s ->
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            when (s) {
+                                AuthStep.Loading, AuthStep.Ready -> Box(
+                                    Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) { CircularProgressIndicator() }
 
-                        is AuthStep.EnterCode -> InputStep(
-                            title = "Введите код из Telegram",
-                            label = "Код",
-                            keyboardType = KeyboardType.Number,
-                            busy = ui.busy,
-                            onSubmit = viewModel::submitCode,
-                        )
+                                AuthStep.MissingCredentials -> AuthNotice(
+                                    icon = Icons.Filled.Warning,
+                                    title = "Не заданы ключи API",
+                                    text = "1. Получите TG_API_ID и TG_API_HASH на my.telegram.org (API development tools).\n" +
+                                            "2. Впишите их в local.properties в корне проекта.\n" +
+                                            "3. Пересоберите и запустите приложение.",
+                                )
 
-                        is AuthStep.EnterPassword -> InputStep(
-                            title = "Облачный пароль (2FA)",
-                            label = if (s.hint.isNotEmpty()) "Пароль (подсказка: ${s.hint})" else "Пароль",
-                            keyboardType = KeyboardType.Password,
-                            secret = true,
-                            busy = ui.busy,
-                            onSubmit = viewModel::submitPassword,
-                        )
+                                AuthStep.EnterPhone -> AuthInputStep(
+                                    kind = AuthFieldKind.Phone,
+                                    title = "Вход",
+                                    subtitle = "Введите номер телефона",
+                                    label = "Номер телефона",
+                                    hint = "В международном формате, например +380…",
+                                    busy = ui.busy,
+                                    onEdit = viewModel::clearError,
+                                    onSubmit = viewModel::submitPhone,
+                                )
 
-                        is AuthStep.Unsupported -> Text(
-                            "Этот способ входа (${s.description}) пока не поддерживается.",
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+                                is AuthStep.EnterCode -> AuthInputStep(
+                                    kind = AuthFieldKind.Code,
+                                    title = "Код подтверждения",
+                                    subtitle = "Мы отправили его в Telegram",
+                                    label = "Код",
+                                    busy = ui.busy,
+                                    onEdit = viewModel::clearError,
+                                    onSubmit = viewModel::submitCode,
+                                )
+
+                                is AuthStep.EnterPassword -> AuthInputStep(
+                                    kind = AuthFieldKind.Password,
+                                    title = "Облачный пароль",
+                                    subtitle = "Включена двухэтапная проверка",
+                                    label = "Пароль",
+                                    hint = s.hint.takeIf { it.isNotEmpty() }?.let { "Подсказка: $it" },
+                                    busy = ui.busy,
+                                    onEdit = viewModel::clearError,
+                                    onSubmit = viewModel::submitPassword,
+                                )
+
+                                is AuthStep.Unsupported -> AuthNotice(
+                                    icon = Icons.Filled.Info,
+                                    title = "Способ входа пока не поддерживается",
+                                    text = s.description,
+                                )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = ui.error != null,
+                        enter = fadeIn(tween(200)) + expandVertically(),
+                        exit = fadeOut(tween(150)) + shrinkVertically(),
+                    ) {
+                        AuthErrorBanner(lastError)
                     }
                 }
-            }
 
-            ui.error?.let {
-                Spacer(Modifier.height(16.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "Неофициальный клиент Telegram",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun InputStep(
-    title: String,
-    label: String,
-    keyboardType: KeyboardType,
-    busy: Boolean,
-    onSubmit: (String) -> Unit,
-    secret: Boolean = false,
-) {
-    // Ключ по заголовку: при смене шага поле очищается.
-    var value by rememberSaveable(title) { mutableStateOf("") }
-
-    Text(title, style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(16.dp))
-    OutlinedTextField(
-        value = value,
-        onValueChange = { value = it },
-        label = { Text(label) },
-        singleLine = true,
-        enabled = !busy,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(16.dp))
-    Button(
-        onClick = { onSubmit(value) },
-        enabled = value.isNotBlank() && !busy,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        if (busy) CircularProgressIndicator(Modifier.height(20.dp)) else Text("Далее")
     }
 }

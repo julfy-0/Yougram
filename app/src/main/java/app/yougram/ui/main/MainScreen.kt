@@ -147,6 +147,8 @@ fun MainScreen(
     onOpenChat: (Long) -> Unit,
     /** Открыть чат и прокрутить к сообщению (из результатов поиска). */
     onOpenMessage: (chatId: Long, messageId: Long) -> Unit,
+    /** Чат, открытый в правой панели (планшет/фолд): подсвечивается в списке. */
+    selectedChatId: Long? = null,
 ) {
     val glass by container.settings.glass.collectAsState()
     val chatPrefs by container.settings.chatPrefs.collectAsState()
@@ -264,6 +266,7 @@ fun MainScreen(
                             contentPadding = chatsPadding,
                             onOpenChat = onOpenChat,
                             lines = chatPrefs.listLines,
+                            selectedChatId = selectedChatId,
                         )
                         if (searching && query.isNotBlank()) {
                             GlobalSearchScreen(

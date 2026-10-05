@@ -11,16 +11,28 @@ import io.github.pytgcalls.media.MediaDescription
 import io.github.pytgcalls.media.MediaSource
 import io.github.pytgcalls.media.StreamMode
 import io.github.pytgcalls.p2p.RTCServer
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Медиа-движок 1:1 звонков на NTgCalls (io.github.pytgcalls:ntgcalls).
  * Сигнализацию и ключ шифрования даёт TDLib, здесь только звук.
+ *
+ * Все нативные вызовы идут через один поток (start/stop не блокируют UI и не пересекаются),
+ * сигнальные пакеты, пришедшие до готовности соединения, копятся и отправляются по порядку.
  */
 class NTgCallsEngine : CallEngine {
-    private var ntg: NTgCalls? = null
-    private var userId: Long = 0L
-    private var sendSignaling: ((ByteArray) -> Unit)? = null
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "ntgcalls-worker").apply { isDaemon = true }
+    }
+    private val generation = AtomicInteger(0)
+    private val lock = Any()
+    private val pending = ArrayDeque<ByteArray>()
+
+    @Volatile private var ntg: NTgCalls? = null
+    @Volatile private var userId: Long = 0L
     @Volatile private var active = false
+    @Volatile private var muted = false
 
     override val isAvailable: Boolean = true
 
@@ -43,13 +55,26 @@ class NTgCallsEngine : CallEngine {
         isVideo: Boolean,
         sendSignaling: (ByteArray) -> Unit,
     ) {
-        stop()
-        this.userId = userId
-        this.sendSignaling = sendSignaling
+        val gen = generation.incrementAndGet()
+        worker.execute {
+            if (gen != generation.get()) return@execute
+            release()
+            connect(gen, userId, state, isOutgoing, sendSignaling)
+        }
+    }
+
+    private fun connect(
+        gen: Int,
+        userId: Long,
+        state: CallStateReady,
+        isOutgoing: Boolean,
+        sendSignaling: (ByteArray) -> Unit,
+    ) {
         val instance = NTgCalls()
+        this.userId = userId
         ntg = instance
         try {
-            instance.onSignalingData { _, data -> this.sendSignaling?.invoke(data) }
+            instance.onSignalingData { _, data -> sendSignaling(data) }
             instance.onConnectionChange { _, info -> Log.d(TAG, "connection: $info") }
 
             instance.createP2pCall(userId)
@@ -75,29 +100,61 @@ class NTgCallsEngine : CallEngine {
                 state.allowP2p,
                 state.customParameters.ifEmpty { null },
             )
-            active = true
+            if (muted) runCatching { instance.mute(userId) }
+
+            synchronized(lock) {
+                if (gen == generation.get()) {
+                    active = true
+                    while (pending.isNotEmpty()) {
+                        val data = pending.removeFirst()
+                        runCatching { instance.sendSignalingData(userId, data) }
+                            .onFailure { Log.e(TAG, "signaling", it) }
+                    }
+                }
+            }
         } catch (e: Throwable) {
             Log.e(TAG, "start failed", e)
-            stop()
+            release()
         }
     }
 
     override fun onSignalingData(data: ByteArray) {
-        if (!active) return
-        runCatching { ntg?.sendSignalingData(userId, data) }.onFailure { Log.e(TAG, "signaling", it) }
+        val instance = synchronized(lock) {
+            if (active) {
+                ntg
+            } else {
+                if (pending.size < MAX_PENDING) pending.addLast(data)
+                null
+            }
+        } ?: return
+        runCatching { instance.sendSignalingData(userId, data) }.onFailure { Log.e(TAG, "signaling", it) }
     }
 
     override fun setMuted(muted: Boolean) {
-        runCatching { if (muted) ntg?.mute(userId) else ntg?.unmute(userId) }
+        this.muted = muted
+        val instance = ntg ?: return
+        if (!active) return
+        runCatching { if (muted) instance.mute(userId) else instance.unmute(userId) }
     }
 
     override fun setVideoEnabled(enabled: Boolean) = Unit
 
     override fun stop() {
-        active = false
+        generation.incrementAndGet()
+        synchronized(lock) {
+            active = false
+            pending.clear()
+        }
+        muted = false
+        worker.execute { release() }
+    }
+
+    /** Останавливает звонок и освобождает нативный экземпляр (иначе микрофон и потоки остаются занятыми). */
+    private fun release() {
         val instance = ntg ?: return
         ntg = null
         runCatching { instance.stop(userId) }
+        runCatching { instance.javaClass.getMethod("free").invoke(instance) }
     }
 
     private fun toRtcServer(server: dev.g000sha256.tdl.dto.CallServer): RTCServer =
@@ -117,5 +174,6 @@ class NTgCallsEngine : CallEngine {
 
     private companion object {
         const val TAG = "NTgCallsEngine"
+        const val MAX_PENDING = 256
     }
 }

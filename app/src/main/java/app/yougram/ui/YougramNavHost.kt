@@ -1,7 +1,23 @@
 package app.yougram.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
+import app.yougram.ui.adaptive.DetailRoute
+import app.yougram.ui.adaptive.TwoPaneShell
+import app.yougram.ui.adaptive.decodeDetail
+import app.yougram.ui.adaptive.encodeDetail
+import app.yougram.ui.adaptive.rememberIsTwoPane
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import app.yougram.ui.browser.BrowserScreen
@@ -54,6 +70,48 @@ fun YougramNavHost(container: AppContainer) {
     val navController = rememberNavController()
     val step by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
 
+    // Планшет / разложенный фолд: список слева, чат или профиль справа (стек хранится строкой).
+    val twoPane = rememberIsTwoPane()
+    val twoPaneNow = rememberUpdatedState(twoPane)
+    var detailRaw by rememberSaveable { mutableStateOf("") }
+    val detail = remember(detailRaw) { decodeDetail(detailRaw) }
+    val setDetail: (List<DetailRoute>) -> Unit = remember { { list -> detailRaw = list.encodeDetail() } }
+    val openChat: (Long, Long) -> Unit = remember(navController) {
+        { chatId: Long, messageId: Long ->
+            if (twoPaneNow.value) {
+                setDetail(listOf(DetailRoute.Chat(chatId, messageId)))
+            } else {
+                navController.navigate(if (messageId != 0L) "chat/$chatId?messageId=$messageId" else "chat/$chatId")
+            }
+        }
+    }
+
+    // Сложили / разложили устройство: переносим открытые чат и профиль между режимами.
+    LaunchedEffect(twoPane) {
+        if (step != AuthStep.Ready) return@LaunchedEffect
+        if (twoPane) {
+            val items = listOfNotNull(navController.previousBackStackEntry, navController.currentBackStackEntry)
+                .mapNotNull { it.toDetailRoute() }
+            if (items.isNotEmpty()) {
+                detailRaw = items.encodeDetail()
+                navController.popBackStack(ROUTE_CHATS, inclusive = false)
+            }
+        } else {
+            val items = decodeDetail(detailRaw)
+            if (items.isNotEmpty()) {
+                detailRaw = ""
+                items.forEach { r ->
+                    navController.navigate(
+                        when (r) {
+                            is DetailRoute.Chat -> if (r.messageId != 0L) "chat/${r.chatId}?messageId=${r.messageId}" else "chat/${r.chatId}"
+                            is DetailRoute.Profile -> "profile/${r.chatId}"
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     // Авторизация управляет верхним уровнем навигации: вошли -> чаты, вышли -> экран входа.
     LaunchedEffect(step) {
         val current = navController.currentDestination?.route
@@ -73,7 +131,7 @@ fun YougramNavHost(container: AppContainer) {
     LaunchedEffect(pendingChat, step) {
         val id = pendingChat ?: return@LaunchedEffect
         if (step != AuthStep.Ready) return@LaunchedEffect
-        navController.navigate("chat/$id") { launchSingleTop = true }
+        if (twoPane) setDetail(listOf(DetailRoute.Chat(id))) else navController.navigate("chat/$id") { launchSingleTop = true }
         container.pendingOpenChat.value = null
     }
 
@@ -124,13 +182,28 @@ fun YougramNavHost(container: AppContainer) {
                                 fadeIn(tween(NavMillis))
                     },
                 ) {
-                    MainScreen(
-                        container = container,
-                        onOpenChat = { chatId -> navController.navigate("chat/$chatId") },
-                        onOpenMessage = { chatId, messageId ->
-                            navController.navigate("chat/$chatId?messageId=$messageId")
-                        },
-                    )
+                    // movableContentOf: вкладка, прокрутка и поиск не сбрасываются при складывании/раскладывании.
+                    val mainPane = remember {
+                        movableContentOf { selected: Long? ->
+                            MainScreen(
+                                container = container,
+                                onOpenChat = { chatId -> openChat(chatId, 0L) },
+                                onOpenMessage = { chatId, messageId -> openChat(chatId, messageId) },
+                                selectedChatId = selected,
+                            )
+                        }
+                    }
+                    val selectedChat = detail.firstNotNullOfOrNull { (it as? DetailRoute.Chat)?.chatId }
+                    if (twoPane) {
+                        BackHandler(enabled = detail.isNotEmpty()) { setDetail(detail.dropLast(1)) }
+                        TwoPaneShell(
+                            detail = detail.lastOrNull(),
+                            listPane = { mainPane(selectedChat) },
+                            detailPane = { route -> DetailPane(route, detail, setDetail, container) },
+                        )
+                    } else {
+                        mainPane(selectedChat)
+                    }
                 }
                 composable(
                     route = ROUTE_CHAT,
@@ -214,6 +287,68 @@ fun YougramNavHost(container: AppContainer) {
                 }
             }
             CallOverlay(container.callManager, container.chatRepository)
+        }
+    }
+}
+
+private fun NavBackStackEntry.toDetailRoute(): DetailRoute? {
+    val id = arguments?.getLong("chatId") ?: return null
+    return when (destination.route) {
+        ROUTE_CHAT -> DetailRoute.Chat(id, arguments?.getLong("messageId") ?: 0L)
+        ROUTE_PROFILE -> DetailRoute.Profile(id)
+        else -> null
+    }
+}
+
+/** Правая панель: чат или профиль, навигация — по собственному стеку. */
+@Composable
+private fun DetailPane(
+    route: DetailRoute,
+    stack: List<DetailRoute>,
+    setStack: (List<DetailRoute>) -> Unit,
+    container: AppContainer,
+) {
+    when (route) {
+        is DetailRoute.Chat -> {
+            val vm: ChatViewModel = viewModel(
+                key = "chat-${route.chatId}-${route.messageId}",
+                factory = ChatViewModel.factory(container.chatRepository, route.chatId, container.settings, route.messageId),
+            )
+            ChatScreen(
+                viewModel = vm,
+                settings = container.settings,
+                onBack = { setStack(stack.dropLast(1)) },
+                // Корневой чат правой панели не имеет «Назад»; чат, открытый из профиля, — имеет.
+                showBack = stack.size > 1,
+                onOpenChatProfile = { setStack(stack + DetailRoute.Profile(route.chatId)) },
+                onOpenProfile = { id -> setStack(stack + DetailRoute.Profile(id)) },
+                onCall = { userId, video -> container.callManager.startCall(userId, video) },
+            )
+        }
+        is DetailRoute.Profile -> {
+            val vm: ProfileViewModel = viewModel(
+                key = "profile-${route.chatId}",
+                factory = ProfileViewModel.factory(container.chatRepository, route.chatId),
+            )
+            // На широкой панели профиль не растягиваем: колонка до 640dp по центру.
+            Box(
+                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                Box(Modifier.widthIn(max = 640.dp).fillMaxHeight()) {
+                    ProfileScreen(
+                        viewModel = vm,
+                        onBack = { setStack(stack.dropLast(1)) },
+                        onOpenChat = {
+                            val prev = stack.getOrNull(stack.size - 2)
+                            if (prev is DetailRoute.Chat && prev.chatId == route.chatId) setStack(stack.dropLast(1))
+                            else setStack(listOf(DetailRoute.Chat(route.chatId)))
+                        },
+                        onLeft = { setStack(emptyList()) },
+                        onCall = { userId, video -> container.callManager.startCall(userId, video) },
+                    )
+                }
+            }
         }
     }
 }

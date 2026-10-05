@@ -1,5 +1,7 @@
 package app.yougram.ui.chats
 
+import app.yougram.ui.glass.plateColor
+import app.yougram.data.PlateArea
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -52,6 +54,8 @@ fun ChatListScreen(
     onOpenChat: (Long) -> Unit,
     /** 2 или 3 строки в строке чата: при трёх последнее сообщение занимает до двух строк. */
     lines: Int = 2,
+    /** Чат, открытый в правой панели на планшете: его строка подсвечивается. */
+    selectedChatId: Long? = null,
 ) {
     val chats by viewModel.chats.collectAsState()
     val folders by viewModel.folders.collectAsState()
@@ -120,7 +124,9 @@ fun ChatListScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth().animateItem().appearOnEnter(),
                         shape = segmentShape(index, visible.size),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        color = if (chat.id == selectedChatId) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        } else plateColor(PlateArea.Chats),
                     ) {
                         ChatRow(chat, lines, onClick = { onOpenChat(chat.id) })
                     }

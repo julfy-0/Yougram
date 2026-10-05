@@ -1,5 +1,6 @@
 package app.yougram
 
+import app.yougram.ui.glass.LocalPlates
 import app.yougram.ui.LocalYougramBanners
 import android.Manifest
 import android.content.Intent
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val theme by container.settings.theme.collectAsState()
             val glass by container.settings.glass.collectAsState()
+            val plates by container.plates.plates.collectAsState()
             val lock by container.appLock.settings.collectAsState()
             val dark = isDarkTheme(theme)
             val secure = lock.type != LockType.None && lock.secureScreen
@@ -106,6 +108,7 @@ class MainActivity : ComponentActivity() {
             YougramTheme(settings = theme) {
                 CompositionLocalProvider(
                     LocalGlass provides glass,
+                    LocalPlates provides plates,
                     LocalYougramUsers provides yougramUsers,
                     LocalYougramBanners provides yougramBanners,
                     LocalBadgeChecker provides container.chatRepository::checkBadge,

@@ -1,5 +1,6 @@
 package app.yougram.ui.settings
 
+import app.yougram.data.PlateRepository
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,7 +18,7 @@ import app.yougram.data.SettingsRepository
 import kotlin.math.roundToInt
 
 @Composable
-fun SettingsScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
+fun SettingsScreen(settings: SettingsRepository, plates: PlateRepository, contentPadding: PaddingValues) {
     val glass by settings.glass.collectAsState()
 
     Column(
@@ -57,5 +58,7 @@ fun SettingsScreen(settings: SettingsRepository, contentPadding: PaddingValues) 
                 )
             }
         }
+
+        PlateSection(plates)
     }
 }

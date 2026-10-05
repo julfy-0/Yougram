@@ -152,6 +152,8 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     settings: SettingsRepository,
     onBack: () -> Unit,
+    /** В правой панели планшета у корневого чата кнопки «Назад» нет. */
+    showBack: Boolean = true,
     /** Тап по шапке чата — профиль собеседника, группы или канала. */
     onOpenChatProfile: () -> Unit = {},
     /** Профиль автора сообщения по id чата. */
@@ -489,8 +491,12 @@ fun ChatScreen(
                         .padding(start = 4.dp, end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    if (showBack) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        }
+                    } else {
+                        Spacer(Modifier.width(12.dp))
                     }
                     Row(
                         Modifier

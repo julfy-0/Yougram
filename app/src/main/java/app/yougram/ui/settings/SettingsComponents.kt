@@ -1,5 +1,7 @@
 package app.yougram.ui.settings
 
+import app.yougram.ui.glass.plateColor
+import app.yougram.data.PlateArea
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -72,7 +74,7 @@ fun SettingGroup(modifier: Modifier = Modifier, build: SettingGroupScope.() -> U
             Surface(
                 Modifier.fillMaxWidth(),
                 shape = segmentShape(index, items.size),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = plateColor(PlateArea.Settings),
             ) { content() }
         }
     }

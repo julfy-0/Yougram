@@ -45,8 +45,8 @@ fun SettingsPageContent(
             onOpenChat = onOpenChat,
             onGift = { showGift = true },
         )
-        SettingsPage.Appearance -> SettingsScreen(container.settings, contentPadding)
-        SettingsPage.Account -> AccountScreen(details, contentPadding)
+        SettingsPage.Appearance -> SettingsScreen(container.settings, container.plates, contentPadding)
+        SettingsPage.Account -> AccountScreen(details, container.accountManager, contentPadding)
         SettingsPage.ChatSettings -> ChatSettingsScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Privacy -> PrivacyScreen(details, container.appLock, container.settings, contentPadding, onNavigate)
         SettingsPage.Blocked -> BlockedScreen(details, contentPadding)

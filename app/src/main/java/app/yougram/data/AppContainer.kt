@@ -5,6 +5,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /** Простой ручной DI-контейнер: один TDLib-клиент на всё приложение. */
 class AppContainer(private val context: Context) {
@@ -12,6 +14,7 @@ class AppContainer(private val context: Context) {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val settings = SettingsRepository(context.applicationContext)
+    val plates = PlateRepository(context.applicationContext)
     val appLock = AppLock(context.applicationContext)
     val accountManager = AccountManager(context.applicationContext)
     val telegram = TelegramClient(context.applicationContext, appScope, accountManager.activeAccountId.value)
@@ -33,5 +36,10 @@ class AppContainer(private val context: Context) {
         chatRepository.start()
         notificationCenter.start()
         callManager.start()
+        // После входа записываем имя, телефон и аватарку в список аккаунтов, чтобы переключатель их показывал.
+        appScope.launch {
+            authRepository.step.first { it == AuthStep.Ready }
+            runCatching { accountRepository.loadAccount() }
+        }
     }
 }

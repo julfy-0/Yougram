@@ -1,5 +1,7 @@
 package app.yougram.ui.calls
 
+import app.yougram.ui.glass.plateColor
+import app.yougram.data.PlateArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -108,7 +110,7 @@ fun CallsScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = segmentShape(index, state.calls.size),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = plateColor(PlateArea.Calls),
                 ) {
                     CallRow(call, viewModel) { onOpenChat(call.chatId) }
                 }

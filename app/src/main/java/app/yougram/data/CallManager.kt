@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class CallPhase { RINGING, CONNECTING, ACTIVE, ENDED }
 
@@ -53,6 +55,15 @@ class CallManager(
     private val _call = MutableStateFlow<ActiveCall?>(null)
     val call: StateFlow<ActiveCall?> = _call.asStateFlow()
 
+    /** Обновления звонка обрабатываются строго по очереди: иначе start/stop движка и смена состояния пересекаются. */
+    private val mutex = Mutex()
+
+    /** Уже завершённые звонки: запоздавшие updateCall по ним не должны заново открывать экран звонка. */
+    private val finished = LinkedHashSet<Int>()
+
+    @Volatile
+    private var dialing = false
+
     /** Запасной протокол, если движок не сообщил свой. */
     private val fallbackProtocol = CallProtocol(
         udpP2p = true,
@@ -84,14 +95,19 @@ class CallManager(
 
     /** Исходящий звонок пользователю [userId]. */
     fun startCall(userId: Long, video: Boolean) {
-        if (_call.value != null) return
+        if (_call.value != null || dialing) return
+        dialing = true
         scope.launch {
-            val result = client.createCall(userId = userId, protocol = protocol, isVideo = video)
-            if (result is TdlResult.Failure) {
-                val text = if (result.code == 403) "Пользователь не принимает звонки" else result.message
-                showEnded(userId, video, text)
+            try {
+                val result = client.createCall(userId = userId, protocol = protocol, isVideo = video)
+                if (result is TdlResult.Failure) {
+                    val text = if (result.code == 403) "Пользователь не принимает звонки" else result.message
+                    showEnded(userId, video, text)
+                }
+                // Дальше состояние придёт в onCallUpdate.
+            } finally {
+                dialing = false
             }
-            // Дальше состояние придёт в onCallUpdate.
         }
     }
 
@@ -104,10 +120,12 @@ class CallManager(
     /** Сбросить или отклонить звонок. */
     fun hangUp() {
         val c = _call.value ?: return
+        if (c.phase == CallPhase.ENDED) return
+        markFinished(c.id)
         val duration = c.startedAtMillis?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
         engine.stop()
         audio.stop()
-        _call.update { it?.copy(phase = CallPhase.ENDED, message = "Звонок завершён") }
+        _call.update { s -> s?.takeIf { it.id == c.id }?.copy(phase = CallPhase.ENDED, message = "Звонок завершён") ?: s }
         scope.launch {
             client.discardCall(
                 callId = c.id,
@@ -117,9 +135,8 @@ class CallManager(
                 connectionId = 0L,
                 inviteLink = "",
             )
-            delay(800)
-            _call.update { null }
         }
+        clearLater(c.id, 800)
     }
 
     fun setMuted(muted: Boolean) {
@@ -127,18 +144,29 @@ class CallManager(
         _call.update { it?.copy(muted = muted) }
     }
 
-    private suspend fun onCallUpdate(call: Call) {
-        val current = _call.value
+    private suspend fun onCallUpdate(call: Call) = mutex.withLock {
+        if (isFinished(call.id)) return@withLock
+        val state = call.state
+        // Уже завершённый звонок на экране не мешает новому.
+        val current = _call.value?.takeUnless { it.phase == CallPhase.ENDED && it.id != call.id }
+
         if (current != null && current.id != call.id) {
             // Второй входящий, пока идёт другой звонок: занято.
-            if (!call.isOutgoing && call.state is CallStatePending) {
+            if (!call.isOutgoing && state is CallStatePending) {
+                markFinished(call.id)
                 client.discardCall(callId = call.id, isDisconnected = false, duration = 0, isVideo = call.isVideo, connectionId = 0L, inviteLink = "")
             }
-            return
+            return@withLock
         }
+        // Запоздалое «завершён» по звонку, которого на экране уже нет, новый звонок не создаёт.
+        if (current == null && (state is CallStateDiscarded || state is CallStateError || state is CallStateHangingUp)) {
+            markFinished(call.id)
+            return@withLock
+        }
+
+        val isNew = current == null
         val base = current ?: run {
             val info = runCatching { chats.userCardInfo(call.userId) }.getOrNull()
-            CallService.start(appContext)
             ActiveCall(
                 id = call.id,
                 userId = call.userId,
@@ -149,7 +177,7 @@ class CallManager(
                 phase = CallPhase.RINGING,
             )
         }
-        when (val state = call.state) {
+        when (state) {
             is CallStatePending -> _call.value = base.copy(
                 phase = CallPhase.RINGING,
                 message = if (call.isOutgoing) (if (state.isReceived) "Звонок…" else "Соединение…") else null,
@@ -169,32 +197,58 @@ class CallManager(
                     engine.start(call.userId, state, call.isOutgoing, call.isVideo) { data ->
                         scope.launch { client.sendCallSignalingData(callId = call.id, data = data) }
                     }
+                    if (base.muted) engine.setMuted(true)
                 }
             }
-            is CallStateHangingUp -> _call.value = base.copy(phase = CallPhase.ENDED, message = "Завершение…")
+            is CallStateHangingUp -> {
+                engine.stop()
+                audio.stop()
+                _call.value = base.copy(phase = CallPhase.ENDED, message = "Завершение…")
+                clearLater(base.id, 5000)
+            }
             is CallStateDiscarded -> finish(base, "Звонок завершён")
             is CallStateError -> finish(base, state.error.message.ifEmpty { "Ошибка звонка" })
             else -> Unit
         }
+
+        // Служба запускается только после того, как состояние звонка уже записано, иначе она сама же себя остановит.
+        if (isNew && _call.value?.id == call.id) CallService.start(appContext)
     }
 
-    private suspend fun finish(base: ActiveCall, text: String) {
+    private fun finish(base: ActiveCall, text: String) {
+        markFinished(base.id)
         engine.stop()
         audio.stop()
         _call.value = base.copy(phase = CallPhase.ENDED, message = text)
-        delay(1200)
-        if (_call.value?.id == base.id) _call.value = null
+        clearLater(base.id, 1200)
     }
 
     private fun showEnded(userId: Long, video: Boolean, text: String) {
         scope.launch {
+            if (_call.value != null) return@launch
             val info = runCatching { chats.userCardInfo(userId) }.getOrNull()
             _call.value = ActiveCall(
                 id = -1, userId = userId, title = info?.first.orEmpty(), avatarFileId = info?.second,
                 isOutgoing = true, isVideo = video, phase = CallPhase.ENDED, message = text,
             )
-            delay(1800)
-            if (_call.value?.id == -1) _call.value = null
+            clearLater(-1, 1800)
         }
     }
+
+    /** Убирает экран звонка через [millis], только если на нём всё ещё этот же звонок. */
+    private fun clearLater(id: Int, millis: Long) {
+        scope.launch {
+            delay(millis)
+            _call.update { if (it?.id == id) null else it }
+        }
+    }
+
+    private fun markFinished(id: Int) {
+        synchronized(finished) {
+            finished.add(id)
+            if (finished.size > 64) finished.remove(finished.first())
+        }
+    }
+
+    private fun isFinished(id: Int): Boolean = synchronized(finished) { id in finished }
 }

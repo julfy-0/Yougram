@@ -1,8 +1,6 @@
 package app.yougram.ui.settings
 
 import app.yougram.data.YougramBadge
-import android.content.Intent
-import android.os.Process
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import app.yougram.data.AccountManager
 import app.yougram.data.BIO_MAX_LENGTH
 import app.yougram.data.BirthdateInfo
 import app.yougram.data.PersonalChatOption
@@ -67,10 +66,10 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class AccountDialog { Username, Phone, Birthdate, Channels, Logout }
+private enum class AccountDialog { Username, Phone, Birthdate, Channels, AddAccount, Logout }
 
 @Composable
-fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingValues) {
+fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountManager, contentPadding: PaddingValues) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -207,7 +206,7 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
         SettingGroup {
             item {
                 ActionRow("Добавить аккаунт", Icons.Filled.PersonAdd, MaterialTheme.colorScheme.primary) {
-                    Toast.makeText(context, "Несколько аккаунтов пока не поддерживаются", Toast.LENGTH_SHORT).show()
+                    dialog = AccountDialog.AddAccount
                 }
             }
             item {
@@ -275,13 +274,23 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
                 }
             }
         }
+        AccountDialog.AddAccount -> ConfirmDialog(
+            title = "Добавить аккаунт",
+            text = "Приложение перезапустится и откроет экран входа. Текущий аккаунт останется в списке, переключаться между аккаунтами можно в настройках.",
+            confirmLabel = "Добавить",
+            onConfirm = {
+                dialog = null
+                accountManager.addAndRestart()
+            },
+            onDismiss = { dialog = null },
+        )
         AccountDialog.Logout -> ConfirmDialog(
             title = "Выход",
             text = "Вы выйдете из аккаунта на этом устройстве. Локальные данные будут удалены.",
             confirmLabel = "Выйти",
             onConfirm = {
                 dialog = null
-                viewModel.logOut { restartApp(context) }
+                viewModel.logOut { accountManager.finishLogoutAndRestart() }
             },
             onDismiss = { dialog = null },
         )
@@ -317,14 +326,6 @@ private fun openChannels(viewModel: SettingsDetailsViewModel, show: () -> Unit) 
     viewModel.clearPersonalChats()
     viewModel.loadPersonalChats()
     show()
-}
-
-/** Перезапуск процесса: после выхода TDLib-клиент закрыт, новому процессу нужен чистый клиент. */
-private fun restartApp(context: android.content.Context) {
-    context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
-        context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-    }
-    Process.killProcess(Process.myPid())
 }
 
 private fun BirthdateInfo.format(): String {
