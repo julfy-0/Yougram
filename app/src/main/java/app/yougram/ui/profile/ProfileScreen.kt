@@ -1,5 +1,22 @@
 package app.yougram.ui.profile
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 import app.yougram.ui.LocalOpenLink
 import app.yougram.ui.LocalYougramBanners
 import app.yougram.ui.ProfileBanner
@@ -154,6 +171,15 @@ fun ProfileScreen(
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val details = state.details
+    val listState = rememberLazyListState()
+    // Вход секций проигрывается один раз; при возврате прокруткой элементы появляются сразу.
+    val entered = remember { mutableStateOf(false) }
+    LaunchedEffect(details != null) {
+        if (details != null) {
+            delay(900)
+            entered.value = true
+        }
+    }
 
     SystemBarsGlass(Modifier.fillMaxSize()) {
         if (details == null) {
@@ -166,6 +192,7 @@ fun ProfileScreen(
 
             LazyColumn(
                 Modifier.fillMaxSize(),
+                state = listState,
                 contentPadding = PaddingValues(
                     start = 12.dp,
                     end = 12.dp,
@@ -174,18 +201,22 @@ fun ProfileScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { ProfileHeader(details, viewModel) }
-                item { ActionsGroup(actions) }
-                item { InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true }) }
-                item { TabSwitcher(tab) { tab = it } }
+                item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value) } }
+                item { Appear(1, entered.value) { ActionsGroup(actions) } }
+                item {
+                    Appear(2, entered.value) {
+                        InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
+                    }
+                }
+                item { Appear(3, entered.value) { TabSwitcher(tab) { tab = it } } }
                 when {
-                    state.sharedLoading && tab != ProfileTab.DELETED -> item {
-                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    state.sharedLoading && tab != ProfileTab.DELETED -> item(key = "loading") {
+                        Box(Modifier.animateItem().fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
                         }
                     }
                     tab == ProfileTab.MEDIA -> {
-                        if (media.isEmpty()) item { EmptyHint() }
+                        if (media.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
                         items3(media) { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 row.forEach { message ->
@@ -196,16 +227,16 @@ fun ProfileScreen(
                         }
                     }
                     tab == ProfileTab.FILES -> {
-                        if (files.isEmpty()) item { EmptyHint() }
-                        files.forEach { message -> item(key = "f${message.id}") { FileRow(message.media!!, context) } }
+                        if (files.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                        files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context) } } }
                     }
                     tab == ProfileTab.LINKS -> {
-                        if (links.isEmpty()) item { EmptyHint() }
-                        links.forEach { message -> item(key = "l${message.id}") { LinkRow(message, context) } }
+                        if (links.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                        links.forEach { message -> item(key = "l${message.id}") { Box(Modifier.animateItem()) { LinkRow(message, context) } } }
                     }
                     else -> {
-                        if (state.deleted.isEmpty()) item { EmptyHint() }
-                        else item(key = "deleted") { DeletedGroup(state.deleted) }
+                        if (state.deleted.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                        else item(key = "deleted") { Box(Modifier.animateItem()) { DeletedGroup(state.deleted) } }
                     }
                 }
             }
@@ -246,7 +277,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.items3(
     row: @Composable (List<MessageItem>) -> Unit,
 ) {
     val rows = list.chunked(3)
-    rows.forEach { chunk -> item(key = "m${chunk.first().id}") { row(chunk) } }
+    rows.forEach { chunk -> item(key = "m${chunk.first().id}") { Box(Modifier.animateItem()) { row(chunk) } } }
 }
 
 private fun actionsFor(
@@ -304,19 +335,32 @@ private fun actionsFor(
 }
 
 @Composable
-private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel) {
+private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, listState: LazyListState, entered: Boolean) {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .animateContentSize()
+            // Параллакс: при прокрутке шапка уходит медленнее и затухает.
+            .graphicsLayer {
+                val offset = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 600f
+                val progress = (offset / 500f).coerceIn(0f, 1f)
+                alpha = 1f - progress * 0.85f
+                scaleX = 1f - progress * 0.08f
+                scaleY = 1f - progress * 0.08f
+                translationY = offset * 0.35f
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val banner = if (details.kind == ProfileKind.USER) LocalYougramBanners.current[details.id] else null
         if (banner != null) {
             // Баннер видят только пользователи Yougram; аватар наполовину заходит на него.
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                ProfileBanner(banner, Modifier.fillMaxWidth().height(120.dp))
+                ProfileBanner(banner, Modifier.fillMaxWidth().height(120.dp).fadeInOnce(500))
                 Box(
                     Modifier
                         .padding(top = 72.dp)
+                        .popIn(entered)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(4.dp),
@@ -330,12 +374,14 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel) 
                 }
             }
         } else {
-            FileAvatar(
-                title = details.title,
-                fileId = details.avatarFileId,
-                fileState = viewModel::fileState,
-                size = 96.dp,
-            )
+            Box(Modifier.popIn(entered)) {
+                FileAvatar(
+                    title = details.title,
+                    fileId = details.avatarFileId,
+                    fileState = viewModel::fileState,
+                    size = 96.dp,
+                )
+            }
         }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -350,13 +396,16 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel) 
             )
             YougramBadge(details.chatId, Modifier.padding(start = 6.dp), size = 20.dp)
         }
-        if (details.subtitle.isNotEmpty()) {
-            Text(
-                details.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+        // Статус («в сети», «был(а) недавно») плавно сменяется без скачка.
+        Crossfade(details.subtitle, label = "subtitle") { subtitle ->
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -432,29 +481,51 @@ private fun DeletedGroup(messages: List<MessageItem>) {
     }
 }
 
+/** Переключатель вкладок: «пилюля» плавно переезжает на выбранную вкладку, цвет текста перетекает. */
 @Composable
 private fun TabSwitcher(selected: ProfileTab, onSelect: (ProfileTab) -> Unit) {
+    val tabs = ProfileTab.entries
+    val gap = 4.dp
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ProfileTab.entries.forEach { tab ->
-                val active = tab == selected
-                Surface(
-                    onClick = { onSelect(tab) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(24.dp),
-                    color = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    contentColor = if (active) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                ) {
-                    Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                        Text(tab.label, style = MaterialTheme.typography.labelLarge)
+        BoxWithConstraints(Modifier.padding(4.dp)) {
+            val tabWidth = (maxWidth - gap * (tabs.size - 1)) / tabs.size
+            val pillOffset by animateDpAsState(
+                targetValue = (tabWidth + gap) * selected.ordinal,
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium),
+                label = "tabPill",
+            )
+            Box(
+                Modifier
+                    .offset(x = pillOffset)
+                    .width(tabWidth)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                tabs.forEach { tab ->
+                    val textColor by animateColorAsState(
+                        targetValue = if (tab == selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        animationSpec = tween(220),
+                        label = "tabText",
+                    )
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable { onSelect(tab) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(tab.label, style = MaterialTheme.typography.labelLarge, color = textColor)
                     }
                 }
             }
@@ -463,8 +534,8 @@ private fun TabSwitcher(selected: ProfileTab, onSelect: (ProfileTab) -> Unit) {
 }
 
 @Composable
-private fun EmptyHint() {
-    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+private fun EmptyHint(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
         Text("Пока ничего нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -480,6 +551,7 @@ private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: 
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
     val bitmap = rememberFileBitmap(preview.path, 512)
+    val bitmapAlpha by animateFloatAsState(if (bitmap != null) 1f else 0f, tween(300), label = "thumbAlpha")
     Box(
         modifier
             .clip4()
@@ -487,7 +559,7 @@ private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: 
         contentAlignment = Alignment.Center,
     ) {
         mini?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-        bitmap?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        bitmap?.let { Image(it, null, Modifier.fillMaxSize().graphicsLayer { alpha = bitmapAlpha }, contentScale = ContentScale.Crop) }
         if (media.kind != MediaKind.PHOTO) {
             Box(
                 Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape),
@@ -497,6 +569,46 @@ private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: 
             }
         }
     }
+}
+
+/** Секция выезжает снизу с затуханием; [index] задаёт каскад. При [skip] показывается сразу. */
+@Composable
+private fun Appear(index: Int, skip: Boolean, content: @Composable () -> Unit) {
+    val progress = remember { Animatable(if (skip) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (progress.value < 1f) {
+            delay(index * 60L)
+            progress.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+        }
+    }
+    Box(
+        Modifier.graphicsLayer {
+            alpha = progress.value
+            translationY = (1f - progress.value) * 24.dp.toPx()
+        },
+    ) { content() }
+}
+
+/** Пружинное «вылетание» аватара из уменьшенного состояния. */
+@Composable
+private fun Modifier.popIn(skip: Boolean): Modifier {
+    val scale = remember { Animatable(if (skip) 1f else 0.6f) }
+    LaunchedEffect(Unit) {
+        if (scale.value < 1f) scale.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+    }
+    return this.graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+        alpha = ((scale.value - 0.6f) / 0.25f).coerceIn(0f, 1f)
+    }
+}
+
+/** Один раз плавно проявляет элемент при первом появлении. */
+@Composable
+private fun Modifier.fadeInOnce(durationMs: Int): Modifier {
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { alpha.animateTo(1f, tween(durationMs)) }
+    return this.graphicsLayer { this.alpha = alpha.value }
 }
 
 private fun Modifier.clip4(): Modifier = this.then(Modifier.clip(RoundedCornerShape(4.dp)))

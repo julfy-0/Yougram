@@ -1,63 +1,40 @@
-package app.yougram.ui
+package app.yougram.data
 
-import app.yougram.data.YougramBanner
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import app.yougram.R
+/**
+ * Метка Yougram в bio: невидимые символы в самом конце, после них (необязательно) закодированный баннер.
+ * Обычные клиенты Telegram их не показывают.
+ */
+object YougramBadge {
+    /** Символы U+2060 не входят в алфавит баннера, поэтому метка не спутается с его данными. */
+    const val MARKER = "\u2060\u2062\u2060"
 
-val LocalYougramUsers = compositionLocalOf { emptySet<Long>() }
-val LocalYougramBanners = compositionLocalOf { emptyMap<Long, YougramBanner>() }
-val LocalBadgeChecker = compositionLocalOf<(Long) -> Unit> { { } }
+    /** Лимит длины bio в Telegram (без Premium). */
+    const val BIO_LIMIT = 70
 
-/** Значок приложения рядом с именем; рисуется только если у [userId] найдена метка Yougram. По нажатию показывает пояснение. */
-@Composable
-fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) {
-    val users = LocalYougramUsers.current
-    val check = LocalBadgeChecker.current
-    var showInfo by remember { mutableStateOf(false) }
-    LaunchedEffect(userId) { check(userId) }
-    if (userId in users) {
-        Box(
-            modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Color(0xFF424242))
-                .clickable { showInfo = true },
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                contentDescription = "Пользователь Yougram",
-                modifier = Modifier.fillMaxSize().scale(1.7f),
-            )
-        }
+    private fun markerIndex(bio: String): Int {
+        val i = bio.lastIndexOf(MARKER)
+        if (i < 0) return -1
+        val payloadStart = i + MARKER.length
+        val rest = bio.length - payloadStart
+        return if (rest == 0 || (rest == YougramBanner.PAYLOAD_LENGTH && YougramBanner.hasPayloadAt(bio, payloadStart))) i else -1
     }
-    if (showInfo) {
-        AlertDialog(
-            onDismissRequest = { showInfo = false },
-            text = { Text("Это пользователь клиента Yougram ❤️") },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
-        )
+
+    fun hasMarker(bio: String): Boolean = markerIndex(bio) >= 0
+
+    /** Хвост bio: метка + баннер, либо пустая строка. */
+    fun tail(bio: String): String {
+        val i = markerIndex(bio)
+        return if (i < 0) "" else bio.substring(i)
+    }
+
+    /** Bio без метки и баннера. */
+    fun strip(bio: String): String {
+        val i = markerIndex(bio)
+        return if (i < 0) bio else bio.substring(0, i)
+    }
+
+    fun bannerOf(bio: String): YougramBanner? {
+        val i = markerIndex(bio)
+        return if (i < 0) null else YougramBanner.decode(bio, i + MARKER.length)
     }
 }
