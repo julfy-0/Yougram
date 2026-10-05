@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -41,6 +42,7 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
     val filters by settings.filterPrefs.collectAsState()
     val badge by settings.badge.collectAsState()
     val inAppBrowser by settings.inAppBrowser.collectAsState()
+    val localPremium by settings.localPremium.collectAsState()
     SettingsPageColumn(contentPadding) {
         SectionLabel("Категории")
         SettingGroup {
@@ -75,6 +77,15 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
                     { v -> settings.setBadge(v) },
                     subtitle = "Ставит метку в «О себе»: другие пользователи Yougram увидят значок у вашего имени",
                     icon = Icons.Filled.VerifiedUser,
+                )
+            }
+            item {
+                SwitchRow(
+                    "Локальный Premium",
+                    localPremium,
+                    { v -> settings.setLocalPremium(v) },
+                    subtitle = "Premium-статус и звезда в интерфейсе только на этом устройстве",
+                    icon = Icons.Filled.Star,
                 )
             }
             item {
@@ -123,7 +134,7 @@ fun GhostModeScreen(settings: SettingsRepository, contentPadding: PaddingValues)
         }
         SettingsFootnote(
             "Пока режим включён, открытие чата не помечает сообщения прочитанными. " +
-                "С опцией «Читать при действиях» чат читается автоматически, когда вы сами отправляете сообщение."
+                    "С опцией «Читать при действиях» чат читается автоматически, когда вы сами отправляете сообщение."
         )
     }
 }
@@ -161,7 +172,7 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
         }
         SettingsFootnote(
             "Запоминает последний известный онлайн людей со скрытым последним посещением (по их сообщениям). " +
-                "Вы увидите очень приблизительно, когда они были в сети в последний раз."
+                    "Вы увидите очень приблизительно, когда они были в сети в последний раз."
         )
         SettingGroup {
             item {
@@ -197,7 +208,7 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
         }
         SettingsFootnote(
             "Если папка превысит лимит, самые старые вложения будут удалены с устройства. " +
-                "Файлы лежат в Android/data/app.yougram/files/${p.folderName}."
+                    "Файлы лежат в Android/data/app.yougram/files/${p.folderName}."
         )
         SettingGroup {
             item { SettingRow("Экспорт базы данных", icon = Icons.Filled.Upload, onClick = { exportLauncher.launch("yougram-spy.db") }) }
@@ -288,8 +299,8 @@ fun SharedFiltersScreen(settings: SettingsRepository, contentPadding: PaddingVal
         }
         SettingsFootnote(
             "Сообщения, содержащие слово или фразу (без учёта регистра), скрываются. " +
-                "Регулярное выражение указывается в слэшах, например /https?:\\/\\/\\S+/. " +
-                "Работает, если включены «Фильтры» и «Общие фильтры в чатах»."
+                    "Регулярное выражение указывается в слэшах, например /https?:\\/\\/\\S+/. " +
+                    "Работает, если включены «Фильтры» и «Общие фильтры в чатах»."
         )
     }
 
@@ -346,7 +357,7 @@ fun ShadowBanScreen(settings: SettingsRepository, contentPadding: PaddingValues)
         }
         SettingsFootnote(
             "Сообщения этих пользователей не показываются в чатах. " +
-                "Быстрый способ: долгое нажатие на сообщение в чате → «Теневой бан»."
+                    "Быстрый способ: долгое нажатие на сообщение в чате → «Теневой бан»."
         )
     }
 

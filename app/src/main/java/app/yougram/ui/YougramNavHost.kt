@@ -28,6 +28,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
+import app.yougram.ui.glass.backdropSource
+import app.yougram.ui.glass.rememberBackdropState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -149,8 +151,10 @@ fun YougramNavHost(container: AppContainer) {
     }
 
     CompositionLocalProvider(LocalOpenLink provides openLink) {
+        val callBackdrop = rememberBackdropState()
         Box(Modifier.fillMaxSize()) {
             NavHost(
+                modifier = Modifier.backdropSource(callBackdrop),
                 navController = navController,
                 startDestination = ROUTE_SPLASH,
                 // По умолчанию (заставка, вход) — плавное затухание.
@@ -286,7 +290,7 @@ fun YougramNavHost(container: AppContainer) {
                     )
                 }
             }
-            CallOverlay(container.callManager, container.chatRepository)
+            CallOverlay(container.callManager, container.chatRepository, callBackdrop)
         }
     }
 }

@@ -9,6 +9,7 @@ import app.yougram.data.ChatRepository
 import app.yougram.data.FileState
 import app.yougram.data.MessageItem
 import app.yougram.data.ProfileDetails
+import app.yougram.data.UserDossier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,25 @@ class ProfileViewModel(
         viewModelScope.launch {
             val items = runCatching { repository.sharedMessages(chatId) }.getOrDefault(emptyList())
             _state.update { it.copy(shared = items, sharedLoading = false) }
+        }
+    }
+
+    private val _dossier = MutableStateFlow<UserDossier?>(null)
+    val dossier: StateFlow<UserDossier?> = _dossier.asStateFlow()
+    private val _dossierLoading = MutableStateFlow(false)
+    val dossierLoading: StateFlow<Boolean> = _dossierLoading.asStateFlow()
+
+    fun loadDossier() {
+        if (_dossierLoading.value) return
+        _dossierLoading.value = true
+        viewModelScope.launch {
+            try {
+                _dossier.value = repository.loadDossier(chatId)
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message) }
+            } finally {
+                _dossierLoading.value = false
+            }
         }
     }
 

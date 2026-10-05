@@ -19,8 +19,8 @@ android {
         applicationId = "app.yougram"
         minSdk = 31 // Android 12
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.7.0"
+        versionCode = 12
+        versionName = "0.7.1"
 
         buildConfigField("int", "TG_API_ID", (localProps.getProperty("TG_API_ID") ?: "0"))
         buildConfigField("String", "TG_API_HASH", "\"${localProps.getProperty("TG_API_HASH") ?: ""}\"")

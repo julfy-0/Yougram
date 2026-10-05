@@ -49,7 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,12 +62,16 @@ import app.yougram.data.AudioRoute
 import app.yougram.data.CallManager
 import app.yougram.data.CallPhase
 import app.yougram.data.ChatRepository
+import app.yougram.data.GlassSettings
 import app.yougram.ui.FileAvatar
+import app.yougram.ui.glass.BackdropState
+import app.yougram.ui.glass.LocalGlass
+import app.yougram.ui.glass.glass
 import kotlinx.coroutines.delay
 
 /** Полноэкранный экран звонка поверх всей навигации; виден, пока есть активный звонок. */
 @Composable
-fun CallOverlay(manager: CallManager, chats: ChatRepository) {
+fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropState) {
     val context = LocalContext.current
     val call by manager.call.collectAsState()
     val route by manager.route.collectAsState()
@@ -109,11 +115,21 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository) {
         else -> c.message ?: ""
     }
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    // Полупрозрачная стеклянная подложка: под ней размытое приложение, поверх — лёгкая подкраска.
+    val base = LocalGlass.current
+    val overlayGlass = remember(base) {
+        GlassSettings(blurRadius = maxOf(base.blurRadius, 40f), opacity = 0.55f)
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .glass(backdrop, overlayGlass, RectangleShape, MaterialTheme.colorScheme.surfaceContainerLowest)
+            // Нажатия не должны проваливаться в приложение под оверлеем.
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+    ) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
@@ -126,7 +142,7 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository) {
                 Text(c.title.ifEmpty { "Звонок" }, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(6.dp))
                 Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (c.phase == CallPhase.ACTIVE && c.emojis.isNotEmpty()) {
+                if ((c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) && c.emojis.isNotEmpty()) {
                     Spacer(Modifier.height(24.dp))
                     Text(c.emojis.joinToString("  "), fontSize = 32.sp)
                     Spacer(Modifier.height(4.dp))
@@ -136,7 +152,7 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (c.phase == CallPhase.ACTIVE && c.message != null) {
+                if ((c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) && c.message != null) {
                     Spacer(Modifier.height(16.dp))
                     Text(
                         c.message,

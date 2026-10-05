@@ -64,6 +64,10 @@ class CallManager(
     @Volatile
     private var dialing = false
 
+    /** Звонок, для которого уже запущен медиа-движок. */
+    @Volatile
+    private var engineCallId = Int.MIN_VALUE
+
     /** Запасной протокол, если движок не сообщил свой. */
     private val fallbackProtocol = CallProtocol(
         udpP2p = true,
@@ -118,7 +122,7 @@ class CallManager(
     }
 
     /** Сбросить или отклонить звонок. */
-    fun hangUp() {
+    fun hangUp(disconnected: Boolean = false) {
         val c = _call.value ?: return
         if (c.phase == CallPhase.ENDED) return
         markFinished(c.id)
@@ -129,7 +133,7 @@ class CallManager(
         scope.launch {
             client.discardCall(
                 callId = c.id,
-                isDisconnected = false,
+                isDisconnected = disconnected,
                 duration = duration,
                 isVideo = c.isVideo,
                 connectionId = 0L,
@@ -184,20 +188,23 @@ class CallManager(
             )
             is CallStateExchangingKeys -> _call.value = base.copy(phase = CallPhase.CONNECTING, message = "Обмен ключами…")
             is CallStateReady -> {
-                val first = current?.phase != CallPhase.ACTIVE
+                val first = engineCallId != call.id
+                val linked = current?.phase == CallPhase.ACTIVE || !engine.isAvailable
                 _call.value = base.copy(
-                    phase = CallPhase.ACTIVE,
+                    phase = if (linked) CallPhase.ACTIVE else CallPhase.CONNECTING,
                     emojis = state.emojis.orEmpty().toList(),
-                    startedAtMillis = base.startedAtMillis ?: System.currentTimeMillis(),
+                    startedAtMillis = if (linked) base.startedAtMillis ?: System.currentTimeMillis() else null,
                     engineAvailable = engine.isAvailable,
-                    message = if (engine.isAvailable) null else "Медиа-движок не подключён: звука и видео нет",
+                    message = if (engine.isAvailable) (if (linked) null else "Соединение…") else "Медиа-движок не подключён: звука и видео нет",
                 )
                 if (first) {
+                    engineCallId = call.id
                     audio.start(call.isVideo)
-                    engine.start(call.userId, state, call.isOutgoing, call.isVideo) { data ->
+                    engine.start(call.userId, state, call.isOutgoing, call.isVideo, { data ->
                         scope.launch { client.sendCallSignalingData(callId = call.id, data = data) }
-                    }
+                    }) { link -> onLink(call.id, link) }
                     if (base.muted) engine.setMuted(true)
+                    watchdog(call.id)
                 }
             }
             is CallStateHangingUp -> {
@@ -213,6 +220,32 @@ class CallManager(
 
         // Служба запускается только после того, как состояние звонка уже записано, иначе она сама же себя остановит.
         if (isNew && _call.value?.id == call.id) CallService.start(appContext)
+    }
+
+    /** Реальное состояние медиа-соединения: таймер и «активный» режим только после CONNECTED. */
+    private fun onLink(id: Int, link: EngineLink) {
+        scope.launch {
+            mutex.withLock {
+                _call.update { c ->
+                    if (c == null || c.id != id || c.phase == CallPhase.ENDED) return@update c
+                    when (link) {
+                        EngineLink.CONNECTED -> if (c.phase == CallPhase.ACTIVE) c.copy(message = null) else
+                            c.copy(phase = CallPhase.ACTIVE, startedAtMillis = System.currentTimeMillis(), message = null)
+                        EngineLink.CONNECTING -> if (c.phase == CallPhase.ACTIVE) c.copy(message = "Переподключение…") else c
+                        EngineLink.FAILED -> c.copy(message = "Нет соединения с собеседником")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Если медиа-соединение не поднялось за 30 с, звонок сбрасывается, а не висит «подключённым». */
+    private fun watchdog(id: Int) {
+        scope.launch {
+            delay(30_000)
+            val c = _call.value
+            if (c != null && c.id == id && c.phase == CallPhase.CONNECTING) hangUp(disconnected = true)
+        }
     }
 
     private fun finish(base: ActiveCall, text: String) {

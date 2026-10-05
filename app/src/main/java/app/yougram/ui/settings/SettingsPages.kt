@@ -40,6 +40,7 @@ fun SettingsPageContent(
         SettingsPage.Home -> SettingsHomeScreen(
             viewModel = viewModel<SettingsHomeViewModel>(factory = SettingsHomeViewModel.factory(container.chatRepository)),
             accountManager = container.accountManager,
+            settings = container.settings,
             contentPadding = contentPadding,
             onNavigate = onNavigate,
             onOpenChat = onOpenChat,
@@ -67,8 +68,9 @@ fun SettingsPageContent(
         SettingsPage.SharedFilters -> SharedFiltersScreen(container.settings, contentPadding)
         SettingsPage.ShadowBan -> ShadowBanScreen(container.settings, contentPadding)
         SettingsPage.Premium -> {
-            val premium by produceState<Boolean?>(null) { value = container.chatRepository.isPremium() }
-            PremiumScreen(premium, contentPadding)
+            val real by produceState<Boolean?>(null) { value = container.chatRepository.isPremium() }
+            val local by container.settings.localPremium.collectAsState()
+            PremiumScreen(if (local) true else real, contentPadding)
         }
         SettingsPage.Stars -> StarsScreen(contentPadding, onGift = { showGift = true })
         SettingsPage.Business -> BusinessScreen(contentPadding)

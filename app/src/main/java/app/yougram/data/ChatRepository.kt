@@ -239,6 +239,23 @@ data class ProfileDetails(
     val muted: Boolean = false,
 )
 
+/** Досье на пользователя: только то, что Telegram и так отдаёт клиенту о собеседнике. */
+data class UserDossier(
+    val id: Long,
+    val name: String,
+    val usernames: List<String>,
+    val phone: String?,
+    val bio: String,
+    val isContact: Boolean,
+    val isMutualContact: Boolean,
+    val isPremium: Boolean,
+    val isBot: Boolean,
+    val isYougram: Boolean,
+    val commonGroupsCount: Int,
+    val commonGroups: List<String>,
+    val deletedMessages: Int,
+)
+
 /** Контакт для UI. Аватарка берётся по [avatarFileId] через [ChatRepository.fileState]. */
 data class ContactItem(
     val id: Long,
@@ -1047,6 +1064,36 @@ class ChatRepository(
         }.getOrNull() ?: return null
         senderCache[key] = info
         return info
+    }
+
+    /** Досье для личного чата [chatId]; данные берутся из TDLib и локального архива, внешних запросов нет. */
+    suspend fun loadDossier(chatId: Long): UserDossier {
+        val chat = client.getChat(chatId = chatId).getOrThrow()
+        val type = chat.type as? ChatTypePrivate ?: error("Досье доступно только для личных чатов")
+        val user = client.getUser(userId = type.userId).getOrThrow()
+        val full = (client.getUserFullInfo(userId = type.userId) as? TdlResult.Success)?.result
+        val bio = full?.bio?.text.orEmpty()
+        val groupIds = runCatching {
+            client.getGroupsInCommon(userId = user.id, offsetChatId = 0L, limit = 30).getOrThrow().chatIds.toList()
+        }.getOrDefault(emptyList())
+        val groups = groupIds.mapNotNull { id ->
+            (client.getChat(chatId = id) as? TdlResult.Success)?.result?.title
+        }
+        return UserDossier(
+            id = user.id,
+            name = "${user.firstName} ${user.lastName}".trim(),
+            usernames = user.usernames?.activeUsernames?.toList().orEmpty(),
+            phone = user.phoneNumber.takeIf { it.isNotEmpty() }?.let { "+$it" },
+            bio = YougramBadge.strip(bio),
+            isContact = user.isContact,
+            isMutualContact = user.isMutualContact,
+            isPremium = user.isPremium,
+            isBot = user.type is UserTypeBot,
+            isYougram = YougramBadge.hasMarker(bio),
+            commonGroupsCount = maxOf(full?.groupInCommonCount ?: 0, groups.size),
+            commonGroups = groups,
+            deletedMessages = runCatching { deletedMessages(chatId).size }.getOrDefault(0),
+        )
     }
 
     /** Данные для экрана профиля чата [chatId] (пользователь, группа или канал). */

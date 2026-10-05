@@ -54,12 +54,13 @@ class NTgCallsEngine : CallEngine {
         isOutgoing: Boolean,
         isVideo: Boolean,
         sendSignaling: (ByteArray) -> Unit,
+        onLink: (EngineLink) -> Unit,
     ) {
         val gen = generation.incrementAndGet()
         worker.execute {
             if (gen != generation.get()) return@execute
             release()
-            connect(gen, userId, state, isOutgoing, sendSignaling)
+            connect(gen, userId, state, isOutgoing, sendSignaling, onLink)
         }
     }
 
@@ -69,13 +70,17 @@ class NTgCallsEngine : CallEngine {
         state: CallStateReady,
         isOutgoing: Boolean,
         sendSignaling: (ByteArray) -> Unit,
+        onLink: (EngineLink) -> Unit,
     ) {
         val instance = NTgCalls()
         this.userId = userId
         ntg = instance
         try {
             instance.onSignalingData { _, data -> sendSignaling(data) }
-            instance.onConnectionChange { _, info -> Log.d(TAG, "connection: $info") }
+            instance.onConnectionChange { _, info ->
+                Log.d(TAG, "connection: $info")
+                if (gen == generation.get()) onLink(linkOf(info))
+            }
 
             instance.createP2pCall(userId)
             // Ключ уже согласован TDLib — обмен ключами внутри NTgCalls пропускаем.
@@ -115,6 +120,7 @@ class NTgCallsEngine : CallEngine {
         } catch (e: Throwable) {
             Log.e(TAG, "start failed", e)
             release()
+            if (gen == generation.get()) onLink(EngineLink.FAILED)
         }
     }
 
@@ -155,6 +161,18 @@ class NTgCallsEngine : CallEngine {
         ntg = null
         runCatching { instance.stop(userId) }
         runCatching { instance.javaClass.getMethod("free").invoke(instance) }
+    }
+
+    /** Достаёт состояние из NetworkInfo без привязки к точным именам полей библиотеки. */
+    private fun linkOf(info: Any): EngineLink {
+        val raw = runCatching { info.javaClass.getField("state").get(info).toString() }
+            .getOrElse { info.toString() }
+            .uppercase()
+        return when {
+            "FAIL" in raw || "TIMEOUT" in raw || "CLOSED" in raw || "DISCONNECT" in raw -> EngineLink.FAILED
+            "CONNECTED" in raw -> EngineLink.CONNECTED
+            else -> EngineLink.CONNECTING
+        }
     }
 
     private fun toRtcServer(server: dev.g000sha256.tdl.dto.CallServer): RTCServer =

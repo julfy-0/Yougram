@@ -81,6 +81,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import app.yougram.data.SettingsRepository
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
@@ -147,6 +148,7 @@ enum class SettingsPage(val title: String) {
 fun SettingsHomeScreen(
     viewModel: SettingsHomeViewModel,
     accountManager: AccountManager,
+    settings: SettingsRepository,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
     onOpenChat: (Long) -> Unit,
@@ -193,6 +195,7 @@ fun SettingsHomeScreen(
             state = state,
             viewModel = viewModel,
             accountManager = accountManager,
+            settings = settings,
             onChangeAvatar = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             onOpenAccountManager = { accountSheetOpen = true },
         )
@@ -283,11 +286,13 @@ private fun ProfileHeader(
     state: SettingsHomeState,
     viewModel: SettingsHomeViewModel,
     accountManager: AccountManager,
+    settings: SettingsRepository,
     onChangeAvatar: () -> Unit,
     onOpenAccountManager: () -> Unit,
 ) {
     val profile = state.profile
     val accounts by accountManager.accounts.collectAsState()
+    val premium by settings.localPremium.collectAsState()
 
     Column(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -316,12 +321,24 @@ private fun ProfileHeader(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text(
-            profile?.name.orEmpty(),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                profile?.name.orEmpty(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (premium) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    Icons.Filled.Star,
+                    contentDescription = "Premium",
+                    tint = androidx.compose.ui.graphics.Color(0xFFB36BFF),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
         val sub = listOfNotNull(
             profile?.phone?.takeIf { it.isNotEmpty() },
             profile?.username?.let { "@$it" },

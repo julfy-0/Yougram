@@ -120,6 +120,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     var tab by remember { mutableStateOf(ProfileTab.MEDIA) }
     var confirmLeave by remember { mutableStateOf(false) }
+    var showDossier by remember { mutableStateOf(false) }
     var pendingVideo by remember { mutableStateOf(false) }
     val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val userId = state.details?.id
@@ -175,7 +176,7 @@ fun ProfileScreen(
             ) {
                 item { ProfileHeader(details, viewModel) }
                 item { ActionsGroup(actions) }
-                item { InfoGroup(details, context) }
+                item { InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true }) }
                 item { TabSwitcher(tab) { tab = it } }
                 when {
                     state.sharedLoading && tab != ProfileTab.DELETED -> item {
@@ -216,6 +217,10 @@ fun ProfileScreen(
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
         }
+    }
+
+    if (showDossier) {
+        DossierSheet(viewModel, onDismiss = { showDossier = false })
     }
 
     if (confirmLeave) {
@@ -367,7 +372,7 @@ private fun ActionsGroup(actions: List<ProfileAction>) {
 }
 
 @Composable
-private fun InfoGroup(details: ProfileDetails, context: Context) {
+private fun InfoGroup(details: ProfileDetails, context: Context, onDossier: () -> Unit) {
     val isUser = details.kind == ProfileKind.USER || details.kind == ProfileKind.BOT
     val others = details.otherUsernames.joinToString(", ") { "@$it" }
     val rows = buildList {
@@ -388,6 +393,7 @@ private fun InfoGroup(details: ProfileDetails, context: Context) {
         }
         add(InfoRowData(details.id.toString(), "ID", null, true))
     }
+    val showDossierRow = details.kind == ProfileKind.USER
     SectionLabel(if (isUser) "О пользователе" else "Информация")
     SettingGroup {
         rows.forEach { row ->
@@ -401,6 +407,9 @@ private fun InfoGroup(details: ProfileDetails, context: Context) {
                     },
                 )
             }
+        }
+        if (showDossierRow) {
+            item { SettingRow(title = "Досье", subtitle = "Всё, что известно клиенту об этом контакте", onClick = onDossier) }
         }
     }
 }

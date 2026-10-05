@@ -522,7 +522,17 @@ class SettingsRepository(context: Context) {
     fun removeShadowBan(userId: Long) =
         updateFilters { f -> f.copy(shadowBanned = f.shadowBanned.filterNot { it.userId == userId }) }
 
+    private val _localPremium = MutableStateFlow(prefs.getBoolean(KEY_LOCAL_PREMIUM, false))
+    /** Локальный Premium: статус и звезда только в этом клиенте, сервер Telegram не затрагивается. */
+    val localPremium: StateFlow<Boolean> = _localPremium.asStateFlow()
+
+    fun setLocalPremium(enabled: Boolean) {
+        _localPremium.value = enabled
+        prefs.edit().putBoolean(KEY_LOCAL_PREMIUM, enabled).apply()
+    }
+
     private companion object {
+        const val KEY_LOCAL_PREMIUM = "local_premium"
         const val KEY_BLUR = "glass_blur"
         const val KEY_OPACITY = "glass_opacity"
         const val KEY_MODE = "theme_mode"

@@ -1,42 +1,63 @@
-package app.yougram.data
+package app.yougram.ui
 
-/** Невидимая метка в bio, по которой клиенты Yougram узнают друг друга; после неё может идти баннер. */
-object YougramBadge {
-    /** Если Telegram вырежет эти символы, поменяй их здесь на другие невидимые. */
-    const val MARKER = "\u2063\u2064\u2062\u2063"
+import app.yougram.data.YougramBanner
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.yougram.R
 
-    /** Лимит длины bio в Telegram. */
-    const val BIO_LIMIT = 70
+val LocalYougramUsers = compositionLocalOf { emptySet<Long>() }
+val LocalYougramBanners = compositionLocalOf { emptyMap<Long, YougramBanner>() }
+val LocalBadgeChecker = compositionLocalOf<(Long) -> Unit> { { } }
 
-    fun hasMarker(bio: String): Boolean = bio.contains(MARKER)
-
-    /** Метка (и баннер, если задан) в конце bio; прежние метка и баннер заменяются. */
-    fun withMarker(bio: String, banner: YougramBanner? = null): String =
-        strip(bio) + MARKER + banner?.encode().orEmpty()
-
-    /** Bio без метки и без баннера. */
-    fun strip(bio: String): String {
-        var s = bio
-        while (true) {
-            val i = s.indexOf(MARKER)
-            if (i < 0) return s
-            s = s.removeRange(i, tailEnd(s, i))
+/** Значок приложения рядом с именем; рисуется только если у [userId] найдена метка Yougram. По нажатию показывает пояснение. */
+@Composable
+fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) {
+    val users = LocalYougramUsers.current
+    val check = LocalBadgeChecker.current
+    var showInfo by remember { mutableStateOf(false) }
+    LaunchedEffect(userId) { check(userId) }
+    if (userId in users) {
+        Box(
+            modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(Color(0xFF424242))
+                .clickable { showInfo = true },
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = "Пользователь Yougram",
+                modifier = Modifier.fillMaxSize().scale(1.7f),
+            )
         }
     }
-
-    /** Метка вместе с баннером в том виде, как она лежит в bio; пустая строка, если метки нет. */
-    fun tail(bio: String): String {
-        val i = bio.indexOf(MARKER)
-        return if (i < 0) "" else bio.substring(i, tailEnd(bio, i))
-    }
-
-    fun bannerOf(bio: String): YougramBanner? {
-        val i = bio.indexOf(MARKER)
-        return if (i < 0) null else YougramBanner.decode(bio, i + MARKER.length)
-    }
-
-    private fun tailEnd(bio: String, markerStart: Int): Int {
-        val end = markerStart + MARKER.length
-        return if (YougramBanner.hasPayloadAt(bio, end)) end + YougramBanner.PAYLOAD_LENGTH else end
+    if (showInfo) {
+        AlertDialog(
+            onDismissRequest = { showInfo = false },
+            text = { Text("Это пользователь клиента Yougram ❤️") },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+        )
     }
 }
