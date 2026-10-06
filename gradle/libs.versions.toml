@@ -1,14 +1,14 @@
 [versions]
 agp = "8.13.2"
 kotlin = "2.2.21"
-composeBom = "2026.09.01"
+composeBom = "2025.09.00"
 coreKtx = "1.17.0"
 activityCompose = "1.11.0"
 lifecycle = "2.9.4"
 navigation = "2.9.4"
 coroutines = "1.10.2"
 camera = "1.5.0"
-tdl = "14.0.0"
+tdl = "13.0.0"
 ntgcalls = "3.0.0"
 
 [libraries]
@@ -18,17 +18,20 @@ androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-ru
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+
 androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camera" }
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camera" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camera" }
 androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camera" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camera" }
+
 tdl-coroutines = { module = "dev.g000sha256:tdl-coroutines", version.ref = "tdl" }
 ntgcalls = { module = "io.github.pytgcalls:ntgcalls", version.ref = "ntgcalls" }
 

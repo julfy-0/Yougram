@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,7 +8,9 @@ plugins {
 
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    if (f.exists()) {
+        f.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -17,21 +19,36 @@ android {
 
     defaultConfig {
         applicationId = "app.yougram"
-        minSdk = 31 // Android 12
+        minSdk = 31
         targetSdk = 36
+
         versionCode = 17
         versionName = "0.8.3"
 
-        buildConfigField("int", "TG_API_ID", (localProps.getProperty("TG_API_ID") ?: "0"))
-        buildConfigField("String", "TG_API_HASH", "\"${localProps.getProperty("TG_API_HASH") ?: ""}\"")
-        buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("UPDATE_URL") ?: ""}\"")
+        buildConfigField(
+            "int",
+            "TG_API_ID",
+            localProps.getProperty("TG_API_ID") ?: "0"
+        )
+
+        buildConfigField(
+            "String",
+            "TG_API_HASH",
+            "\"${localProps.getProperty("TG_API_HASH") ?: ""}\""
+        )
+
+        buildConfigField(
+            "String",
+            "UPDATE_URL",
+            "\"${localProps.getProperty("UPDATE_URL") ?: ""}\""
+        )
     }
 
     signingConfigs {
         create("release") {
             val pass = localProps.getProperty("KS_PASS")
             val keystore = rootProject.file("yougram.jks")
-            // Если ключа или пароля нет, подпись не настраиваем, чтобы не ломать debug-сборку.
+
             if (pass != null && keystore.exists()) {
                 storeFile = keystore
                 storePassword = pass
@@ -44,8 +61,13 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -62,23 +84,31 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        )
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+
     implementation(libs.androidx.navigation.compose)
+
     implementation(libs.kotlinx.coroutines.android)
 
+    // Compose BOM 2025.09.00 в†’ Compose 1.9.1
     implementation(platform(libs.androidx.compose.bom))
+
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.camera.core)
@@ -87,8 +117,13 @@ dependencies {
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.camera.view)
 
+    // TDLib Coroutines 12.0.1
     implementation(libs.tdl.coroutines)
+
     implementation(libs.ntgcalls)
+
     implementation("com.airbnb.android:lottie-compose:6.6.7")
     implementation("org.luaj:luaj-jse:3.0.1")
 }
+
+
