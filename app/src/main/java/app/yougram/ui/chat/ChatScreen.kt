@@ -116,6 +116,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
@@ -129,6 +130,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import kotlin.reflect.KProperty
 import app.yougram.ui.ChatWallpaper
 import app.yougram.data.GlassSettings
 import app.yougram.ui.glass.BackdropState
@@ -192,7 +197,8 @@ fun ChatScreen(
     val bubbleBackdrop = rememberBackdropState()
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
-    var input by remember { mutableStateOf("") }
+    val inputHolder = remember { InputHolder() }
+    var input by inputHolder
     var viewerMedia by remember { mutableStateOf<MediaItem?>(null) }
     var actionMessage by remember { mutableStateOf<MessageItem?>(null) }
     var replyTo by remember { mutableStateOf<MessageItem?>(null) }
@@ -229,16 +235,36 @@ fun ChatScreen(
         if (result.values.all { it }) videoRecorderOpen = true
         else Toast.makeText(context, "Нужен доступ к камере и микрофону", Toast.LENGTH_SHORT).show()
     }
+    // Редактирование: фокус и клавиатура на поле, курсор в конце текста.
+    val inputFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var draftBeforeEdit by remember { mutableStateOf("") }
+    LaunchedEffect(editing?.id) {
+        if (editing != null) {
+            delay(200) // меню сообщения ещё закрывается
+            runCatching { inputFocus.requestFocus() }
+            keyboard?.show()
+        }
+    }
+
+    /** Выходит из режима редактирования и возвращает в поле то, что человек набирал до него. */
+    fun stopEditing() {
+        editing = null
+        input = draftBeforeEdit
+        draftBeforeEdit = ""
+    }
+
     fun submit() {
         val e = editing
         if (e != null) {
-            viewModel.edit(e.id, input)
-            editing = null
+            // Текст не менялся — Telegram ответил бы ошибкой «сообщение не изменено», поэтому просто выходим.
+            if (input.trim() != e.text.trim()) viewModel.edit(e.id, input)
+            stopEditing()
         } else {
             viewModel.send(input, replyTo?.id)
             replyTo = null
+            input = ""
         }
-        input = ""
     }
     var pendingCallVideo by remember { mutableStateOf(false) }
     val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -656,8 +682,7 @@ fun ChatScreen(
                             )
                         }
                         IconButton(onClick = {
-                            if (editing != null) input = ""
-                            editing = null
+                            if (editing != null) stopEditing()
                             replyTo = null
                         }) { Icon(Icons.Filled.Close, contentDescription = "Отмена") }
                     }
@@ -679,7 +704,8 @@ fun ChatScreen(
                     Surface(
                         modifier = Modifier.weight(1f).heightIn(min = 56.dp),
                         shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        // Полупрозрачное поле: сквозь него просвечивают обои и размытый фон панели.
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = InputFieldAlpha),
                     ) {
                         Row(
                             Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -725,9 +751,9 @@ fun ChatScreen(
                                         )
                                     }
                                     BasicTextField(
-                                        value = input,
-                                        onValueChange = { input = it },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        value = inputHolder.value,
+                                        onValueChange = { inputHolder.value = it },
+                                        modifier = Modifier.fillMaxWidth().focusRequester(inputFocus),
                                         maxLines = 5,
                                         keyboardOptions = KeyboardOptions(
                                             imeAction = if (chatPrefs.enterToSend) ImeAction.Send else ImeAction.Default,
@@ -903,7 +929,7 @@ fun ChatScreen(
             reactions = available,
             onDismiss = { actionMessage = null },
             onReact = { viewModel.react(message.id, it) },
-            onReply = { editing = null; replyTo = message },
+            onReply = { if (editing != null) stopEditing(); replyTo = message },
             onSave = {
                 val media = message.media ?: return@MessageMenu
                 scope.launch {
@@ -919,7 +945,12 @@ fun ChatScreen(
             },
             onForward = { forwardMessage = message },
             onPin = { viewModel.pin(message.id) },
-            onEdit = { replyTo = null; editing = message; input = message.text },
+            onEdit = {
+                replyTo = null
+                if (editing == null) draftBeforeEdit = input
+                editing = message
+                input = message.text
+            },
             onDelete = { deleteMessage = message },
             onShadowBan = { sender?.let { viewModel.shadowBan(it) } },
         )
@@ -1248,6 +1279,11 @@ private fun MessageFooter(
         if (deleted) {
             Text("удалено · ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }
+        if (message.paidMessageStars > 0) {
+            // Платное сообщение: отправитель заплатил звёздами.
+            Icon(Icons.Filled.Star, contentDescription = "Платное сообщение", tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
+            Text(" ${message.paidMessageStars} · ", style = MaterialTheme.typography.labelSmall, color = muted)
+        }
         Text(formatTime(message.date), style = MaterialTheme.typography.labelSmall, color = muted)
         if (mine) {
             Spacer(Modifier.width(4.dp))
@@ -1400,4 +1436,21 @@ private suspend fun copyToCache(context: Context, uri: Uri): String? = withConte
             ?: return@runCatching null
         file.absolutePath
     }.getOrNull()
+}
+
+/** Прозрачность «таблетки» поля ввода: 0 — полностью прозрачная, 1 — непрозрачная. */
+private const val InputFieldAlpha = 0.5f
+
+/**
+ * Состояние поля ввода. Внутри — TextFieldValue (чтобы не ломать композицию клавиатуры при наборе),
+ * снаружи — обычная строка: присваивание строки ставит курсор в конец.
+ */
+private class InputHolder {
+    var value by mutableStateOf(TextFieldValue(""))
+}
+
+private operator fun InputHolder.getValue(thisRef: Any?, property: KProperty<*>): String = value.text
+
+private operator fun InputHolder.setValue(thisRef: Any?, property: KProperty<*>, newText: String) {
+    if (newText != value.text) value = TextFieldValue(newText, TextRange(newText.length))
 }

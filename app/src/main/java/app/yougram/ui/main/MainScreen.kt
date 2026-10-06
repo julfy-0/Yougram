@@ -13,7 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -98,6 +100,7 @@ import app.yougram.ui.glass.backdropSource
 import app.yougram.ui.glass.glass
 import app.yougram.ui.glass.rememberBackdropState
 import app.yougram.ui.settings.SettingsPage
+import app.yougram.ui.settings.UpdateScreen
 import app.yougram.ui.settings.SettingsPageContent
 import kotlin.math.roundToInt
 import android.widget.Toast
@@ -417,6 +420,19 @@ fun MainScreen(
                 .height(bottomInset)
                 .glass(backdrop, glass, RectangleShape),
         )
+
+        // «Обновление клиента»: на весь экран, поверх верхней и нижней панелей.
+        AnimatedVisibility(
+            visible = tab == MainTab.Settings && settingsPage == SettingsPage.Update,
+            enter = slideInVertically(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { it / 6 } + fadeIn(tween(ScreenAnimationMillis)),
+            exit = slideOutVertically(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { it / 6 } + fadeOut(tween(ScreenAnimationMillis / 2)),
+        ) {
+            UpdateScreen(
+                updater = container.updater,
+                client = container.telegram.client,
+                onBack = { settingsPage = settingsPage.parent },
+            )
+        }
     }
 }
 

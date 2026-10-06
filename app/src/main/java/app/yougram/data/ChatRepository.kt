@@ -50,7 +50,11 @@ import dev.g000sha256.tdl.dto.MessageContent
 import dev.g000sha256.tdl.dto.MessageDocument
 import dev.g000sha256.tdl.dto.MessageInteractionInfo
 import dev.g000sha256.tdl.dto.MessageReplyToMessage
+import dev.g000sha256.tdl.dto.MessagePaidMedia
 import dev.g000sha256.tdl.dto.MessagePhoto
+import dev.g000sha256.tdl.dto.PaidMediaPhoto
+import dev.g000sha256.tdl.dto.PaidMediaPreview
+import dev.g000sha256.tdl.dto.PaidMediaVideo
 import dev.g000sha256.tdl.dto.MessageSenderChat
 import dev.g000sha256.tdl.dto.MessageSenderUser
 import dev.g000sha256.tdl.dto.MessageText
@@ -182,6 +186,10 @@ data class MediaItem(
     val duration: Int = 0,
     /** Сжатая форма волны голосового (5 бит на отсчёт) или null. */
     val waveform: ByteArray? = null,
+    /** Платное медиа, которое ещё не куплено: файла нет, есть только размытая заглушка. */
+    val locked: Boolean = false,
+    /** Сколько звёзд стоит платное медиа (для заблокированного — цена открытия). */
+    val paidStars: Long = 0L,
 )
 
 /** Стикер для панели выбора: файл TDLib уже можно скачать и отправить обратно по id. */
@@ -255,6 +263,8 @@ data class MessageItem(
     val hasComments: Boolean = false,
     /** Ветка комментариев, в которой написано сообщение; 0 — вне ветки. */
     val threadId: Long = 0L,
+    /** Сколько звёзд отправитель заплатил за это сообщение (платные сообщения); 0 — обычное. */
+    val paidMessageStars: Long = 0L,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -1875,6 +1885,7 @@ class ChatRepository(
         is MessageSticker -> ""
         is MessageDocument -> c.caption.text
         is MessageVoiceNote -> c.caption.text
+        is MessagePaidMedia -> c.caption.text
         is MessageVideoNote -> ""
         is MessageCall -> formatCallMessage(c, isOutgoing)
         else -> typeLabel(c)
@@ -1923,6 +1934,11 @@ class ChatRepository(
             "ChatDeletePhoto" -> "Фото удалено"
             "BasicGroupChatCreate", "SupergroupChatCreate" -> "Чат создан"
             "ContactRegistered" -> "Присоединился к Telegram"
+            "PaidMessagesRefunded" -> "Звёзды за сообщения возвращены"
+            "PaidMessagePriceChanged" -> "Цена сообщений изменена"
+            "Gift" -> "Подарок"
+            "GiftedStars" -> "Подарок: звёзды"
+            "GiftedPremium" -> "Подарок: Premium"
             "Unsupported" -> "Это сообщение не поддерживается"
             else -> "Сообщение"
         }
@@ -1930,6 +1946,7 @@ class ChatRepository(
     }
 
     private fun summaryOf(body: String, media: MediaItem?): String = when {
+        media != null && media.locked && body.isEmpty() -> "⭐ ${media.paidStars} · Платное медиа"
         media == null || body.isNotEmpty() -> body
         media.kind == MediaKind.DOCUMENT -> media.name.ifEmpty { media.kind.label }
         else -> media.kind.label
@@ -1984,6 +2001,7 @@ class ChatRepository(
             commentCount = interactionInfo?.replyInfo?.replyCount ?: 0,
             hasComments = interactionInfo?.replyInfo != null,
             threadId = (topicId as? MessageTopicThread)?.messageThreadId ?: 0L,
+            paidMessageStars = paidMessageStarCount,
         )
     }
 
@@ -2065,6 +2083,62 @@ class ChatRepository(
                 size = sizeOf(sticker.sticker),
                 miniThumb = null,
             )
+        }
+        is MessagePaidMedia -> when (val first = media.orEmpty().filterNotNull().firstOrNull()) {
+            // Уже открытое платное медиа показываем как обычное фото/видео.
+            is PaidMediaPhoto -> {
+                val sizes = first.photo.sizes.orEmpty().filterNotNull()
+                val full = sizes.maxByOrNull { it.width.toLong() * it.height }
+                val preview = sizes.firstOrNull { maxOf(it.width, it.height) >= 600 } ?: full
+                if (full == null) null else {
+                    track(full.photo)
+                    track(preview?.photo)
+                    MediaItem(
+                        kind = MediaKind.PHOTO,
+                        fileId = full.photo.id,
+                        previewFileId = preview?.photo?.id,
+                        width = full.width,
+                        height = full.height,
+                        name = "",
+                        mimeType = "image/jpeg",
+                        size = sizeOf(full.photo),
+                        miniThumb = first.photo.minithumbnail?.data,
+                        paidStars = starCount,
+                    )
+                }
+            }
+            is PaidMediaVideo -> {
+                track(first.video.video)
+                track(first.video.thumbnail?.file)
+                MediaItem(
+                    kind = MediaKind.VIDEO,
+                    fileId = first.video.video.id,
+                    previewFileId = first.video.thumbnail?.file?.id,
+                    width = first.video.width,
+                    height = first.video.height,
+                    name = first.video.fileName,
+                    mimeType = first.video.mimeType,
+                    size = sizeOf(first.video.video),
+                    miniThumb = first.video.minithumbnail?.data,
+                    paidStars = starCount,
+                )
+            }
+            // Ещё не куплено: от медиа есть только размеры и крошечная заглушка.
+            is PaidMediaPreview -> MediaItem(
+                kind = if (first.duration > 0) MediaKind.VIDEO else MediaKind.PHOTO,
+                fileId = 0,
+                previewFileId = null,
+                width = first.width,
+                height = first.height,
+                name = "",
+                mimeType = "",
+                size = 0L,
+                miniThumb = first.minithumbnail?.data,
+                duration = first.duration,
+                locked = true,
+                paidStars = starCount,
+            )
+            else -> null
         }
         is MessageDocument -> {
             track(document.document)

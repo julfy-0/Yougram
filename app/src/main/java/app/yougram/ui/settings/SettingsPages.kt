@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -81,7 +83,7 @@ fun SettingsPageContent(
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
         SettingsPage.Language -> LanguageScreen(contentPadding)
         SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client, container.accountManager, onNavigate)
-        SettingsPage.Update -> UpdateScreen(container.updater, contentPadding)
+        SettingsPage.Update -> Box(Modifier.fillMaxSize()) // полноэкранный экран рисуется поверх панелей в MainScreen
         SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
         SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)

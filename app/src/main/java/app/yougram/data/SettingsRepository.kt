@@ -30,6 +30,10 @@ data class ThemeSettings(
     val dynamic: Boolean = true,
     /** Индекс в списке акцентов; используется, когда [dynamic] выключен. */
     val accent: Int = 0,
+    /** Путь к своему шрифту (копия в хранилище приложения); null — системный шрифт. */
+    val fontPath: String? = null,
+    /** Имя файла шрифта для показа в настройках. */
+    val fontName: String? = null,
 )
 
 /** Локальные настройки уведомлений (применятся, когда появятся push-уведомления). */
@@ -214,6 +218,8 @@ class SettingsRepository(context: Context) {
             mode = ThemeMode.entries.getOrElse(prefs.getInt(KEY_MODE, ThemeMode.Dark.ordinal)) { ThemeMode.Dark },
             dynamic = prefs.getBoolean(KEY_DYNAMIC, true),
             accent = prefs.getInt(KEY_ACCENT, 0),
+            fontPath = prefs.getString(KEY_FONT_PATH, null)?.takeIf { java.io.File(it).exists() },
+            fontName = prefs.getString(KEY_FONT_NAME, null),
         )
     )
     val theme: StateFlow<ThemeSettings> = _theme.asStateFlow()
@@ -231,6 +237,12 @@ class SettingsRepository(context: Context) {
     fun setAccent(index: Int) {
         _theme.update { it.copy(accent = index) }
         prefs.edit().putInt(KEY_ACCENT, index).apply()
+    }
+
+    /** Свой шрифт для всего приложения; [path] = null возвращает системный. */
+    fun setCustomFont(path: String?, name: String?) {
+        _theme.update { it.copy(fontPath = path, fontName = if (path == null) null else name) }
+        prefs.edit().putString(KEY_FONT_PATH, path).putString(KEY_FONT_NAME, if (path == null) null else name).apply()
     }
 
     fun resetGlass() {
@@ -555,6 +567,8 @@ class SettingsRepository(context: Context) {
         const val KEY_MODE = "theme_mode"
         const val KEY_DYNAMIC = "theme_dynamic"
         const val KEY_ACCENT = "theme_accent"
+        const val KEY_FONT_PATH = "theme_font_path"
+        const val KEY_FONT_NAME = "theme_font_name"
         const val KEY_POWER = "power_saving"
         const val KEY_POWER_PREV_BLUR = "power_prev_blur"
     }

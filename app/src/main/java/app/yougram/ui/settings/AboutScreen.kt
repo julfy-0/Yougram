@@ -139,10 +139,11 @@ fun AboutScreen(
                 when (val u = update) {
                     UpdateState.Idle, UpdateState.Checking -> SettingRow(
                         title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
+                        onClick = openUpdate,
                     )
                     UpdateState.UpToDate -> SettingRow(
                         title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
-                        value = "Проверить", onClick = { updater.check() },
+                        value = "Открыть", onClick = openUpdate,
                     )
                     is UpdateState.Available -> SettingRow(
                         title = "Доступна версия ${u.info.versionName}",
@@ -165,7 +166,7 @@ fun AboutScreen(
                     )
                     is UpdateState.Error -> SettingRow(
                         title = u.message, icon = Icons.Filled.SystemUpdate,
-                        value = "Повторить", onClick = { updater.check() },
+                        value = "Открыть", onClick = openUpdate,
                     )
                 }
             }

@@ -12,8 +12,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,7 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -55,6 +60,11 @@ private const val AnimationAutoLimit = 8L shl 20
 /** Медиа внутри пузыря: фото/видео/GIF/стикер с превью или строка документа. */
 @Composable
 fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (MediaItem) -> Unit) {
+    // Платное медиа, которое ещё не куплено: файлов нет, показываем размытую заглушку с ценой.
+    if (media.locked) {
+        LockedPaidMedia(media)
+        return
+    }
     val context = LocalContext.current
     val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
     var viewer by remember { mutableStateOf(false) }
@@ -79,6 +89,46 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
     }
     val viewerPath = full.path
     if (viewer && viewerPath != null) VideoViewerDialog(viewerPath) { viewer = false }
+}
+
+/** Заглушка платного медиа: размытое превью, замок и цена в звёздах. */
+@Composable
+private fun LockedPaidMedia(media: MediaItem) {
+    val mini = remember(media.miniThumb) {
+        media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+    }
+    val ratio = if (media.width > 0 && media.height > 0) {
+        (media.width.toFloat() / media.height).coerceIn(0.6f, 1.8f)
+    } else 1f
+    Box(
+        Modifier
+            .width(260.dp)
+            .aspectRatio(ratio)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        mini?.let { Image(it, null, Modifier.fillMaxSize().blur(24.dp), contentScale = ContentScale.Crop) }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("${media.paidStars}", color = Color.White, style = MaterialTheme.typography.labelLarge)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (media.kind == MediaKind.VIDEO) "Платное видео" else "Платное фото",
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
 }
 
 @Composable

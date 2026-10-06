@@ -11,6 +11,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import java.io.File
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
+import androidx.compose.runtime.remember
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,7 +58,8 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
         accentScheme(Accents[settings.accent.coerceIn(Accents.indices)].color, dark)
     }
     val colorScheme = if (dark) base.withLightText() else base
-    MaterialTheme(colorScheme = colorScheme) {
+    val typography = rememberTypography(settings.fontPath)
+    MaterialTheme(colorScheme = colorScheme, typography = typography) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = colorScheme.background,
@@ -62,6 +69,38 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
         }
     }
 }
+
+/** Типографика приложения: стандартная или со своим шрифтом из файла. Битый файл — молча остаёмся на системном. */
+@Composable
+private fun rememberTypography(fontPath: String?): Typography = remember(fontPath) {
+    val family = fontPath?.let { path ->
+        runCatching {
+            val file = File(path)
+            // Проверяем, что файл — настоящий шрифт: иначе Compose упадёт при первой отрисовке текста.
+            android.graphics.fonts.Font.Builder(file).build()
+            FontFamily(Font(file, FontWeight.Normal))
+        }.getOrNull()
+    }
+    if (family == null) Typography() else Typography().withFontFamily(family)
+}
+
+private fun Typography.withFontFamily(f: FontFamily) = copy(
+    displayLarge = displayLarge.copy(fontFamily = f),
+    displayMedium = displayMedium.copy(fontFamily = f),
+    displaySmall = displaySmall.copy(fontFamily = f),
+    headlineLarge = headlineLarge.copy(fontFamily = f),
+    headlineMedium = headlineMedium.copy(fontFamily = f),
+    headlineSmall = headlineSmall.copy(fontFamily = f),
+    titleLarge = titleLarge.copy(fontFamily = f),
+    titleMedium = titleMedium.copy(fontFamily = f),
+    titleSmall = titleSmall.copy(fontFamily = f),
+    bodyLarge = bodyLarge.copy(fontFamily = f),
+    bodyMedium = bodyMedium.copy(fontFamily = f),
+    bodySmall = bodySmall.copy(fontFamily = f),
+    labelLarge = labelLarge.copy(fontFamily = f),
+    labelMedium = labelMedium.copy(fontFamily = f),
+    labelSmall = labelSmall.copy(fontFamily = f),
+)
 
 /** В тёмной теме весь текст светлый, а фон гарантированно тёмный. */
 private fun ColorScheme.withLightText(): ColorScheme = copy(

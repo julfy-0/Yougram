@@ -48,6 +48,8 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
 
     fun check() {
         if (job?.isActive == true) return
+        // Уже скачанное или качающееся обновление не сбрасываем повторной проверкой.
+        if (_state.value is UpdateState.Downloading || _state.value is UpdateState.Ready) return
         val url = BuildConfig.UPDATE_URL
         if (!url.startsWith("https://")) {
             _state.value = UpdateState.Error("Адрес обновлений не задан (UPDATE_URL в local.properties)")

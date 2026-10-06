@@ -1,6 +1,18 @@
 package app.yougram.ui.settings
 
 import androidx.compose.foundation.background
+import java.io.File
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.widget.Toast
+import android.provider.OpenableColumns
+import android.net.Uri
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +42,20 @@ import app.yougram.ui.theme.Accents
 @Composable
 fun ThemeSection(settings: SettingsRepository) {
     val theme by settings.theme.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fontPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            val result = withContext(Dispatchers.IO) { importFont(context, uri) }
+            if (result == null) {
+                Toast.makeText(context, "Не удалось открыть шрифт: нужен файл .ttf или .otf", Toast.LENGTH_LONG).show()
+            } else {
+                val old = theme.fontPath
+                settings.setCustomFont(result.first, result.second)
+                if (old != null && old != result.first) runCatching { File(old).delete() }
+            }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingGroup {
@@ -52,6 +78,28 @@ fun ThemeSection(settings: SettingsRepository) {
                     onClick = { settings.setDynamicColor(!theme.dynamic) },
                     trailing = { CheckSwitch(theme.dynamic, settings::setDynamicColor) },
                 )
+            }
+        }
+
+        SettingGroup {
+            item {
+                SettingRow(
+                    title = "Шрифт",
+                    subtitle = theme.fontName ?: "Системный",
+                    value = "Выбрать",
+                    onClick = { fontPicker.launch(arrayOf("*/*")) },
+                )
+            }
+            if (theme.fontPath != null) {
+                item {
+                    SettingRow(
+                        title = "Вернуть системный шрифт",
+                        onClick = {
+                            theme.fontPath?.let { runCatching { File(it).delete() } }
+                            settings.setCustomFont(null, null)
+                        },
+                    )
+                }
             }
         }
 
@@ -111,3 +159,20 @@ fun ThemeSection(settings: SettingsRepository) {
         }
     }
 }
+
+/** Копирует выбранный файл шрифта в хранилище приложения и проверяет, что это настоящий шрифт. Возвращает путь и имя. */
+private fun importFont(context: Context, uri: Uri): Pair<String, String>? = runCatching {
+    val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0) else null }
+        ?: "Свой шрифт"
+    val dir = File(context.filesDir, "fonts").apply { mkdirs() }
+    val target = File(dir, "custom-${System.currentTimeMillis()}.ttf")
+    context.contentResolver.openInputStream(uri)!!.use { input -> target.outputStream().use { input.copyTo(it) } }
+    try {
+        android.graphics.fonts.Font.Builder(target).build()
+    } catch (e: Exception) {
+        target.delete()
+        throw e
+    }
+    target.absolutePath to name
+}.getOrNull()
