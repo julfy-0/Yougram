@@ -44,6 +44,13 @@ android {
         )
     }
 
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     signingConfigs {
         create("release") {
             val pass = localProps.getProperty("KS_PASS")
@@ -123,7 +130,6 @@ dependencies {
     implementation(libs.ntgcalls)
 
     implementation("com.airbnb.android:lottie-compose:6.6.7")
-    implementation("org.luaj:luaj-jse:3.0.1")
 }
 
 

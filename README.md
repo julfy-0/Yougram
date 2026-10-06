@@ -39,31 +39,29 @@ TDLib в минорных релизах меняет сигнатуры мет�
 - **Встроенный браузер**: `ui/browser/BrowserScreen.kt` (WebView). Ссылки в сообщениях кликабельны (`ui/Links.kt`), переключатель в «Режим призрака и шпион». Только http(s), http поднимается до https.
 - **Баннеры профиля**: 12 бит (палитра, узор, градиент) лежат в bio сразу после невидимой метки Yougram (`data/YougramBanner.kt`). Другие клиенты Telegram их не видят и не рисуют. Редактор: «Режим призрака и шпион» → «Баннер профиля».
 
-## Lua plugin message API
+## C++ плагины
 
-Plugins receive structured Telegram messages through `events.on("message_received", ...)`.
-The `message.type` value is derived from the TDLib `MessageContent` class and is not limited to text/media. `message.content` contains a recursively converted TDLib object, so new TDLib message types can be exposed without changing the Lua API.
+Плагины Yougram — нативные библиотеки (`.so`), которые загружаются через JNI (`plugin/NativePluginManager.kt` + `src/main/cpp/yougram_plugin_host.cpp`).
+Интерфейс — чистый C ABI: `src/main/cpp/include/yougram_plugin.h`, пример — `src/main/cpp/example_hello.cpp`.
 
-Supported message families include text, photo, video, animation/GIF, audio, voice note, video note, document, sticker, contact, location, venue, poll, dice, game, invoice, story, call, service/system messages, and any additional `MessageContent` type provided by the installed TDLib version.
+Пакет `.ygplugin` — zip:
 
-Example:
-
-```lua
-events.on("message_received", function(message)
-    print(message.type)
-    print(message.chat_id)
-    print(message.text)
-    print(message.content)
-end)
-
-events.on("message_edited", function(message)
-    print("edited:", message.type, message.message_id)
-end)
-
-events.on("message_deleted", function(event)
-    print("deleted in chat", event.chat_id)
-end)
 ```
+manifest.json
+lib/arm64-v8a/libmyplugin.so
+lib/armeabi-v7a/libmyplugin.so   (по желанию, другие ABI)
+```
+
+```json
+{ "id": "com.example.my", "name": "My plugin", "version": "1.0.0", "api": "1.0",
+  "author": "me", "description": "...", "entry": "libmyplugin.so", "permissions": [] }
+```
+
+Плагин экспортирует `yougram_plugin_entry()` и получает `on_load / on_enable / on_disable / on_event(event, json)`.
+События: `message_received`, `message_edited`, `message_deleted`; тело — JSON (для `message_received` — все поля `PluginMessage`, `content` — рекурсивно сконвертированный объект TDLib, поэтому новые типы сообщений доступны без изменения API).
+Из плагина доступны `host->log(...)` и `host->notify(...)`.
+
+Безопасность: нативный код **не изолирован** — он работает с правами приложения, а его падение закрывает приложение. Перед установкой приложение показывает предупреждение. Lua-плагины больше не поддерживаются.
 
 ## 0.8.3 — объединённый релиз: багфиксы, Telegram-функции, Stories и комментарии
 

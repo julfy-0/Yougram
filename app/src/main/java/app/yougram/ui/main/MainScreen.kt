@@ -76,7 +76,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.yougram.data.AppContainer
 import app.yougram.feature.stories.StoriesViewModel
-import app.yougram.feature.stories.StoriesRow
+import app.yougram.feature.stories.StoriesBar
+import app.yougram.feature.stories.StoryRef
 import app.yougram.data.ChatFolderItem
 import app.yougram.data.GlassSettings
 import app.yougram.ui.calls.CallsScreen
@@ -106,6 +107,7 @@ enum class MainTab(val title: String, val icon: ImageVector) {
 
 private val TopBarContentHeight = 56.dp
 private val FolderBarHeight = 48.dp
+private val StoriesBarHeight = 88.dp
 private val BottomBarHeight = 60.dp
 private val BottomBarMargin = 8.dp
 
@@ -198,7 +200,8 @@ fun MainScreen(
     val selectedFolder by chatListViewModel.selectedFolder.collectAsState()
     val folderId = selectedFolder?.takeIf { id -> folders.any { it.id == id } }
     val showFolders = tab == MainTab.Chats && folders.isNotEmpty()
-    val storiesTop = if (storyRefs.isNotEmpty()) 92.dp else 0.dp
+    val showStories = tab == MainTab.Chats && storyRefs.isNotEmpty() && !searching
+    val storiesTop = if (showStories) StoriesBarHeight else 0.dp
     val chatsPadding = if (folders.isNotEmpty()) {
         PaddingValues(
             top = topInset + TopBarContentHeight + FolderBarHeight + storiesTop + 8.dp,
@@ -270,7 +273,6 @@ fun MainScreen(
             ) { (currentTab, currentPage) ->
                 when (currentTab) {
                     MainTab.Chats -> Box(Modifier.fillMaxSize()) {
-                        StoriesRow(viewModel = storiesViewModel, onOpen = onOpenStories, modifier = Modifier.padding(top = topInset + TopBarContentHeight))
                         // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
                         ChatListScreen(
                             viewModel = chatListViewModel,
@@ -328,6 +330,14 @@ fun MainScreen(
             folders = if (showFolders) folders else emptyList(),
             selectedFolder = folderId,
             onSelectFolder = chatListViewModel::selectFolder,
+            stories = if (showStories) storyRefs else emptyList(),
+            onOpenStory = onOpenStories,
+            onAddStory = { onOpenStories(0L, 0) },
+            searchOnTop = chatPrefs.searchOnTop,
+            onSearch = {
+                tab = MainTab.Chats
+                searching = true
+            },
             backdrop = backdrop,
             glass = glass,
             topInset = topInset,
@@ -343,6 +353,7 @@ fun MainScreen(
                 tab = MainTab.Chats
                 searching = true
             },
+            showSearch = !chatPrefs.searchOnTop,
             backdrop = backdrop,
             glass = glass,
             bottomInset = bottomInset,
@@ -372,6 +383,11 @@ private fun GlassTopBar(
     folders: List<ChatFolderItem>,
     selectedFolder: Int?,
     onSelectFolder: (Int?) -> Unit,
+    stories: List<StoryRef>,
+    onOpenStory: (Long, Int) -> Unit,
+    onAddStory: () -> Unit,
+    searchOnTop: Boolean,
+    onSearch: () -> Unit,
     backdrop: BackdropState,
     glass: GlassSettings,
     topInset: Dp,
@@ -381,9 +397,16 @@ private fun GlassTopBar(
     Box(
         modifier
             // Уезжает вверх только строка с заголовком: стекло под статус-баром и папки остаются.
-            .offset { IntOffset(0, -(TopBarContentHeight.roundToPx() * (1f - progress())).roundToInt()) }
+            .offset {
+                val hide = TopBarContentHeight + if (stories.isNotEmpty()) StoriesBarHeight else 0.dp
+                IntOffset(0, -(hide.roundToPx() * (1f - progress())).roundToInt())
+            }
             .fillMaxWidth()
-            .height(topInset + TopBarContentHeight + if (folders.isNotEmpty()) FolderBarHeight else 0.dp)
+            .height(
+                topInset + TopBarContentHeight +
+                    (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
+                    (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
+            )
             .glass(backdrop, glass, RectangleShape),
     ) {
         Row(
@@ -430,7 +453,25 @@ private fun GlassTopBar(
                     Spacer(Modifier.width(16.dp))
                 }
                 Text(title, style = MaterialTheme.typography.titleLarge)
+                if (searchOnTop && onBack == null) {
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Filled.Search, contentDescription = "Поиск")
+                    }
+                }
             }
+        }
+        // Истории — между заголовком и папками; прячутся вместе с заголовком.
+        if (stories.isNotEmpty()) {
+            StoriesBar(
+                stories = stories,
+                onOpen = onOpenStory,
+                onAdd = onAddStory,
+                modifier = Modifier
+                    .padding(top = topInset + TopBarContentHeight)
+                    .height(StoriesBarHeight)
+                    .graphicsLayer { alpha = progress() },
+            )
         }
         if (folders.isNotEmpty()) {
             FolderTabs(
@@ -490,6 +531,7 @@ private fun GlassBottomBar(
     selected: MainTab,
     onSelect: (MainTab) -> Unit,
     onSearch: () -> Unit,
+    showSearch: Boolean,
     backdrop: BackdropState,
     glass: GlassSettings,
     bottomInset: Dp,
@@ -525,7 +567,7 @@ private fun GlassBottomBar(
         }
 
         // Отдельная круглая кнопка поиска справа, той же высоты, что и «таблетка».
-        Box(
+        if (showSearch) Box(
             Modifier
                 .size(BottomBarHeight)
                 .glass(backdrop, glass, SearchButtonShape)

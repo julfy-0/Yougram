@@ -269,7 +269,7 @@ fun YougramNavHost(container: AppContainer) {
                     )
                 }
 
-                commentsRoute(navController, container.telegram.client)
+                commentsRoute(navController, container)
 
                 composable(
                     route = ROUTE_BROWSER,

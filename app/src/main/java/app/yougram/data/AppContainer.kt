@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import app.yougram.plugin.LuaPluginManager
+import app.yougram.plugin.NativePluginManager
 import app.yougram.feature.stories.StoriesRepository
 
 /** Простой ручной DI-контейнер: один TDLib-клиент на всё приложение. */
@@ -18,7 +18,7 @@ class AppContainer(private val context: Context) {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val settings = SettingsRepository(context.applicationContext)
-    val plugins = LuaPluginManager(context.applicationContext)
+    val plugins = NativePluginManager(context.applicationContext)
     val plates = PlateRepository(context.applicationContext)
     val appLock = AppLock(context.applicationContext)
     val accountManager = AccountManager(context.applicationContext)

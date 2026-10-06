@@ -85,6 +85,8 @@ data class ChatPrefs(
     val wallpaper: Long = 0L,
     /** 2 или 3 строки в строке списка чатов. */
     val listLines: Int = 2,
+    /** true — кнопка поиска в верхней панели, false — рядом с нижней панелью вкладок. */
+    val searchOnTop: Boolean = false,
     val swipeAction: SwipeAction = SwipeAction.ChangeFolder,
     val nightAuto: Boolean = false,
     val inAppBrowser: Boolean = true,
@@ -296,6 +298,7 @@ class SettingsRepository(context: Context) {
             nameColor = prefs.getInt("c_name_color", 3),
             wallpaper = prefs.getLong("c_wallpaper", 0L),
             listLines = prefs.getInt("c_list_lines", 2),
+            searchOnTop = prefs.getBoolean("c_search_top", false),
             swipeAction = SwipeAction.entries.getOrElse(prefs.getInt("c_swipe", 1)) { SwipeAction.ChangeFolder },
             nightAuto = prefs.getBoolean("c_night_auto", false),
             inAppBrowser = prefs.getBoolean("c_in_app_browser", true),
@@ -322,6 +325,7 @@ class SettingsRepository(context: Context) {
             .putInt("c_name_color", c.nameColor)
             .putLong("c_wallpaper", c.wallpaper)
             .putInt("c_list_lines", c.listLines)
+            .putBoolean("c_search_top", c.searchOnTop)
             .putInt("c_swipe", c.swipeAction.ordinal)
             .putBoolean("c_night_auto", c.nightAuto)
             .putBoolean("c_in_app_browser", c.inAppBrowser)

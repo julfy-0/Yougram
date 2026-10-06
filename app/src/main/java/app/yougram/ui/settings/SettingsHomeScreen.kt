@@ -83,7 +83,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import app.yougram.data.SettingsRepository
-import app.yougram.plugin.LuaPluginManager
+import app.yougram.plugin.NativePluginManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
@@ -207,7 +207,7 @@ fun SettingsHomeScreen(
             item { SettingRow("Безопасность", subtitle = "Пин-код, графический ключ, отпечаток", icon = Icons.Filled.Lock, onClick = { onNavigate(SettingsPage.Security) }) }
             item { SettingRow("Уведомления", subtitle = "Звуки, сигналы, бейджи", icon = Icons.Filled.Notifications, onClick = { onNavigate(SettingsPage.Notifications) }) }
             item { SettingRow("Данные и память", subtitle = "Кэш, автозагрузка медиа", icon = Icons.Filled.PieChart, onClick = { onNavigate(SettingsPage.DataStorage) }) }
-            item { SettingRow("Плагины", subtitle = "Lua-плагины Yougram", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
+            item { SettingRow("Плагины", subtitle = "Плагины на C++", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
             item { SettingRow("Папки с чатами", subtitle = "Сортировка чатов по папкам", icon = Icons.Filled.Folder, onClick = { onNavigate(SettingsPage.Folders) }) }
             item { SettingRow("Устройства", subtitle = "Активные сеансы", icon = Icons.Filled.Laptop, value = state.devices?.toString(), onClick = { onNavigate(SettingsPage.Devices) }) }
             item { SettingRow("Энергосбережение", subtitle = "Экономия заряда", icon = Icons.Filled.BatterySaver, onClick = { onNavigate(SettingsPage.PowerSaving) }) }

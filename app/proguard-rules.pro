@@ -10,3 +10,8 @@
 -keepclassmembers class * {
     native <methods>;
 }
+
+# Нативные плагины: JNI вызывает onNativeNotify по имени
+-keepclassmembers class app.yougram.plugin.NativePluginManager {
+    void onNativeNotify(java.lang.String, java.lang.String, java.lang.String);
+}

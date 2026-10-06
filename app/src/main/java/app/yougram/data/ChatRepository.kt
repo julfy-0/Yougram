@@ -64,7 +64,7 @@ import dev.g000sha256.tdl.dto.UserStatusOffline
 import dev.g000sha256.tdl.dto.UserStatusOnline
 import dev.g000sha256.tdl.dto.UserStatusRecently
 import dev.g000sha256.tdl.dto.UserTypeBot
-import app.yougram.plugin.LuaPluginManager
+import app.yougram.plugin.NativePluginManager
 import app.yougram.plugin.PluginMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -378,7 +378,7 @@ class ChatRepository(
     private val settings: SettingsRepository,
     private val spy: SpyStore,
     private val context: Context,
-    private val plugins: LuaPluginManager? = null,
+    private val plugins: NativePluginManager? = null,
 ) {
     private val client get() = telegram.client
 

@@ -218,6 +218,18 @@ fun ChatSettingsScreen(
             }
         }
 
+        SectionLabel("Кнопка поиска")
+        SettingGroup {
+            item {
+                SwitchRow(
+                    "Поиск в верхней панели",
+                    prefs.searchOnTop,
+                    { v -> update { it.copy(searchOnTop = v) } },
+                )
+            }
+        }
+        SettingsFootnote("Включено — кнопка поиска в верхней панели. Выключено — рядом с нижней панелью вкладок.")
+
         SectionLabel("Смахивание влево в списке чатов")
         SettingGroup {
             item { SwipeActionPicker(prefs.swipeAction) { a -> update { it.copy(swipeAction = a) } } }
