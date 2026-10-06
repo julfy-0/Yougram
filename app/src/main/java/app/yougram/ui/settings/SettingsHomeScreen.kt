@@ -136,7 +136,8 @@ enum class SettingsPage(val title: String) {
     Premium("Telegram Premium"),
     Stars("Звёзды Telegram"),
     Business("Telegram для бизнеса"),
-    TelegramHub("Telegram");
+    TelegramHub("Telegram"),
+    Update("Обновление");
 
     /** Страница, на которую ведёт «Назад». */
     val parent: SettingsPage
@@ -145,6 +146,7 @@ enum class SettingsPage(val title: String) {
             Ghost, Spy, MessageFilters, Banner -> Extras
             SharedFilters, ShadowBan -> MessageFilters
             Premium, Stars, Business -> TelegramHub
+            Update -> About
             else -> Home
         }
 }

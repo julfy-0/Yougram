@@ -98,6 +98,7 @@ fun AboutScreen(
     updater: AppUpdater,
     client: TdlClient,
     accounts: AccountManager,
+    onNavigate: (SettingsPage) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -128,22 +129,46 @@ fun AboutScreen(
     var showPrime by remember { mutableStateOf(false) }
 
     SettingsPageColumn(contentPadding) {
-        // Место под баннер
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .combinedClickable(onClick = {}, onLongClick = openDebug),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.about_banner),
-                contentDescription = "Баннер О приложении",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
+        // Баннер (долгое нажатие — отладка)
+        YougramAboutBanner(Modifier.combinedClickable(onClick = {}, onLongClick = openDebug))
+
+        // Обновление — сразу под баннером. Если есть новая версия, строка ведёт на отдельный экран.
+        SettingGroup {
+            item {
+                val openUpdate = { onNavigate(SettingsPage.Update) }
+                when (val u = update) {
+                    UpdateState.Idle, UpdateState.Checking -> SettingRow(
+                        title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
+                    )
+                    UpdateState.UpToDate -> SettingRow(
+                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
+                        value = "Проверить", onClick = { updater.check() },
+                    )
+                    is UpdateState.Available -> SettingRow(
+                        title = "Доступна версия ${u.info.versionName}",
+                        subtitle = "Нажмите, чтобы посмотреть изменения",
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Открыть", onClick = openUpdate,
+                    )
+                    is UpdateState.Downloading -> SettingRow(
+                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
+                        onClick = openUpdate,
+                        below = {
+                            LinearProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
+                        },
+                    )
+                    is UpdateState.Ready -> SettingRow(
+                        title = "Версия ${u.info.versionName} скачана",
+                        subtitle = "Нажмите, чтобы установить",
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Установить", onClick = openUpdate,
+                    )
+                    is UpdateState.Error -> SettingRow(
+                        title = u.message, icon = Icons.Filled.SystemUpdate,
+                        value = "Повторить", onClick = { updater.check() },
+                    )
+                }
+            }
         }
 
         Column(
@@ -209,48 +234,6 @@ fun AboutScreen(
                         }
                     },
                 )
-            }
-        }
-
-        SectionLabel("Обновление")
-        SettingGroup {
-            item {
-                when (val u = update) {
-                    UpdateState.Idle, UpdateState.Checking -> SettingRow(
-                        title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
-                    )
-                    UpdateState.UpToDate -> SettingRow(
-                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
-                        value = "Проверить", onClick = { updater.check() },
-                    )
-                    is UpdateState.Available -> SettingRow(
-                        title = "Доступна версия ${u.info.versionName}",
-                        subtitle = u.info.notes.ifBlank { null },
-                        icon = Icons.Filled.SystemUpdate,
-                        value = "Скачать", onClick = { updater.download() },
-                    )
-                    is UpdateState.Downloading -> SettingRow(
-                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
-                        below = {
-                            LinearProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
-                        },
-                    )
-                    is UpdateState.Ready -> SettingRow(
-                        title = "Версия ${u.info.versionName} скачана",
-                        subtitle = "Нажмите, чтобы установить",
-                        icon = Icons.Filled.SystemUpdate,
-                        value = "Обновить",
-                        onClick = {
-                            if (!updater.install()) {
-                                Toast.makeText(context, "Разрешите установку из этого приложения и нажмите снова", Toast.LENGTH_LONG).show()
-                            }
-                        },
-                    )
-                    is UpdateState.Error -> SettingRow(
-                        title = u.message, icon = Icons.Filled.SystemUpdate,
-                        value = "Повторить", onClick = { updater.check() },
-                    )
-                }
             }
         }
 
