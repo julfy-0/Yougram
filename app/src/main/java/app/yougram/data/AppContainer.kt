@@ -5,7 +5,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import app.yougram.plugin.LuaPluginManager
 
@@ -37,6 +39,13 @@ class AppContainer(private val context: Context) {
         CallLog.init(context.applicationContext)
         plugins.loadAll()
         telegram.start()
+        // Прокси из настроек (в том числе заданный на экране входа) передаём в TDLib при каждом изменении.
+        appScope.launch {
+            settings.dataPrefs
+                .map { listOf(it.proxyType, it.proxyServer, it.proxyPort, it.proxyUser, it.proxyPass) }
+                .distinctUntilChanged()
+                .collect { runCatching { telegram.applyProxy(settings.dataPrefs.value) } }
+        }
         chatRepository.start()
         notificationCenter.start()
         callManager.start()

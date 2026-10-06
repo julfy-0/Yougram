@@ -172,7 +172,9 @@ fun YougramNavHost(container: AppContainer) {
                     }
                 }
                 composable(ROUTE_AUTH) {
-                    val vm: AuthViewModel = viewModel(factory = AuthViewModel.factory(container.authRepository))
+                    val vm: AuthViewModel = viewModel(
+                        factory = AuthViewModel.factory(container.authRepository, container.settings),
+                    )
                     AuthScreen(viewModel = vm)
                 }
                 composable(

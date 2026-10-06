@@ -130,7 +130,10 @@ data class DataPrefs(
     val proxyServer: String = "",
     val proxyPort: String = "",
     val proxyUser: String = "",
+    /** Пароль для SOCKS5/HTTP или секрет для MTProto. */
     val proxyPass: String = "",
+    /** "socks5" | "http" | "mtproto". */
+    val proxyType: String = "socks5",
 )
 
 /** Режим призрака: не выдаём факт прочтения. */
@@ -372,6 +375,7 @@ class SettingsRepository(context: Context) {
             proxyPort = prefs.getString("d_proxy_port", "").orEmpty(),
             proxyUser = prefs.getString("d_proxy_user", "").orEmpty(),
             proxyPass = prefs.getString("d_proxy_pass", "").orEmpty(),
+            proxyType = prefs.getString("d_proxy_type", "socks5").orEmpty().ifBlank { "socks5" },
         )
     )
     val dataPrefs: StateFlow<DataPrefs> = _dataPrefs.asStateFlow()
@@ -394,6 +398,7 @@ class SettingsRepository(context: Context) {
             .putString("d_proxy_port", d.proxyPort)
             .putString("d_proxy_user", d.proxyUser)
             .putString("d_proxy_pass", d.proxyPass)
+            .putString("d_proxy_type", d.proxyType)
             .apply()
     }
 

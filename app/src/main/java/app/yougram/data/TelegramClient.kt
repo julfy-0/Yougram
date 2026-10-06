@@ -17,10 +17,15 @@ import dev.g000sha256.tdl.dto.NetworkTypeNone
 import dev.g000sha256.tdl.dto.NetworkTypeOther
 import dev.g000sha256.tdl.dto.NetworkTypeWiFi
 import dev.g000sha256.tdl.dto.OptionValueInteger
+import dev.g000sha256.tdl.dto.ProxyTypeHttp
+import dev.g000sha256.tdl.dto.ProxyTypeMtproto
+import dev.g000sha256.tdl.dto.ProxyTypeSocks5
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
@@ -96,6 +101,26 @@ class TelegramClient(
                 }
             }
         }
+    }
+
+    /** Применяет прокси из настроек. Пустой сервер или порт — прокси выключается. */
+    suspend fun applyProxy(prefs: DataPrefs) {
+        // До setTdlibParameters TDLib не принимает запросы.
+        authState.filterNotNull().first { it !is AuthorizationStateWaitTdlibParameters }
+        val old = (client.getProxies() as? TdlResult.Success)?.result?.proxies.orEmpty()
+        old.forEach { client.removeProxy(proxyId = it.id) }
+
+        val port = prefs.proxyPort.toIntOrNull()
+        if (prefs.proxyServer.isBlank() || port == null) {
+            client.disableProxy()
+            return
+        }
+        val type = when (prefs.proxyType) {
+            "mtproto" -> ProxyTypeMtproto(secret = prefs.proxyPass)
+            "http" -> ProxyTypeHttp(username = prefs.proxyUser, password = prefs.proxyPass, httpOnly = false)
+            else -> ProxyTypeSocks5(username = prefs.proxyUser, password = prefs.proxyPass)
+        }
+        client.addProxy(server = prefs.proxyServer, port = port, enable = true, type = type)
     }
 
     private suspend fun sendTdlibParameters() {

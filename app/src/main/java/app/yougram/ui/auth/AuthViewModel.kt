@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.data.AuthRepository
 import app.yougram.data.AuthStep
+import app.yougram.data.DataPrefs
+import app.yougram.data.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,10 +17,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
+class AuthViewModel(
+    private val repository: AuthRepository,
+    private val settings: SettingsRepository,
+) : ViewModel() {
 
     val step: StateFlow<AuthStep> = repository.step
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AuthStep.Loading)
+
+    /** Текущие настройки прокси (то же хранилище, что и в «Данные и память»). */
+    val proxy: StateFlow<DataPrefs> = settings.dataPrefs
 
     data class Ui(val busy: Boolean = false, val error: String? = null)
 
@@ -28,6 +36,13 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun submitPhone(phone: String) = run { repository.sendPhone(phone) }
     fun submitCode(code: String) = run { repository.sendCode(code) }
     fun submitPassword(password: String) = run { repository.sendPassword(password) }
+
+    /** Сохраняет прокси; в TDLib он применяется автоматически (см. AppContainer.start). */
+    fun saveProxy(type: String, server: String, port: String, user: String, pass: String) {
+        settings.updateDataPrefs {
+            it.copy(proxyType = type, proxyServer = server, proxyPort = port, proxyUser = user, proxyPass = pass)
+        }
+    }
 
     /** Ошибка исчезает, как только пользователь начинает править поле. */
     fun clearError() {
@@ -61,8 +76,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     }
 
     companion object {
-        fun factory(repository: AuthRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { AuthViewModel(repository) }
+        fun factory(repository: AuthRepository, settings: SettingsRepository): ViewModelProvider.Factory = viewModelFactory {
+            initializer { AuthViewModel(repository, settings) }
         }
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yougram.data.SettingsRepository
+import app.yougram.ui.auth.ProxyDialog
 
 private val CallsSavingOptions = listOf("Никогда", "Только в роуминге", "Всегда")
 
@@ -156,21 +157,11 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
             },
             onDismiss = { dialog = null },
         )
-        DataDialog.Proxy -> EditDialog(
-            title = "Настройки прокси",
-            labels = listOf("Сервер", "Порт", "Логин", "Пароль или секрет"),
-            initial = listOf(prefs.proxyServer, prefs.proxyPort, prefs.proxyUser, prefs.proxyPass),
-            secretIndices = setOf(3),
-            onConfirm = { values ->
-                val port = values[1].filter(Char::isDigit).take(5)
-                val validPort = if (port.toIntOrNull() in 1..65535) port else ""
+        DataDialog.Proxy -> ProxyDialog(
+            initial = prefs,
+            onConfirm = { type, server, port, user, pass ->
                 settings.updateDataPrefs {
-                    it.copy(
-                        proxyServer = values[0].trim(),
-                        proxyPort = validPort,
-                        proxyUser = values[2].trim(),
-                        proxyPass = values[3],
-                    )
+                    it.copy(proxyType = type, proxyServer = server, proxyPort = port, proxyUser = user, proxyPass = pass)
                 }
                 dialog = null
             },

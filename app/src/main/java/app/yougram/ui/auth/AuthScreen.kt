@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +49,8 @@ import app.yougram.data.AuthStep
 fun AuthScreen(viewModel: AuthViewModel) {
     val step by viewModel.step.collectAsState()
     val ui by viewModel.ui.collectAsState()
+    val proxy by viewModel.proxy.collectAsState()
+    var showProxy by remember { mutableStateOf(false) }
 
     // Последний текст ошибки остаётся на экране, пока плашка плавно скрывается.
     var lastError by remember { mutableStateOf("") }
@@ -163,7 +166,24 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { showProxy = true }) {
+                    Text(
+                        if (proxy.proxyServer.isBlank()) "Прокси" else "Прокси: ${proxy.proxyServer}:${proxy.proxyPort}",
+                    )
+                }
             }
+        }
+
+        if (showProxy) {
+            ProxyDialog(
+                initial = proxy,
+                onConfirm = { type, server, port, user, pass ->
+                    viewModel.saveProxy(type, server, port, user, pass)
+                    showProxy = false
+                },
+                onDismiss = { showProxy = false },
+            )
         }
     }
 }
