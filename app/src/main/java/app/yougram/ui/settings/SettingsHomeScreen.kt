@@ -135,7 +135,8 @@ enum class SettingsPage(val title: String) {
     Banner("Баннер профиля"),
     Premium("Telegram Premium"),
     Stars("Звёзды Telegram"),
-    Business("Telegram для бизнеса");
+    Business("Telegram для бизнеса"),
+    TelegramHub("Telegram");
 
     /** Страница, на которую ведёт «Назад». */
     val parent: SettingsPage
@@ -143,6 +144,7 @@ enum class SettingsPage(val title: String) {
             Blocked, Websites -> Privacy
             Ghost, Spy, MessageFilters, Banner -> Extras
             SharedFilters, ShadowBan -> MessageFilters
+            Premium, Stars, Business -> TelegramHub
             else -> Home
         }
 }
@@ -154,21 +156,11 @@ fun SettingsHomeScreen(
     settings: SettingsRepository,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
-    onOpenChat: (Long) -> Unit,
-    onGift: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    var askDialog by remember { mutableStateOf(false) }
     var accountSheetOpen by remember { mutableStateOf(false) }
 
-    val openUrl = { url: String ->
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (_: Exception) {
-            Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
-        }
-    }
     LaunchedEffect(state.error) {
         state.error?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -223,18 +215,7 @@ fun SettingsHomeScreen(
         }
 
         SettingGroup {
-            item { SettingRow("Telegram Premium", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.Premium) }) }
-            item { SettingRow("Звёзды Telegram", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.Stars) }) }
-            item { SettingRow("Telegram для бизнеса", icon = Icons.Filled.Storefront, onClick = { onNavigate(SettingsPage.Business) }) }
-            item { SettingRow("Отправить подарок", icon = Icons.Filled.CardGiftcard, onClick = onGift) }
-        }
-
-        SectionLabel("Помощь")
-        SettingGroup {
-            item { SettingRow("Задать вопрос", icon = Icons.Filled.ChatBubble, onClick = { askDialog = true }) }
-            item { SettingRow("Вопросы о Telegram", icon = Icons.Filled.QuestionMark, onClick = { openUrl("https://telegram.org/faq") }) }
-            item { SettingRow("Возможности Telegram", icon = Icons.Filled.Lightbulb, onClick = { openUrl("https://telegram.org/tour") }) }
-            item { SettingRow("Политика конфиденциальности", icon = Icons.Filled.VerifiedUser, onClick = { openUrl("https://telegram.org/privacy") }) }
+            item { SettingRow("Telegram", subtitle = "Premium, Звёзды, Бизнес, подарки, помощь", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.TelegramHub) }) }
             item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
         }
 
@@ -255,32 +236,6 @@ fun SettingsHomeScreen(
             accountManager = accountManager,
             fileState = viewModel::fileState,
             onDismiss = { accountSheetOpen = false },
-        )
-    }
-
-    if (askDialog) {
-        val linkColor = MaterialTheme.colorScheme.primary
-        AlertDialog(
-            onDismissRequest = { askDialog = false },
-            title = { Text("Задать вопрос") },
-            text = {
-                Text(
-                    buildAnnotatedString {
-                        append("Поддержкой Telegram занимаются волонтёры. Мы стараемся отвечать как можно быстрее, однако иногда приходится немного подождать.\n\nОзнакомьтесь с ")
-                        withLink(LinkAnnotation.Url("https://telegram.org/faq", TextLinkStyles(SpanStyle(color = linkColor)))) {
-                            append("частыми вопросами о Telegram")
-                        }
-                        append(": там есть важные советы по устранению неисправностей и ответы на подробные вопросы.")
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    askDialog = false
-                    viewModel.openSupport(onOpenChat)
-                }) { Text("Спросить") }
-            },
-            dismissButton = { TextButton(onClick = { askDialog = false }) { Text("Отмена") } },
         )
     }
 }

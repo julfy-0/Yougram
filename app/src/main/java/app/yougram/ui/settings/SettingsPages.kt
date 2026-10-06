@@ -58,6 +58,11 @@ fun SettingsPageContent(
             settings = container.settings,
             contentPadding = contentPadding,
             onNavigate = onNavigate,
+        )
+        SettingsPage.TelegramHub -> TelegramHubScreen(
+            viewModel = viewModel<SettingsHomeViewModel>(factory = SettingsHomeViewModel.factory(container.chatRepository)),
+            contentPadding = contentPadding,
+            onNavigate = onNavigate,
             onOpenChat = onOpenChat,
             onGift = { showGift = true },
         )
@@ -75,7 +80,7 @@ fun SettingsPageContent(
         SettingsPage.Devices -> DevicesScreen(details, contentPadding)
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
         SettingsPage.Language -> LanguageScreen(contentPadding)
-        SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client)
+        SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client, container.accountManager)
         SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
         SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)

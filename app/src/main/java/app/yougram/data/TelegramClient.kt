@@ -17,6 +17,7 @@ import dev.g000sha256.tdl.dto.NetworkTypeNone
 import dev.g000sha256.tdl.dto.NetworkTypeOther
 import dev.g000sha256.tdl.dto.NetworkTypeWiFi
 import dev.g000sha256.tdl.dto.OptionValueInteger
+import dev.g000sha256.tdl.dto.Proxy as TdProxy
 import dev.g000sha256.tdl.dto.ProxyTypeHttp
 import dev.g000sha256.tdl.dto.ProxyTypeMtproto
 import dev.g000sha256.tdl.dto.ProxyTypeSocks5
@@ -120,7 +121,7 @@ class TelegramClient(
             "http" -> ProxyTypeHttp(username = prefs.proxyUser, password = prefs.proxyPass, httpOnly = false)
             else -> ProxyTypeSocks5(username = prefs.proxyUser, password = prefs.proxyPass)
         }
-        client.addProxy(server = prefs.proxyServer, port = port, enable = true, type = type)
+        client.addProxy(proxy = TdProxy(server = prefs.proxyServer, port = port, type = type), enable = true, comment = "")
     }
 
     private suspend fun sendTdlibParameters() {
