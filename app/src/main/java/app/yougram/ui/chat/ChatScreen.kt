@@ -14,7 +14,6 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -137,6 +136,7 @@ import kotlin.reflect.KProperty
 import app.yougram.ui.ChatWallpaper
 import app.yougram.data.GlassSettings
 import app.yougram.ui.glass.BackdropState
+import app.yougram.ui.glass.LocalPlates
 import app.yougram.data.EditRecord
 import app.yougram.data.FileState
 import app.yougram.data.MediaItem
@@ -192,6 +192,21 @@ fun ChatScreen(
     val glass by settings.glass.collectAsState()
     val chatPrefs by settings.chatPrefs.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
+    val powerSaving by settings.powerSaving.collectAsState()
+    val appContext = LocalContext.current
+    val lowRam = remember(appContext) {
+        (appContext.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.isLowRamDevice == true
+    }
+    // Размытие под сообщениями дорогое: на слабых устройствах, в энергосбережении и при сплошных пузырях его нет.
+    val bubbleBlurOn = chatPrefs.bubbleBlur && chatPrefs.bubbleOpacity < 100 && !powerSaving && !lowRam
+    LaunchedEffect(bubbleBlurOn) {
+        if (bubbleBlurOn) {
+            settings.armChatGuard()
+            delay(2500) // чат успел отрисоваться без падения
+            settings.disarmChatGuard()
+        }
+    }
+    DisposableEffect(Unit) { onDispose { settings.disarmChatGuard() } }
     val backdrop = rememberBackdropState()
     // Отдельный источник размытия только для фона чата (обои), без самих сообщений.
     val bubbleBackdrop = rememberBackdropState()
@@ -421,7 +436,7 @@ fun ChatScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .then(if (chatPrefs.bubbleBlur) Modifier.backdropSource(bubbleBackdrop) else Modifier)
+                    .then(if (bubbleBlurOn) Modifier.backdropSource(bubbleBackdrop) else Modifier)
                     .background(MaterialTheme.colorScheme.background),
             ) {
                 if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
@@ -481,7 +496,7 @@ fun ChatScreen(
                             onOpenComments = { onOpenComments(message.chatId, message.id) },
                             commentsEnabled = !threadMode,
                             bubbleOpacity = chatPrefs.bubbleOpacity / 100f,
-                            bubbleBackdrop = if (chatPrefs.bubbleBlur) bubbleBackdrop else null,
+                            bubbleBackdrop = if (bubbleBlurOn) bubbleBackdrop else null,
                             glassSettings = glass,
                             highlighted = message.id == highlightId,
                             searchQuery = if (searchOpen) search.query else "",
@@ -842,17 +857,16 @@ fun ChatScreen(
                 }
             }
         }
-    }
 
-    if (videoRecorderOpen) {
-        VideoNoteRecorderDialog(
-            onSend = { path, seconds, length -> viewModel.sendVideoNote(path, seconds, length) },
-            onDismiss = { videoRecorderOpen = false },
-        )
-    }
-
-    if (emojiSheet) {
-        ModalBottomSheet(onDismissRequest = { emojiSheet = false }) {
+        // Меню эмодзи / стикеров / GIF: полупрозрачная панель с размытием фона чата.
+        run {
+            GlassPickerPanel(
+                visible = emojiSheet,
+                backdrop = backdrop,
+                glass = glass,
+                transparency = LocalPlates.current.picker,
+                onDismiss = { emojiSheet = false },
+            ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -905,10 +919,16 @@ fun ChatScreen(
                     onSent = { emojiSheet = false },
                 )
             }
-            Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))
+            }
         }
     }
 
+    if (videoRecorderOpen) {
+        VideoNoteRecorderDialog(
+            onSend = { path, seconds, length -> viewModel.sendVideoNote(path, seconds, length) },
+            onDismiss = { videoRecorderOpen = false },
+        )
+    }
 
     viewerMedia?.let { media ->
         PhotoViewer(media = media, viewModel = viewModel, onDismiss = { viewerMedia = null })
@@ -1391,7 +1411,7 @@ private fun PickerTabButton(
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = pickerChipColor(selected),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),

@@ -306,11 +306,29 @@ class SettingsRepository(context: Context) {
 
     fun resetNotifications() = updateNotifications { NotificationPrefs() }
 
+    // Защита от «вылета при входе в чат»: перед открытием чата с размытием под сообщениями ставим метку
+    // и снимаем её, когда чат благополучно отрисован. Если при запуске метка осталась — прошлый вход
+    // закончился падением, и размытие под сообщениями выключается, чтобы приложение не падало снова.
+    init {
+        if (prefs.getBoolean(KEY_CHAT_GUARD, false)) {
+            prefs.edit().putBoolean("c_bubble_blur", false).putBoolean(KEY_CHAT_GUARD, false).commit()
+        }
+    }
+
+    /** Ставит метку синхронно: при падении процесса запись apply() могла бы не успеть на диск. */
+    fun armChatGuard() {
+        prefs.edit().putBoolean(KEY_CHAT_GUARD, true).commit()
+    }
+
+    fun disarmChatGuard() {
+        if (prefs.getBoolean(KEY_CHAT_GUARD, false)) prefs.edit().putBoolean(KEY_CHAT_GUARD, false).apply()
+    }
+
     // Настройки чатов.
     private val _chatPrefs = MutableStateFlow(
         ChatPrefs(
-            textSize = prefs.getInt("c_text_size", 16),
-            bubbleRadius = prefs.getInt("c_bubble_radius", 24),
+            textSize = prefs.getInt("c_text_size", 16).coerceIn(10, 40),
+            bubbleRadius = prefs.getInt("c_bubble_radius", 24).coerceIn(0, 28),
             nameColor = prefs.getInt("c_name_color", 3),
             wallpaper = prefs.getLong("c_wallpaper", 0L),
             listLines = prefs.getInt("c_list_lines", 2),
@@ -328,7 +346,7 @@ class SettingsRepository(context: Context) {
             showSensitive = prefs.getBoolean("c_sensitive", true),
             enterToSend = prefs.getBoolean("c_enter_send", false),
             distanceUnit = DistanceUnit.entries.getOrElse(prefs.getInt("c_distance", 0)) { DistanceUnit.Auto },
-            bubbleOpacity = prefs.getInt("c_bubble_opacity", 100),
+            bubbleOpacity = prefs.getInt("c_bubble_opacity", 100).coerceIn(20, 100),
             bubbleBlur = prefs.getBoolean("c_bubble_blur", false),
         )
     )
@@ -570,6 +588,7 @@ class SettingsRepository(context: Context) {
         const val KEY_FONT_PATH = "theme_font_path"
         const val KEY_FONT_NAME = "theme_font_name"
         const val KEY_POWER = "power_saving"
+        const val KEY_CHAT_GUARD = "chat_guard"
         const val KEY_POWER_PREV_BLUR = "power_prev_blur"
     }
     private val _badge = MutableStateFlow(prefs.getBoolean("yougram_badge", true))

@@ -26,7 +26,7 @@ fun PlateSection(plates: PlateRepository) {
         item {
             SettingRow(
                 title = "Сбросить подложки",
-                subtitle = "Вернуть сплошной фон везде",
+                subtitle = "Вернуть значения по умолчанию",
                 onClick = plates::reset,
             )
         }

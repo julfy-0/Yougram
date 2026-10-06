@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -151,6 +152,9 @@ enum class SettingsPage(val title: String) {
         }
 }
 
+/** Открыть менеджер аккаунтов: сама панель рисуется в MainScreen, чтобы размывать фон под собой. */
+val LocalOpenAccountManager = androidx.compose.runtime.staticCompositionLocalOf<() -> Unit> { {} }
+
 @Composable
 fun SettingsHomeScreen(
     viewModel: SettingsHomeViewModel,
@@ -161,7 +165,7 @@ fun SettingsHomeScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    var accountSheetOpen by remember { mutableStateOf(false) }
+    val openAccountManager = LocalOpenAccountManager.current
 
     LaunchedEffect(state.error) {
         state.error?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -194,7 +198,7 @@ fun SettingsHomeScreen(
             accountManager = accountManager,
             settings = settings,
             onChangeAvatar = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            onOpenAccountManager = { accountSheetOpen = true },
+            onOpenAccountManager = openAccountManager,
         )
 
         val sections = listOf(
@@ -240,14 +244,6 @@ fun SettingsHomeScreen(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-
-    if (accountSheetOpen) {
-        AccountManagerSheet(
-            accountManager = accountManager,
-            fileState = viewModel::fileState,
-            onDismiss = { accountSheetOpen = false },
         )
     }
 }
@@ -349,9 +345,9 @@ private fun ProfileHeader(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Содержимое менеджера аккаунтов; контейнер (стеклянная панель) задаёт MainScreen. */
 @Composable
-fun AccountManagerSheet(
+fun AccountManagerContent(
     accountManager: AccountManager,
     fileState: (Int) -> Flow<FileState>,
     onDismiss: () -> Unit,
@@ -360,11 +356,7 @@ fun AccountManagerSheet(
     val activeId by accountManager.activeAccountId.collectAsState()
     var removeTarget by remember { mutableStateOf<AccountEntry?>(null) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-    ) {
+    run {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -394,7 +386,7 @@ fun AccountManagerSheet(
 
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.heightIn(max = 340.dp),
             ) {
                 items(accounts, key = { it.id }) { acc ->
                     val isActive = acc.id == activeId
@@ -406,8 +398,9 @@ fun AccountManagerSheet(
                             }
                         },
                         shape = RoundedCornerShape(16.dp),
-                        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        // Полупрозрачные плитки: блюр панели виден и под ними.
+                        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(

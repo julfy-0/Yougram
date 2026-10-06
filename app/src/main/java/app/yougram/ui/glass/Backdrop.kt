@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.yougram.data.GlassSettings
 
@@ -84,8 +85,18 @@ fun Modifier.glass(
         .onGloballyPositioned { myOffset = it.positionInRoot() }
         .clip(shape)
         .drawBehind {
-            val delta = state.sourceOffset - myOffset
-            translate(delta.x, delta.y) { drawLayer(state.layer) }
+            // При почти сплошной подкраске размытая копия всё равно не видна — не тратим на неё GPU.
+            if (settings.opacity < OPAQUE_THRESHOLD) {
+                val layer = state.layer
+                // Слой могли ещё не записать (первый кадр после входа на экран) или уже освободить:
+                // рисование такого слоя может уронить приложение, поэтому пропускаем.
+                if (!layer.isReleased && layer.size != IntSize.Zero) {
+                    val delta = state.sourceOffset - myOffset
+                    runCatching { translate(delta.x, delta.y) { drawLayer(layer) } }
+                }
+            }
             drawRect(tint.copy(alpha = settings.opacity))
         }
 }
+
+private const val OPAQUE_THRESHOLD = 0.98f

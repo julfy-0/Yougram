@@ -15,8 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.ui.Alignment
@@ -104,6 +103,7 @@ fun SettingRow(
     trailing: (@Composable () -> Unit)? = null,
     below: (@Composable () -> Unit)? = null,
 ) {
+    val shownIcon = icon ?: autoIcon(title)
     Row(
         modifier
             .fillMaxWidth()
@@ -111,12 +111,12 @@ fun SettingRow(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) {
+        run {
             Box(
                 Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+                Icon(shownIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(16.dp))
         }
@@ -239,4 +239,62 @@ fun DotSlider(
             CornerRadius(thumbW / 2f),
         )
     }
+}
+
+/**
+ * Иконка по названию строки: так все страницы настроек выглядят одинаково (плитка с иконкой слева),
+ * даже если иконку явно не передали. Порядок важен: срабатывает первое совпадение.
+ */
+private val AutoIcons: List<Pair<List<String>, ImageVector>> = listOf(
+    listOf("сброс", "сбросить") to Icons.Filled.RestartAlt,
+    listOf("удалить", "очист") to Icons.Filled.DeleteOutline,
+    listOf("перезапуск") to Icons.Filled.Refresh,
+    listOf("повтор") to Icons.Filled.Repeat,
+    listOf("вибро") to Icons.Filled.Vibration,
+    listOf("рингтон", "звук", "аудио") to Icons.Filled.VolumeUp,
+    listOf("всплыва", "уведомлен", "счётчик", "счетчик") to Icons.Filled.Notifications,
+    listOf("личные") to Icons.Filled.Person,
+    listOf("групп") to Icons.Filled.Group,
+    listOf("канал") to Icons.Filled.Campaign,
+    listOf("истори", "правок") to Icons.Filled.History,
+    listOf("реакци") to Icons.Filled.Favorite,
+    listOf("закреп") to Icons.Filled.PushPin,
+    listOf("контакт") to Icons.Filled.Contacts,
+    listOf("синхрон") to Icons.Filled.Sync,
+    listOf("карты", "карта") to Icons.Filled.Map,
+    listOf("ссылок", "сайт") to Icons.Filled.Link,
+    listOf("фильтр") to Icons.Filled.FilterList,
+    listOf("чёрн", "в чс", "блок", "теневой") to Icons.Filled.Block,
+    listOf("призрак") to Icons.Filled.VisibilityOff,
+    listOf("шпион", "дату чтения", "последний онлайн") to Icons.Filled.Visibility,
+    listOf("бот") to Icons.Filled.SmartToy,
+    listOf("папк") to Icons.Filled.Folder,
+    listOf("фото", "изображ") to Icons.Filled.Image,
+    listOf("видео", "стрим", "mkv") to Icons.Filled.Videocam,
+    listOf("файл", "вложен", "документ") to Icons.Filled.Description,
+    listOf("wi-fi", "wifi") to Icons.Filled.Wifi,
+    listOf("мобильн", "роуминг") to Icons.Filled.SignalCellularAlt,
+    listOf("плат", "доставк") to Icons.Filled.CreditCard,
+    listOf("черновик") to Icons.Filled.Edit,
+    listOf("поиск", "подсказк") to Icons.Filled.Search,
+    listOf("плагин") to Icons.Filled.Extension,
+    listOf("соединен", "фон") to Icons.Filled.Cloud,
+    listOf("текст", "размер") to Icons.Filled.TextFields,
+    listOf("тема", "цвет", "оформлен") to Icons.Filled.Palette,
+    listOf("блюр", "размыт", "прозрачн", "подлож", "панел") to Icons.Filled.BlurOn,
+    listOf("пин", "код", "ключ", "парол") to Icons.Filled.Lock,
+    listOf("отпечат", "биометр") to Icons.Filled.Fingerprint,
+    listOf("язык") to Icons.Filled.Language,
+    listOf("верси", "обновлен", "update") to Icons.Filled.SystemUpdate,
+    listOf("устройств", "сеанс") to Icons.Filled.Laptop,
+    listOf("помощь", "faq", "вопрос") to Icons.Filled.HelpOutline,
+    listOf("подарк") to Icons.Filled.CardGiftcard,
+    listOf("звёзд", "premium", "премиум") to Icons.Filled.Star,
+    listOf("бизнес") to Icons.Filled.Storefront,
+    listOf("информац", "приложен") to Icons.Filled.Info,
+)
+
+internal fun autoIcon(title: String): ImageVector {
+    val t = title.lowercase()
+    return AutoIcons.firstOrNull { (keys, _) -> keys.any { it in t } }?.second ?: Icons.Filled.Tune
 }

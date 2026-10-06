@@ -19,7 +19,7 @@ fun PowerSavingScreen(settings: SettingsRepository, contentPadding: PaddingValue
                     "Режим энергосбережения",
                     enabled,
                     settings::setPowerSaving,
-                    subtitle = "Отключает размытие панелей",
+                    subtitle = "Отключает размытие панелей, меню и фона под сообщениями",
                     icon = Icons.Filled.BatterySaver,
                 )
             }

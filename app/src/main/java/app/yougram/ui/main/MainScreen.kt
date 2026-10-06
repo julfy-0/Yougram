@@ -57,6 +57,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +103,10 @@ import app.yougram.ui.glass.rememberBackdropState
 import app.yougram.ui.settings.SettingsPage
 import app.yougram.ui.settings.UpdateScreen
 import app.yougram.ui.settings.SettingsPageContent
+import app.yougram.ui.settings.LocalOpenAccountManager
+import app.yougram.ui.settings.AccountManagerContent
+import app.yougram.ui.chat.GlassPickerPanel
+import app.yougram.ui.glass.LocalPlates
 import kotlin.math.roundToInt
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -184,6 +189,7 @@ fun MainScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var barsVisible by rememberSaveable { mutableStateOf(true) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
+    var accountSheetOpen by remember { mutableStateOf(false) }
 
     val chatListViewModel: ChatListViewModel = viewModel(
         factory = ChatListViewModel.factory(container.chatRepository),
@@ -333,13 +339,15 @@ fun MainScreen(
                     )
                     MainTab.Settings -> Box(Modifier.fillMaxSize()) {
                         Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
-                            SettingsPageContent(
-                                page = currentPage,
-                                container = container,
-                                contentPadding = contentPadding,
-                                onNavigate = { settingsPage = it },
-                                onOpenChat = onOpenChat,
-                            )
+                            CompositionLocalProvider(LocalOpenAccountManager provides { accountSheetOpen = true }) {
+                                SettingsPageContent(
+                                    page = currentPage,
+                                    container = container,
+                                    contentPadding = contentPadding,
+                                    onNavigate = { settingsPage = it },
+                                    onOpenChat = onOpenChat,
+                                )
+                            }
                         }
                         AnimatedVisibility(
                             visible = searching && query.isNotBlank(),
@@ -420,6 +428,21 @@ fun MainScreen(
                 .height(bottomInset)
                 .glass(backdrop, glass, RectangleShape),
         )
+
+        // Менеджер аккаунтов: полупрозрачная панель с размытием, выезжает снизу.
+        GlassPickerPanel(
+            visible = accountSheetOpen && tab == MainTab.Settings,
+            backdrop = backdrop,
+            glass = glass,
+            transparency = LocalPlates.current.accounts,
+            onDismiss = { accountSheetOpen = false },
+        ) {
+            AccountManagerContent(
+                accountManager = container.accountManager,
+                fileState = container.chatRepository::fileState,
+                onDismiss = { accountSheetOpen = false },
+            )
+        }
 
         // «Обновление клиента»: на весь экран, поверх верхней и нижней панелей.
         AnimatedVisibility(
