@@ -240,9 +240,16 @@ class ChatViewModel(
     private val _gifs = MutableStateFlow<List<GifItem>>(emptyList())
     val gifs: StateFlow<List<GifItem>> = _gifs.asStateFlow()
 
+    private var stickerSetsJob: Job? = null
+
     fun loadStickerSets() {
-        viewModelScope.launch {
-            runCatching { repository.loadStickerSets() }.onSuccess { _stickerSets.value = it }
+        if (stickerSetsJob?.isActive == true) return
+        stickerSetsJob = viewModelScope.launch {
+            runCatching { repository.loadStickerSets() }
+                .onSuccess { _stickerSets.value = it }
+                .onFailure { error ->
+                    _state.update { cur -> cur.copy(error = error.message ?: "Не удалось загрузить наборы стикеров") }
+                }
         }
     }
 
@@ -257,9 +264,17 @@ class ChatViewModel(
         }
     }
 
+    private var gifsJob: Job? = null
+
     fun loadGifs() {
-        viewModelScope.launch {
-            runCatching { repository.loadSavedGifs() }.onSuccess { _gifs.value = it }
+        // Avoid overlapping TDLib requests when the user switches tabs quickly.
+        if (gifsJob?.isActive == true) return
+        gifsJob = viewModelScope.launch {
+            runCatching { repository.loadSavedGifs() }
+                .onSuccess { _gifs.value = it }
+                .onFailure { error ->
+                    _state.update { cur -> cur.copy(error = error.message ?: "Не удалось загрузить GIF") }
+                }
         }
     }
 
