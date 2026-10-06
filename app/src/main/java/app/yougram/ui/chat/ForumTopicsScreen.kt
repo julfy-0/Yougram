@@ -69,6 +69,7 @@ fun ChatOrTopics(
     onOpenChatProfile: () -> Unit,
     onOpenProfile: (Long) -> Unit,
     onCall: (Long, Boolean) -> Unit,
+    onOpenComments: (Long, Long) -> Unit = { _, _ -> },
     showBack: Boolean = true,
 ) {
     val skipCheck = topicId != 0 || messageId != 0L
@@ -106,6 +107,7 @@ fun ChatOrTopics(
                 onOpenChatProfile = onOpenChatProfile,
                 onOpenProfile = onOpenProfile,
                 onCall = onCall,
+                onOpenComments = onOpenComments,
                 titleOverride = topicName.takeIf { topicId != 0 },
             )
         }

@@ -1,5 +1,6 @@
 package app.yougram.ui
 
+import app.yougram.feature.chat.comments.commentsRoute
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -55,6 +56,8 @@ import app.yougram.ui.chat.ChatOrTopics
 import app.yougram.ui.chat.ChatScreen
 import app.yougram.ui.chat.ChatViewModel
 import app.yougram.ui.main.MainScreen
+import app.yougram.feature.stories.StoriesScreen
+import app.yougram.feature.stories.StoriesViewModel
 import app.yougram.ui.profile.ProfileScreen
 import app.yougram.ui.profile.ProfileViewModel
 
@@ -64,6 +67,7 @@ private const val ROUTE_CHATS = "chats"
 private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}&topicId={topicId}"
 private const val ROUTE_PROFILE = "profile/{chatId}"
 private const val ROUTE_BROWSER = "browser/{url}"
+private const val ROUTE_STORIES = "stories/{chatId}/{storyId}"
 
 private const val NavMillis = 320
 private const val FadeMillis = 220
@@ -197,6 +201,7 @@ fun YougramNavHost(container: AppContainer) {
                                 onOpenChat = { chatId -> openChat(chatId, 0L) },
                                 onOpenMessage = { chatId, messageId -> openChat(chatId, messageId) },
                                 selectedChatId = selected,
+                                onOpenStories = { chatId, storyId -> navController.navigate("stories/$chatId/$storyId") },
                             )
                         }
                     }
@@ -211,6 +216,18 @@ fun YougramNavHost(container: AppContainer) {
                     } else {
                         mainPane(selectedChat)
                     }
+                }
+                composable(
+                    route = ROUTE_STORIES,
+                    arguments = listOf(navArgument("chatId") { type = NavType.LongType }, navArgument("storyId") { type = NavType.IntType }),
+                ) { entry ->
+                    val vm: StoriesViewModel = viewModel(
+                        factory = StoriesViewModel.factory(container.stories, container.chatRepository),
+                    )
+                    val chatId = entry.arguments?.getLong("chatId") ?: 0L
+                    val storyId = entry.arguments?.getInt("storyId") ?: 0
+                    LaunchedEffect(chatId, storyId) { vm.open(app.yougram.feature.stories.StoryRef(chatId, dev.g000sha256.tdl.dto.StoryInfo(storyId, 0, false, false))) }
+                    StoriesScreen(viewModel = vm, onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ROUTE_CHAT,
@@ -248,8 +265,12 @@ fun YougramNavHost(container: AppContainer) {
                         onOpenChatProfile = { navController.navigate("profile/$chatId") },
                         onOpenProfile = { id -> navController.navigate("profile/$id") },
                         onCall = { userId, video -> container.callManager.startCall(userId, video) },
+                        onOpenComments = { c, m -> navController.navigate("comments/$c/$m") },
                     )
                 }
+
+                commentsRoute(navController, container.telegram.client)
+
                 composable(
                     route = ROUTE_BROWSER,
                     arguments = listOf(navArgument("url") { type = NavType.StringType }),

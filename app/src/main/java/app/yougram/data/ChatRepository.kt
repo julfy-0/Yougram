@@ -248,6 +248,10 @@ data class MessageItem(
     val reply: ReplyRef? = null,
     /** Реакции под сообщением. */
     val reactions: List<ReactionItem> = emptyList(),
+    /** Количество комментариев/ответов в discussion thread. */
+    val commentCount: Int = 0,
+    /** Для сообщения существует discussion thread, доступный для комментариев. */
+    val hasComments: Boolean = false,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -1939,6 +1943,8 @@ class ChatRepository(
                 ?.takeIf { it.messageId != 0L }
                 ?.let { ReplyRef(it.chatId, it.messageId) },
             reactions = interactionInfo.toReactions(),
+            commentCount = interactionInfo?.replyInfo?.replyCount ?: 0,
+            hasComments = interactionInfo?.replyInfo != null,
         )
     }
 

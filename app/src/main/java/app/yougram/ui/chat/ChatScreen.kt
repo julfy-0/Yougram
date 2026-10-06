@@ -1,5 +1,7 @@
 package app.yougram.ui.chat
 
+import app.yougram.feature.chat.comments.CommentsButton
+
 import app.yougram.ui.LocalOpenLink
 import app.yougram.ui.rememberLinkified
 import java.io.File
@@ -167,6 +169,8 @@ fun ChatScreen(
     onOpenProfile: (Long) -> Unit = {},
     /** Звонок собеседнику в личном чате: (userId, видео). */
     onCall: (Long, Boolean) -> Unit = { _, _ -> },
+    /** Открыть комментарии к канальному посту. */
+    onOpenComments: (Long, Long) -> Unit = { _, _ -> },
     /** Заголовок вместо названия чата (имя темы форума). */
     titleOverride: String? = null,
 ) {
@@ -432,6 +436,7 @@ fun ChatScreen(
                                 }
                             },
                             onReact = { emoji -> viewModel.react(message.id, emoji) },
+                            onOpenComments = { onOpenComments(message.chatId, message.id) },
                             highlighted = message.id == highlightId,
                             searchQuery = if (searchOpen) search.query else "",
                         )
@@ -1021,6 +1026,7 @@ private fun MessageBubble(
     reply: ReplyPreview?,
     onReplyClick: () -> Unit,
     onReact: (String) -> Unit,
+    onOpenComments: () -> Unit,
     highlighted: Boolean,
     searchQuery: String,
 ) {
@@ -1161,6 +1167,13 @@ private fun MessageBubble(
             }
             if (message.reactions.isNotEmpty()) {
                 ReactionRow(message.reactions, onReact, Modifier.padding(top = 4.dp))
+            }
+            if (message.hasComments) {
+                CommentsButton(
+                    count = message.commentCount,
+                    onClick = onOpenComments,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
             }
         }
     }

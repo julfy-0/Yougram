@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.yougram.data.AppContainer
+import app.yougram.feature.stories.StoriesViewModel
+import app.yougram.feature.stories.StoriesRow
 import app.yougram.data.ChatFolderItem
 import app.yougram.data.GlassSettings
 import app.yougram.ui.calls.CallsScreen
@@ -149,6 +151,7 @@ fun MainScreen(
     onOpenMessage: (chatId: Long, messageId: Long) -> Unit,
     /** Чат, открытый в правой панели (планшет/фолд): подсвечивается в списке. */
     selectedChatId: Long? = null,
+    onOpenStories: (Long, Int) -> Unit = { _, _ -> },
 ) {
     val glass by container.settings.glass.collectAsState()
     val chatPrefs by container.settings.chatPrefs.collectAsState()
@@ -172,6 +175,10 @@ fun MainScreen(
     val chatListViewModel: ChatListViewModel = viewModel(
         factory = ChatListViewModel.factory(container.chatRepository),
     )
+    val storiesViewModel: StoriesViewModel = viewModel(
+        factory = StoriesViewModel.factory(container.stories, container.chatRepository),
+    )
+    val storyRefs by storiesViewModel.stories.collectAsState()
     val searchViewModel: GlobalSearchViewModel = viewModel(
         factory = GlobalSearchViewModel.factory(container.chatRepository),
     )
@@ -191,12 +198,16 @@ fun MainScreen(
     val selectedFolder by chatListViewModel.selectedFolder.collectAsState()
     val folderId = selectedFolder?.takeIf { id -> folders.any { it.id == id } }
     val showFolders = tab == MainTab.Chats && folders.isNotEmpty()
+    val storiesTop = if (storyRefs.isNotEmpty()) 92.dp else 0.dp
     val chatsPadding = if (folders.isNotEmpty()) {
         PaddingValues(
-            top = topInset + TopBarContentHeight + FolderBarHeight + 8.dp,
+            top = topInset + TopBarContentHeight + FolderBarHeight + storiesTop + 8.dp,
             bottom = contentPadding.calculateBottomPadding(),
         )
-    } else contentPadding
+    } else PaddingValues(
+        top = contentPadding.calculateTopPadding() + storiesTop,
+        bottom = contentPadding.calculateBottomPadding(),
+    )
 
     val scrollConnection = remember(density) {
         HideOnScrollConnection(with(density) { 24.dp.toPx() }) { barsVisible = it }
@@ -259,6 +270,7 @@ fun MainScreen(
             ) { (currentTab, currentPage) ->
                 when (currentTab) {
                     MainTab.Chats -> Box(Modifier.fillMaxSize()) {
+                        StoriesRow(viewModel = storiesViewModel, onOpen = onOpenStories, modifier = Modifier.padding(top = topInset + TopBarContentHeight))
                         // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
                         ChatListScreen(
                             viewModel = chatListViewModel,
