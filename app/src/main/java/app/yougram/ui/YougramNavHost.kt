@@ -7,6 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import app.yougram.ui.LocalOpenUsername
+import kotlinx.coroutines.launch
+import android.widget.Toast
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
@@ -155,7 +159,25 @@ fun YougramNavHost(container: AppContainer) {
         }
     }
 
-    CompositionLocalProvider(LocalOpenLink provides openLink) {
+    // Тап по @username: ищем в Telegram и открываем профиль (в планшетном режиме — в правой панели).
+    val scope = rememberCoroutineScope()
+    val detailNow = rememberUpdatedState(detail)
+    val openUsername: (String) -> Unit = remember(navController, context) {
+        { username: String ->
+            scope.launch {
+                val id = runCatching { container.chatRepository.resolveUsername(username) }.getOrNull()
+                if (id == null) {
+                    Toast.makeText(context, "@$username не найден", Toast.LENGTH_SHORT).show()
+                } else if (twoPaneNow.value) {
+                    setDetail(detailNow.value + DetailRoute.Profile(id))
+                } else {
+                    navController.navigate("profile/$id")
+                }
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalOpenLink provides openLink, LocalOpenUsername provides openUsername) {
         val callBackdrop = rememberBackdropState()
         Box(Modifier.fillMaxSize()) {
             NavHost(

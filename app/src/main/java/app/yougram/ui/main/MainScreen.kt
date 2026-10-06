@@ -2,6 +2,10 @@ package app.yougram.ui.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.scaleIn
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -117,6 +121,9 @@ private val PillPadding = 6.dp
 
 /** Кнопка поиска: квадрат со скруглёнными углами. */
 private val SearchButtonShape = RoundedCornerShape(20.dp)
+private val SearchBlurRadius = 24.dp
+private const val SearchAnimationMillis = 260
+private const val SearchResultsAlpha = 0.78f
 
 private const val BarsAnimationMillis = 260
 
@@ -230,6 +237,13 @@ fun MainScreen(
 
     val inSettingsSubpage = tab == MainTab.Settings && settingsPage != SettingsPage.Home
 
+    // Пока открыт поиск, всё, что под ним (список чатов / настройки), плавно размывается.
+    val underSearchBlur by animateDpAsState(
+        targetValue = if (searching) SearchBlurRadius else 0.dp,
+        animationSpec = tween(SearchAnimationMillis, easing = FastOutSlowInEasing),
+        label = "underSearchBlur",
+    )
+
     BackHandler(enabled = inSettingsSubpage) {
         settingsPage = settingsPage.parent
     }
@@ -275,15 +289,21 @@ fun MainScreen(
                 when (currentTab) {
                     MainTab.Chats -> Box(Modifier.fillMaxSize()) {
                         // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
-                        ChatListScreen(
-                            viewModel = chatListViewModel,
-                            query = "",
-                            contentPadding = chatsPadding,
-                            onOpenChat = onOpenChat,
-                            lines = chatPrefs.listLines,
-                            selectedChatId = selectedChatId,
-                        )
-                        if (searching && query.isNotBlank()) {
+                        Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
+                            ChatListScreen(
+                                viewModel = chatListViewModel,
+                                query = "",
+                                contentPadding = chatsPadding,
+                                onOpenChat = onOpenChat,
+                                lines = chatPrefs.listLines,
+                                selectedChatId = selectedChatId,
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = searching && query.isNotBlank(),
+                            enter = fadeIn(tween(SearchAnimationMillis)),
+                            exit = fadeOut(tween(SearchAnimationMillis / 2)),
+                        ) {
                             GlobalSearchScreen(
                                 viewModel = searchViewModel,
                                 query = query,
@@ -291,7 +311,8 @@ fun MainScreen(
                                 fileState = container.chatRepository::fileState,
                                 onOpenChat = onOpenChat,
                                 onOpenMessage = onOpenMessage,
-                                modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                                // Полупрозрачная подложка: сквозь неё видно размытый список.
+                                modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
                             )
                         }
                     }
@@ -308,14 +329,20 @@ fun MainScreen(
                         query = if (searching) query else "",
                     )
                     MainTab.Settings -> Box(Modifier.fillMaxSize()) {
-                        SettingsPageContent(
-                            page = currentPage,
-                            container = container,
-                            contentPadding = contentPadding,
-                            onNavigate = { settingsPage = it },
-                            onOpenChat = onOpenChat,
-                        )
-                        if (searching && query.isNotBlank()) {
+                        Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
+                            SettingsPageContent(
+                                page = currentPage,
+                                container = container,
+                                contentPadding = contentPadding,
+                                onNavigate = { settingsPage = it },
+                                onOpenChat = onOpenChat,
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = searching && query.isNotBlank(),
+                            enter = fadeIn(tween(SearchAnimationMillis)),
+                            exit = fadeOut(tween(SearchAnimationMillis / 2)),
+                        ) {
                             SettingsSearchResults(
                                 query = query,
                                 contentPadding = contentPadding,
@@ -324,7 +351,7 @@ fun MainScreen(
                                     searching = false
                                     query = ""
                                 },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                                modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
                             )
                         }
                     }
@@ -441,44 +468,62 @@ private fun GlassTopBar(
                 .graphicsLayer { alpha = progress() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (searching) {
-                val focusRequester = remember { FocusRequester() }
-                LaunchedEffect(Unit) { focusRequester.requestFocus() }
-                TextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    placeholder = { Text(searchHint) },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                )
-                IconButton(onClick = onCloseSearch) {
-                    Icon(Icons.Filled.Close, contentDescription = "Закрыть поиск")
-                }
-            } else {
-                if (onBack != null) {
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                            .clickable(onClick = onBack),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                    }
-                    Spacer(Modifier.width(16.dp))
-                }
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                if (searchOnTop && onBack == null) {
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onSearch) {
-                        Icon(Icons.Filled.Search, contentDescription = "Поиск")
+            AnimatedContent(
+                targetState = searching,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    (
+                        fadeIn(tween(SearchAnimationMillis, delayMillis = 60)) +
+                            slideInHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { it / 5 } +
+                            scaleIn(tween(SearchAnimationMillis, easing = FastOutSlowInEasing), initialScale = 0.94f)
+                        ).togetherWith(
+                        fadeOut(tween(SearchAnimationMillis / 2)) +
+                            slideOutHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { -it / 8 },
+                    )
+                },
+                label = "searchField",
+            ) { isSearching ->
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    if (isSearching) {
+                        val focusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        TextField(
+                            value = query,
+                            onValueChange = onQueryChange,
+                            placeholder = { Text(searchHint) },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                            modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                        )
+                        IconButton(onClick = onCloseSearch) {
+                            Icon(Icons.Filled.Close, contentDescription = "Закрыть поиск")
+                        }
+                    } else {
+                        if (onBack != null) {
+                            Box(
+                                Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                    .clickable(onClick = onBack),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                            }
+                            Spacer(Modifier.width(16.dp))
+                        }
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        if (searchOnTop && onBack == null) {
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = onSearch) {
+                                Icon(Icons.Filled.Search, contentDescription = "Поиск")
+                            }
+                        }
                     }
                 }
             }

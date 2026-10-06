@@ -15,6 +15,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
@@ -22,7 +23,12 @@ import androidx.compose.ui.text.withLink
 /** Открывает ссылку так, как выбрано в настройках: во встроенном браузере или во внешнем приложении. */
 val LocalOpenLink = staticCompositionLocalOf<(String) -> Unit> { {} }
 
+/** Открывает профиль по @username (без «@»): ищет пользователя или публичный чат в Telegram. */
+val LocalOpenUsername = staticCompositionLocalOf<(String) -> Unit> { {} }
+
 private val UrlPattern = Regex("""(?:https?://|www\.)[^\s<>"']+""", RegexOption.IGNORE_CASE)
+// @username: 5–32 символа, начинается с буквы. Не трогаем адреса почты (user@host) и куски ссылок.
+private val MentionPattern = Regex("""(?<![\p{L}\p{N}_@./])@([A-Za-z][A-Za-z0-9_]{3,31})(?![A-Za-z0-9_])""")
 private val SchemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 private const val TrailingPunctuation = ".,;:!?)]}»\u2026"
 
@@ -53,26 +59,58 @@ fun openExternally(context: Context, url: String) {
     }
 }
 
-/** Текст сообщения, в котором ссылки подсвечены и кликабельны. */
+private class LinkToken(val start: Int, val end: Int, val value: String, val mention: Boolean)
+
+/** Текст сообщения, в котором ссылки и @юзернеймы подсвечены и кликабельны. */
 @Composable
-fun rememberLinkified(text: String, linkColor: Color, onOpen: (String) -> Unit): AnnotatedString {
+fun rememberLinkified(
+    text: String,
+    linkColor: Color,
+    onOpen: (String) -> Unit,
+    onMention: (String) -> Unit = {},
+): AnnotatedString {
     val currentOpen by rememberUpdatedState(onOpen)
+    val currentMention by rememberUpdatedState(onMention)
     return remember(text, linkColor) {
+        val tokens = ArrayList<LinkToken>()
+        for (match in UrlPattern.findAll(text)) {
+            var url = match.value
+            while (url.isNotEmpty() && url.last() in TrailingPunctuation) url = url.dropLast(1)
+            if (url.length < 4) continue
+            tokens += LinkToken(match.range.first, match.range.first + url.length, url, mention = false)
+        }
+        val urlCount = tokens.size
+        for (match in MentionPattern.findAll(text)) {
+            val start = match.range.first
+            // @ внутри ссылки (например, t.me/@name) — это часть ссылки, не отдельный юзернейм.
+            if ((0 until urlCount).any { start >= tokens[it].start && start < tokens[it].end }) continue
+            tokens += LinkToken(start, match.range.last + 1, match.groupValues[1], mention = true)
+        }
+        tokens.sortBy { it.start }
+
         buildAnnotatedString {
             var cursor = 0
-            for (match in UrlPattern.findAll(text)) {
-                var url = match.value
-                while (url.isNotEmpty() && url.last() in TrailingPunctuation) url = url.dropLast(1)
-                if (url.length < 4) continue
-                append(text.substring(cursor, match.range.first))
-                withLink(
-                    LinkAnnotation.Clickable(
-                        tag = "url",
-                        styles = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
-                        linkInteractionListener = { currentOpen(url) },
-                    ),
-                ) { append(url) }
-                cursor = match.range.first + url.length
+            for (t in tokens) {
+                if (t.start < cursor) continue
+                append(text.substring(cursor, t.start))
+                if (t.mention) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "mention",
+                            styles = TextLinkStyles(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold)),
+                            linkInteractionListener = { currentMention(t.value) },
+                        ),
+                    ) { append(text.substring(t.start, t.end)) }
+                } else {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "url",
+                            styles = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
+                            linkInteractionListener = { currentOpen(t.value) },
+                        ),
+                    ) { append(t.value) }
+                }
+                cursor = t.end
             }
             append(text.substring(cursor))
         }

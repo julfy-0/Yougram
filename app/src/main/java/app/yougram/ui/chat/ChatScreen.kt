@@ -3,6 +3,7 @@ package app.yougram.ui.chat
 import app.yougram.feature.chat.comments.CommentsButton
 
 import app.yougram.ui.LocalOpenLink
+import app.yougram.ui.LocalOpenUsername
 import app.yougram.ui.rememberLinkified
 import java.io.File
 import kotlinx.coroutines.withContext
@@ -1161,6 +1162,7 @@ private fun MessageBubble(
                                 message.text,
                                 if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
                                 LocalOpenLink.current,
+                                LocalOpenUsername.current,
                             )
                             val shown = remember(linked, searchQuery, matchColor) {
                                 linked.highlightMatches(searchQuery, matchColor)

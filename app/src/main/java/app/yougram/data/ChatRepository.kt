@@ -1752,6 +1752,10 @@ class ChatRepository(
     suspend fun openPrivateChat(userId: Long): Long =
         client.createPrivateChat(userId = userId, force = false).getOrThrow().id
 
+    /** Ищет пользователя или публичный чат по @username; null — такого нет. */
+    suspend fun resolveUsername(username: String): Long? =
+        client.searchPublicChat(username.trim().removePrefix("@")).okOrNull()?.id
+
     /** Страница истории звонков. Для первой страницы передайте пустой [offset]. */
     suspend fun loadCalls(offset: String, onlyMissed: Boolean, limit: Int = 40): CallPage {
         val found = client.searchCallMessages(
