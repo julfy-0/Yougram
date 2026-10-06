@@ -22,8 +22,8 @@ android {
         minSdk = 31
         targetSdk = 36
 
-        versionCode = 17
-        versionName = "0.8.3"
+        versionCode = 18
+        versionName = "0.8.4"
 
         buildConfigField(
             "int",
@@ -130,6 +130,9 @@ dependencies {
     implementation(libs.ntgcalls)
 
     implementation("com.airbnb.android:lottie-compose:6.6.7")
+
+    // Lua-плагины (LuaPluginManager, PluginManager).
+    implementation("org.luaj:luaj-jse:3.0.1")
 }
 
 

@@ -85,6 +85,7 @@ import app.yougram.ui.calls.CallsViewModel
 import app.yougram.ui.chats.ChatListScreen
 import app.yougram.ui.chats.ChatListViewModel
 import app.yougram.ui.chats.GlobalSearchScreen
+import app.yougram.ui.settings.SettingsSearchResults
 import app.yougram.ui.chats.GlobalSearchViewModel
 import app.yougram.ui.contacts.ContactsScreen
 import app.yougram.ui.contacts.ContactsViewModel
@@ -298,26 +299,48 @@ fun MainScreen(
                         viewModel = viewModel<ContactsViewModel>(factory = ContactsViewModel.factory(container.chatRepository)),
                         contentPadding = contentPadding,
                         onOpenChat = onOpenChat,
+                        query = if (searching) query else "",
                     )
                     MainTab.Calls -> CallsScreen(
                         viewModel = viewModel<CallsViewModel>(factory = CallsViewModel.factory(container.chatRepository)),
                         contentPadding = contentPadding,
                         onOpenChat = onOpenChat,
+                        query = if (searching) query else "",
                     )
-                    MainTab.Settings -> SettingsPageContent(
-                        page = currentPage,
-                        container = container,
-                        contentPadding = contentPadding,
-                        onNavigate = { settingsPage = it },
-                        onOpenChat = onOpenChat,
-                    )
+                    MainTab.Settings -> Box(Modifier.fillMaxSize()) {
+                        SettingsPageContent(
+                            page = currentPage,
+                            container = container,
+                            contentPadding = contentPadding,
+                            onNavigate = { settingsPage = it },
+                            onOpenChat = onOpenChat,
+                        )
+                        if (searching && query.isNotBlank()) {
+                            SettingsSearchResults(
+                                query = query,
+                                contentPadding = contentPadding,
+                                onOpen = {
+                                    settingsPage = it
+                                    searching = false
+                                    query = ""
+                                },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                            )
+                        }
+                    }
                 }
             }
         }
 
         GlassTopBar(
             title = if (inSettingsSubpage) settingsPage.title else tab.title,
-            searching = searching && tab == MainTab.Chats,
+            searching = searching,
+            searchHint = when (tab) {
+                MainTab.Chats -> "Чаты, контакты, сообщения"
+                MainTab.Contacts -> "Поиск контактов"
+                MainTab.Calls -> "Поиск звонков"
+                MainTab.Settings -> "Поиск по настройкам"
+            },
             query = query,
             onQueryChange = { query = it },
             onCloseSearch = {
@@ -334,10 +357,7 @@ fun MainScreen(
             onOpenStory = onOpenStories,
             onAddStory = { onOpenStories(0L, 0) },
             searchOnTop = chatPrefs.searchOnTop,
-            onSearch = {
-                tab = MainTab.Chats
-                searching = true
-            },
+            onSearch = { searching = true },
             backdrop = backdrop,
             glass = glass,
             topInset = topInset,
@@ -348,11 +368,12 @@ fun MainScreen(
         // Нижняя панель остаётся на месте при прокрутке: прячется только верхняя.
         GlassBottomBar(
             selected = tab,
-            onSelect = { tab = it },
-            onSearch = {
-                tab = MainTab.Chats
-                searching = true
+            onSelect = {
+                tab = it
+                searching = false
+                query = ""
             },
+            onSearch = { searching = true },
             showSearch = !chatPrefs.searchOnTop,
             backdrop = backdrop,
             glass = glass,
@@ -376,6 +397,7 @@ fun MainScreen(
 private fun GlassTopBar(
     title: String,
     searching: Boolean,
+    searchHint: String,
     query: String,
     onQueryChange: (String) -> Unit,
     onCloseSearch: () -> Unit,
@@ -425,7 +447,7 @@ private fun GlassTopBar(
                 TextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    placeholder = { Text("Чаты, контакты, сообщения") },
+                    placeholder = { Text(searchHint) },
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,

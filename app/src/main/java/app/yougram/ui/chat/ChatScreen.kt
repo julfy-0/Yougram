@@ -129,6 +129,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import app.yougram.ui.ChatWallpaper
+import app.yougram.data.GlassSettings
+import app.yougram.ui.glass.BackdropState
 import app.yougram.data.EditRecord
 import app.yougram.data.FileState
 import app.yougram.data.MediaItem
@@ -173,6 +175,10 @@ fun ChatScreen(
     onOpenComments: (Long, Long) -> Unit = { _, _ -> },
     /** Заголовок вместо названия чата (имя темы форума). */
     titleOverride: String? = null,
+    /** Подзаголовок вместо стандартного (в комментариях — название канала). */
+    subtitleOverride: String? = null,
+    /** Режим комментариев к посту: у сообщений нет кнопки «Комментарии». */
+    threadMode: Boolean = false,
 ) {
     val state by viewModel.state.collectAsState()
     val senders by viewModel.senders.collectAsState()
@@ -181,6 +187,8 @@ fun ChatScreen(
     val chatPrefs by settings.chatPrefs.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
     val backdrop = rememberBackdropState()
+    // Отдельный источник размытия только для фона чата (обои), без самих сообщений.
+    val bubbleBackdrop = rememberBackdropState()
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
     var input by remember { mutableStateOf("") }
@@ -383,7 +391,14 @@ fun ChatScreen(
                 .backdropSource(backdrop)
                 .background(MaterialTheme.colorScheme.background),
         ) {
-            if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (chatPrefs.bubbleBlur) Modifier.backdropSource(bubbleBackdrop) else Modifier)
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
+            }
             if (state.loading && state.messages.isEmpty()) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             } else {
@@ -437,6 +452,10 @@ fun ChatScreen(
                             },
                             onReact = { emoji -> viewModel.react(message.id, emoji) },
                             onOpenComments = { onOpenComments(message.chatId, message.id) },
+                            commentsEnabled = !threadMode,
+                            bubbleOpacity = chatPrefs.bubbleOpacity / 100f,
+                            bubbleBackdrop = if (chatPrefs.bubbleBlur) bubbleBackdrop else null,
+                            glassSettings = glass,
                             highlighted = message.id == highlightId,
                             searchQuery = if (searchOpen) search.query else "",
                         )
@@ -549,9 +568,9 @@ fun ChatScreen(
                                 )
                                 YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
                             }
-                            if (state.subtitle.isNotEmpty()) {
+                            if ((subtitleOverride ?: state.subtitle).isNotEmpty()) {
                                 Text(
-                                    state.subtitle,
+                                    subtitleOverride ?: state.subtitle,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (state.isOnline) androidx.compose.ui.graphics.Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -1027,6 +1046,10 @@ private fun MessageBubble(
     onReplyClick: () -> Unit,
     onReact: (String) -> Unit,
     onOpenComments: () -> Unit,
+    commentsEnabled: Boolean,
+    bubbleOpacity: Float,
+    bubbleBackdrop: BackdropState?,
+    glassSettings: GlassSettings,
     highlighted: Boolean,
     searchQuery: String,
 ) {
@@ -1039,6 +1062,8 @@ private fun MessageBubble(
     val showAvatar = showSenderUi && !joinedWithOlder
     // Кружок показывается без пузыря.
     val bare = media?.kind == MediaKind.VIDEO_NOTE && message.text.isEmpty()
+    // Кнопка комментариев прилегает к самому посту — полоса внизу пузыря.
+    val withComments = commentsEnabled && message.hasComments && !bare
 
     LaunchedEffect(senderKey, showSenderUi) {
         if (showSenderUi && senderKey != null) viewModel.ensureSender(senderKey)
@@ -1094,17 +1119,26 @@ private fun MessageBubble(
                     MessageMedia(media, viewModel, onOpenPhoto)
                 }
             } else {
+                val glassModifier = if (bubbleBackdrop != null) {
+                    Modifier.glass(bubbleBackdrop, glassSettings.copy(opacity = bubbleOpacity), shape, tint = bubbleColor)
+                } else {
+                    Modifier
+                }
                 Surface(
-                    modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) },
+                    modifier = glassModifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) },
                     shape = shape,
-                    color = bubbleColor,
+                    color = if (bubbleBackdrop != null) Color.Transparent else bubbleColor.copy(alpha = bubbleOpacity),
                     contentColor = when {
                         highlighted -> MaterialTheme.colorScheme.onTertiaryContainer
                         mine -> MaterialTheme.colorScheme.onPrimaryContainer
                         else -> MaterialTheme.colorScheme.onSurface
                     },
                 ) {
-                    Column(Modifier.widthIn(max = if (showSenderUi) 290.dp else 320.dp)) {
+                    Column(
+                        Modifier
+                            .widthIn(max = if (showSenderUi) 290.dp else 320.dp)
+                            .then(if (withComments) Modifier.width(IntrinsicSize.Max) else Modifier),
+                    ) {
                         if (showName && senderKey != null) {
                             SenderName(
                                 senderKey, sender, onOpenSender,
@@ -1148,8 +1182,16 @@ private fun MessageBubble(
                             edits = edits,
                             readAt = readAt,
                             onShowEdits = onShowEdits,
-                            modifier = Modifier.align(Alignment.End).padding(start = 16.dp, end = 14.dp, top = 2.dp, bottom = 8.dp),
+                            modifier = Modifier.align(Alignment.End).padding(start = 16.dp, end = 14.dp, top = 2.dp, bottom = if (withComments) 6.dp else 8.dp),
                         )
+                        if (withComments) {
+                            CommentsButton(
+                                count = message.commentCount,
+                                onClick = onOpenComments,
+                                attached = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
@@ -1168,10 +1210,11 @@ private fun MessageBubble(
             if (message.reactions.isNotEmpty()) {
                 ReactionRow(message.reactions, onReact, Modifier.padding(top = 4.dp))
             }
-            if (message.hasComments) {
+            if (commentsEnabled && message.hasComments && bare) {
                 CommentsButton(
                     count = message.commentCount,
                     onClick = onOpenComments,
+                    attached = false,
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }

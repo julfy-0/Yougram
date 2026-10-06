@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,13 +36,19 @@ fun ContactsScreen(
     viewModel: ContactsViewModel,
     contentPadding: PaddingValues,
     onOpenChat: (Long) -> Unit,
+    /** Строка поиска из нижней/верхней панели; пусто — показываем всех. */
+    query: String = "",
 ) {
     val state by viewModel.state.collectAsState()
+    val contacts = remember(state.contacts, query) {
+        val q = query.trim()
+        if (q.isEmpty()) state.contacts else state.contacts.filter { it.name.contains(q, ignoreCase = true) }
+    }
     Box(Modifier.fillMaxSize()) {
         when {
             state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-            state.contacts.isEmpty() -> Text(
-                state.error ?: "Контактов нет",
+            contacts.isEmpty() -> Text(
+                state.error ?: if (state.contacts.isEmpty()) "Контактов нет" else "Ничего не найдено",
                 Modifier.align(Alignment.Center).padding(contentPadding),
                 color = if (state.error != null) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -56,10 +63,10 @@ fun ContactsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                itemsIndexed(state.contacts, key = { _, c -> c.id }) { index, contact ->
+                itemsIndexed(contacts, key = { _, c -> c.id }) { index, contact ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = segmentShape(index, state.contacts.size),
+                        shape = segmentShape(index, contacts.size),
                         color = plateColor(PlateArea.Contacts),
                     ) {
                         ContactRow(contact, viewModel) { viewModel.openChat(contact.id, onOpenChat) }

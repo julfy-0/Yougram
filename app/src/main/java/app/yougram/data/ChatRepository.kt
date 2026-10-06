@@ -22,6 +22,7 @@ import dev.g000sha256.tdl.dto.ChatTypePrivate
 import dev.g000sha256.tdl.dto.ChatTypeSupergroup
 import dev.g000sha256.tdl.dto.MessageTopic
 import dev.g000sha256.tdl.dto.MessageTopicForum
+import dev.g000sha256.tdl.dto.MessageTopicThread
 import dev.g000sha256.tdl.dto.FormattedText
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
@@ -252,6 +253,8 @@ data class MessageItem(
     val commentCount: Int = 0,
     /** Для сообщения существует discussion thread, доступный для комментариев. */
     val hasComments: Boolean = false,
+    /** Ветка комментариев, в которой написано сообщение; 0 — вне ветки. */
+    val threadId: Long = 0L,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -897,7 +900,7 @@ class ChatRepository(
     suspend fun getChatTitle(chatId: Long): String =
         chatStates.value[chatId]?.title ?: client.getChat(chatId = chatId).getOrThrow().title
 
-    suspend fun getChatInfo(chatId: Long): ChatInfo = runCatching {
+    suspend fun getChatInfo(chatId: Long, viaThread: Boolean = false): ChatInfo = runCatching {
         val chat = client.getChat(chatId = chatId).getOrThrow()
         val type = chat.type
         val isChannel = (type as? ChatTypeSupergroup)?.isChannel == true
@@ -908,7 +911,7 @@ class ChatRepository(
         val canSend = when (type) {
             is ChatTypeSupergroup -> {
                 val status = (client.getSupergroup(supergroupId = type.supergroupId) as? TdlResult.Success)?.result?.status
-                canWriteAs(status, type.isChannel, chat.permissions.canSendBasicMessages)
+                canWriteAs(status, type.isChannel, chat.permissions.canSendBasicMessages, viaThread)
             }
             is ChatTypeBasicGroup -> {
                 val status = (client.getBasicGroup(basicGroupId = type.basicGroupId) as? TdlResult.Success)?.result?.status
@@ -927,13 +930,15 @@ class ChatRepository(
         )
     }.getOrDefault(ChatInfo(title = getChatTitle(chatId)))
 
-    private fun canWriteAs(status: ChatMemberStatus?, isChannel: Boolean, defaultCanSend: Boolean): Boolean = when (status) {
+    private fun canWriteAs(status: ChatMemberStatus?, isChannel: Boolean, defaultCanSend: Boolean, viaThread: Boolean = false): Boolean = when (status) {
         null -> !isChannel && defaultCanSend
         is ChatMemberStatusCreator -> status.isMember
         is ChatMemberStatusAdministrator -> !isChannel || status.rights.canPostMessages
         is ChatMemberStatusMember -> !isChannel && defaultCanSend
         is ChatMemberStatusRestricted -> status.isMember && !isChannel && status.permissions.canSendBasicMessages
-        is ChatMemberStatusLeft, is ChatMemberStatusBanned -> false
+        // В комментариях к посту писать можно и не состоя в группе обсуждения.
+        is ChatMemberStatusLeft -> viaThread && defaultCanSend
+        is ChatMemberStatusBanned -> false
         else -> false
     }
 
@@ -1077,10 +1082,11 @@ class ChatRepository(
         while (collected.size < limit && attempts < 3) {
             val pageLimit = limit - collected.size + (if (from != 0L) 1 else 0)
             val topic = topicOf(chatId)
-            val page = if (topic != 0) {
-                client.getForumTopicHistory(chatId = chatId, forumTopicId = topic, fromMessageId = from, offset = 0, limit = pageLimit)
-            } else {
-                client.getChatHistory(chatId = chatId, fromMessageId = from, offset = 0, limit = pageLimit, onlyLocal = false)
+            val thread = threadOf(chatId)
+            val page = when {
+                thread != 0L -> client.getMessageThreadHistory(chatId = chatId, messageId = thread, fromMessageId = from, offset = 0, limit = pageLimit)
+                topic != 0 -> client.getForumTopicHistory(chatId = chatId, forumTopicId = topic, fromMessageId = from, offset = 0, limit = pageLimit)
+                else -> client.getChatHistory(chatId = chatId, fromMessageId = from, offset = 0, limit = pageLimit, onlyLocal = false)
             }
             val batch = page.getOrThrow().messages.orEmpty().filterNotNull()
             val fresh = batch.filter { it.id != fromMessageId && !collected.containsKey(it.id) }
@@ -1094,7 +1100,11 @@ class ChatRepository(
     }
 
     fun incomingFor(chatId: Long): Flow<MessageItem> = newMessages.filter {
-        it.chatId == chatId && (topicOf(chatId) == 0 || it.topicId == topicOf(chatId))
+        val thread = threadOf(chatId)
+        it.chatId == chatId && when {
+            thread != 0L -> it.threadId == thread || it.reply?.messageId == thread
+            else -> topicOf(chatId) == 0 || it.topicId == topicOf(chatId)
+        }
     }
 
     // ---- Форумы (группы с темами) ----
@@ -1109,8 +1119,31 @@ class ChatRepository(
 
     private fun topicOf(chatId: Long): Int = activeTopics[chatId] ?: 0
 
-    private fun topicParam(chatId: Long): MessageTopic? =
-        topicOf(chatId).takeIf { it != 0 }?.let { MessageTopicForum(forumTopicId = it) }
+    private val activeThreads = ConcurrentHashMap<Long, Long>()
+
+    /** Ветка комментариев, открытая сейчас в чате [chatId] (0 — без ветки): в неё идут отправка и загрузка истории. */
+    fun setActiveThread(chatId: Long, threadId: Long) {
+        if (threadId == 0L) activeThreads.remove(chatId) else activeThreads[chatId] = threadId
+    }
+
+    private fun threadOf(chatId: Long): Long = activeThreads[chatId] ?: 0L
+
+    /** Чат обсуждения и id ветки для комментариев к посту; null — комментарии недоступны. */
+    suspend fun openCommentThread(channelChatId: Long, postId: Long): Pair<Long, Long>? = runCatching {
+        val info = client.getMessageThread(chatId = channelChatId, messageId = postId).getOrThrow()
+        info.chatId to info.messageThreadId
+    }.getOrNull()
+
+    private fun threadReply(chatId: Long): InputMessageReplyToMessage? =
+        threadOf(chatId).takeIf { it != 0L }?.let {
+            InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "")
+        }
+
+    private fun topicParam(chatId: Long): MessageTopic? {
+        val thread = threadOf(chatId)
+        if (thread != 0L) return MessageTopicThread(messageThreadId = thread)
+        return topicOf(chatId).takeIf { it != 0 }?.let { MessageTopicForum(forumTopicId = it) }
+    }
 
     suspend fun isForum(chatId: Long): Boolean {
         forumCache[chatId]?.let { return it }
@@ -1155,7 +1188,8 @@ class ChatRepository(
         client.sendMessage(
             chatId = chatId,
             topicId = topicParam(chatId),
-            replyTo = replyToId?.let { InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "") },
+            replyTo = replyToId?.let { InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "") }
+                ?: threadReply(chatId),
             options = null,
             replyMarkup = null,
             inputMessageContent = InputMessageText(
@@ -1426,7 +1460,7 @@ class ChatRepository(
         client.sendMessage(
             chatId = chatId,
             topicId = topicParam(chatId),
-            replyTo = null,
+            replyTo = threadReply(chatId),
             options = null,
             replyMarkup = null,
             inputMessageContent = content,
@@ -1945,6 +1979,7 @@ class ChatRepository(
             reactions = interactionInfo.toReactions(),
             commentCount = interactionInfo?.replyInfo?.replyCount ?: 0,
             hasComments = interactionInfo?.replyInfo != null,
+            threadId = (topicId as? MessageTopicThread)?.messageThreadId ?: 0L,
         )
     }
 

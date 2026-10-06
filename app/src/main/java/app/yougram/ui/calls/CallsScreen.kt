@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +50,15 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     contentPadding: PaddingValues,
     onOpenChat: (Long) -> Unit,
+    /** Строка поиска из нижней/верхней панели; пусто — показываем все звонки. */
+    query: String = "",
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
+    val calls = remember(state.calls, query) {
+        val q = query.trim()
+        if (q.isEmpty()) state.calls else state.calls.filter { it.title.contains(q, ignoreCase = true) }
+    }
 
     LaunchedEffect(listState) {
         snapshotFlow {
@@ -106,10 +113,10 @@ fun CallsScreen(
                     }
                 }
             }
-            itemsIndexed(state.calls, key = { _, c -> c.messageId }) { index, call ->
+            itemsIndexed(calls, key = { _, c -> c.messageId }) { index, call ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = segmentShape(index, state.calls.size),
+                    shape = segmentShape(index, calls.size),
                     color = plateColor(PlateArea.Calls),
                 ) {
                     CallRow(call, viewModel) { onOpenChat(call.chatId) }
@@ -118,8 +125,8 @@ fun CallsScreen(
         }
         when {
             state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-            state.calls.isEmpty() -> Text(
-                state.error ?: "Звонков нет",
+            calls.isEmpty() -> Text(
+                state.error ?: if (state.calls.isEmpty()) "Звонков нет" else "Ничего не найдено",
                 Modifier.align(Alignment.Center),
                 color = if (state.error != null) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurfaceVariant,

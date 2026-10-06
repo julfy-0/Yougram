@@ -73,14 +73,18 @@ class ChatViewModel(
     val initialMessageId: Long = 0L,
     /** Тема форума, в которой открыт чат; 0 — обычный чат. */
     val topicId: Int = 0,
+    /** Ветка комментариев к посту канала в чате обсуждения; 0 — обычный чат. */
+    val threadId: Long = 0L,
 ) : ViewModel() {
 
     init {
         repository.setActiveTopic(chatId, topicId)
+        repository.setActiveThread(chatId, threadId)
     }
 
     override fun onCleared() {
         if (topicId != 0) repository.setActiveTopic(chatId, 0)
+        if (threadId != 0L) repository.setActiveThread(chatId, 0L)
         super.onCleared()
     }
 
@@ -429,7 +433,7 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             try {
-                val chatInfo = repository.getChatInfo(chatId)
+                val chatInfo = repository.getChatInfo(chatId, viaThread = threadId != 0L)
                 val history = repository.loadHistory(chatId) // от старых к новым
                 val snapshot = repository.spySnapshot(chatId)
                 val lastRead = repository.getLastReadOutboxMessageId(chatId)
@@ -582,8 +586,9 @@ class ChatViewModel(
             settings: SettingsRepository,
             initialMessageId: Long = 0L,
             topicId: Int = 0,
+            threadId: Long = 0L,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatViewModel(repository, chatId, settings, initialMessageId, topicId) }
+            initializer { ChatViewModel(repository, chatId, settings, initialMessageId, topicId, threadId) }
         }
     }
 }

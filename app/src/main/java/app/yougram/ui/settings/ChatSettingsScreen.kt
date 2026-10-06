@@ -201,6 +201,19 @@ fun ChatSettingsScreen(
             item { SliderRow(prefs.bubbleRadius, 0..28) { v -> update { it.copy(bubbleRadius = v) } } }
         }
 
+        SectionLabel("Прозрачность блоков с сообщениями")
+        SettingGroup {
+            item { SliderRow(prefs.bubbleOpacity, 20..100) { v -> update { it.copy(bubbleOpacity = v) } } }
+            item {
+                SwitchRow(
+                    "Размывать фон под сообщениями",
+                    prefs.bubbleBlur,
+                    { v -> update { it.copy(bubbleBlur = v) } },
+                    subtitle = "Обои чата просвечивают сквозь сообщения размытыми. Заметно при прозрачности ниже 100",
+                )
+            }
+        }
+
         SectionLabel("Список чатов")
         SettingGroup {
             item {
@@ -356,7 +369,7 @@ fun ChatSettingsScreen(
                 )
             }
         }
-        SettingsFootnote("Применяются: размер текста, углы, обои, отправка по Enter и строки в списке чатов. Остальное пока только сохраняется.")
+        SettingsFootnote("Применяются: размер текста, углы, прозрачность и размытие сообщений, обои, отправка по Enter и строки в списке чатов. Остальное пока только сохраняется.")
     }
 
     when (dialog) {
@@ -432,7 +445,7 @@ private fun ChatPreview(prefs: ChatPrefs) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
                 shape = shape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = prefs.bubbleOpacity / 100f),
                 modifier = Modifier.align(Alignment.Start).widthIn(max = 280.dp),
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -456,7 +469,7 @@ private fun ChatPreview(prefs: ChatPrefs) {
             }
             Surface(
                 shape = shape,
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = prefs.bubbleOpacity / 100f),
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.align(Alignment.End),
             ) {

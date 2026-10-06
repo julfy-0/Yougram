@@ -195,23 +195,33 @@ fun SettingsHomeScreen(
             onOpenAccountManager = { accountSheetOpen = true },
         )
 
-        SettingGroup {
-            item { SettingRow("Настройки Yougram", subtitle = "Тема, цвета, панели", icon = Icons.Filled.Tune, onClick = { onNavigate(SettingsPage.Appearance) }) }
-            item { SettingRow("Призрак, шпион, фильтры", subtitle = "Скрытность и локальный архив", icon = Icons.Filled.VisibilityOff, onClick = { onNavigate(SettingsPage.Extras) }) }
-        }
+        val sections = listOf(
+            "Yougram" to listOf(
+                HomeEntry("Настройки Yougram", "Тема, цвета, панели", Icons.Filled.Tune, null, SettingsPage.Appearance),
+                HomeEntry("Призрак, шпион, фильтры", "Скрытность и локальный архив", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
+                HomeEntry("Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
+                HomeEntry("Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, null, SettingsPage.PowerSaving),
+            ),
+            "Аккаунт и защита" to listOf(
+                HomeEntry("Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
+                HomeEntry("Конфиденциальность", "Кто видит ваши данные", Icons.Filled.VpnKey, null, SettingsPage.Privacy),
+                HomeEntry("Безопасность", "Пин-код, графический ключ, отпечаток", Icons.Filled.Lock, null, SettingsPage.Security),
+                HomeEntry("Устройства", "Активные сеансы", Icons.Filled.Laptop, state.devices?.toString(), SettingsPage.Devices),
+            ),
+            "Чаты" to listOf(
+                HomeEntry("Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, null, SettingsPage.ChatSettings),
+                HomeEntry("Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, null, SettingsPage.Folders),
+                HomeEntry("Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
+            ),
+            "Данные и язык" to listOf(
+                HomeEntry("Данные и память", "Кэш, автозагрузка медиа", Icons.Filled.PieChart, null, SettingsPage.DataStorage),
+                HomeEntry("Язык", null, Icons.Filled.Language, language, SettingsPage.Language),
+            ),
+        )
 
-        SettingGroup {
-            item { SettingRow("Аккаунт", subtitle = "Номер телефона, имя пользователя", icon = Icons.Filled.Person, onClick = { onNavigate(SettingsPage.Account) }) }
-            item { SettingRow("Настройки чатов", subtitle = "Размер текста, анимации", icon = Icons.Filled.ChatBubble, onClick = { onNavigate(SettingsPage.ChatSettings) }) }
-            item { SettingRow("Конфиденциальность", subtitle = "Кто видит ваши данные", icon = Icons.Filled.VpnKey, onClick = { onNavigate(SettingsPage.Privacy) }) }
-            item { SettingRow("Безопасность", subtitle = "Пин-код, графический ключ, отпечаток", icon = Icons.Filled.Lock, onClick = { onNavigate(SettingsPage.Security) }) }
-            item { SettingRow("Уведомления", subtitle = "Звуки, сигналы, бейджи", icon = Icons.Filled.Notifications, onClick = { onNavigate(SettingsPage.Notifications) }) }
-            item { SettingRow("Данные и память", subtitle = "Кэш, автозагрузка медиа", icon = Icons.Filled.PieChart, onClick = { onNavigate(SettingsPage.DataStorage) }) }
-            item { SettingRow("Плагины", subtitle = "Плагины на C++", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
-            item { SettingRow("Папки с чатами", subtitle = "Сортировка чатов по папкам", icon = Icons.Filled.Folder, onClick = { onNavigate(SettingsPage.Folders) }) }
-            item { SettingRow("Устройства", subtitle = "Активные сеансы", icon = Icons.Filled.Laptop, value = state.devices?.toString(), onClick = { onNavigate(SettingsPage.Devices) }) }
-            item { SettingRow("Энергосбережение", subtitle = "Экономия заряда", icon = Icons.Filled.BatterySaver, onClick = { onNavigate(SettingsPage.PowerSaving) }) }
-            item { SettingRow("Язык", icon = Icons.Filled.Language, value = language, onClick = { onNavigate(SettingsPage.Language) }) }
+        sections.forEach { (title, entries) ->
+            SectionLabel(title)
+            SettingGroup { entries.forEach { e -> item { HomeEntryRow(e, onNavigate) } } }
         }
 
         SettingGroup {
@@ -238,6 +248,19 @@ fun SettingsHomeScreen(
             onDismiss = { accountSheetOpen = false },
         )
     }
+}
+
+private class HomeEntry(
+    val title: String,
+    val subtitle: String?,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val value: String?,
+    val page: SettingsPage,
+)
+
+@Composable
+private fun HomeEntryRow(e: HomeEntry, onNavigate: (SettingsPage) -> Unit) {
+    SettingRow(e.title, subtitle = e.subtitle, icon = e.icon, value = e.value, onClick = { onNavigate(e.page) })
 }
 
 @Composable

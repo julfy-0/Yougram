@@ -100,6 +100,10 @@ data class ChatPrefs(
     val showSensitive: Boolean = true,
     val enterToSend: Boolean = false,
     val distanceUnit: DistanceUnit = DistanceUnit.Auto,
+    /** Непрозрачность блоков с сообщениями, %: 100 — сплошные. */
+    val bubbleOpacity: Int = 100,
+    /** Блоки с сообщениями размывают фон чата (обои) под собой. */
+    val bubbleBlur: Boolean = false,
 )
 
 enum class MapPreview(val label: String) {
@@ -312,6 +316,8 @@ class SettingsRepository(context: Context) {
             showSensitive = prefs.getBoolean("c_sensitive", true),
             enterToSend = prefs.getBoolean("c_enter_send", false),
             distanceUnit = DistanceUnit.entries.getOrElse(prefs.getInt("c_distance", 0)) { DistanceUnit.Auto },
+            bubbleOpacity = prefs.getInt("c_bubble_opacity", 100),
+            bubbleBlur = prefs.getBoolean("c_bubble_blur", false),
         )
     )
     val chatPrefs: StateFlow<ChatPrefs> = _chatPrefs.asStateFlow()
@@ -339,6 +345,8 @@ class SettingsRepository(context: Context) {
             .putBoolean("c_sensitive", c.showSensitive)
             .putBoolean("c_enter_send", c.enterToSend)
             .putInt("c_distance", c.distanceUnit.ordinal)
+            .putInt("c_bubble_opacity", c.bubbleOpacity)
+            .putBoolean("c_bubble_blur", c.bubbleBlur)
             .apply()
     }
 
