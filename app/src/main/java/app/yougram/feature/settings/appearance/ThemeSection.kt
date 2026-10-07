@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -20,16 +21,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import app.yougram.core.settings.AppIconStyle
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.settings.ThemeMode
 import app.yougram.core.ui.theme.Accents
@@ -141,18 +141,17 @@ fun ThemeSection(settings: SettingsRepository) {
 
         SettingGroup {
             item {
-                var selectedIcon by remember { mutableIntStateOf(0) }
-                val icons = listOf("Yougram", "Тёмная", "Золотая", "Классика", "Неон")
+                val selectedIcon = theme.appIcon
                 SettingRow(
                     title = "Иконка приложения",
-                    subtitle = "Смена стиля значка на рабочем столе",
+                    subtitle = "Сейчас: ${selectedIcon.title}. Нажмите вариант, чтобы сразу сменить значок",
                     below = {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(icons.size) { index ->
+                            items(AppIconStyle.entries) { style ->
                                 androidx.compose.material3.FilterChip(
-                                    selected = selectedIcon == index,
-                                    onClick = { selectedIcon = index },
-                                    label = { androidx.compose.material3.Text(icons[index]) },
+                                    selected = selectedIcon == style,
+                                    onClick = { settings.setAppIcon(style) },
+                                    label = { androidx.compose.material3.Text(style.title) },
                                 )
                             }
                         }

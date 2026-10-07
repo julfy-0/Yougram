@@ -89,6 +89,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1466,16 +1467,34 @@ class ChatRepository(
     }.getOrDefault(ReplyPreview("", "Сообщение недоступно"))
 
     suspend fun editText(chatId: Long, messageId: Long, text: String) {
-        client.editMessageText(
-            chatId = chatId,
-            messageId = messageId,
-            replyMarkup = null,
-            inputMessageContent = InputMessageText(
-                text = FormattedText(text = text, entities = emptyArray()),
-                linkPreviewOptions = null,
-                clearDraft = false,
-            ),
-        ).getOrThrow()
+        // Сразу после отправки TDLib иногда ещё не успевает синхронизировать сообщение
+        // с серверной историей. В этот короткий момент editMessageText может вернуть
+        // message_not_found. Повторяем только эту временную ошибку.
+        var last: Throwable? = null
+        repeat(4) { attempt ->
+            try {
+                client.editMessageText(
+                    chatId = chatId,
+                    messageId = messageId,
+                    replyMarkup = null,
+                    inputMessageContent = InputMessageText(
+                        text = FormattedText(text = text, entities = emptyArray()),
+                        linkPreviewOptions = null,
+                        clearDraft = false,
+                    ),
+                ).getOrThrow()
+                return
+            } catch (e: Throwable) {
+                last = e
+                val message = e.message.orEmpty().lowercase()
+                val temporaryNotFound = message.contains("message_not_found") ||
+                    message.contains("message not found") ||
+                    message.contains("message-not-found")
+                if (!temporaryNotFound || attempt == 3) throw e
+                delay(250L * (attempt + 1))
+            }
+        }
+        throw last ?: IllegalStateException("Не удалось изменить сообщение")
     }
 
     /** Удаляет сообщение у всех (в личных чатах и там, где позволяют права). */
