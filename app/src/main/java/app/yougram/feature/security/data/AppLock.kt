@@ -27,11 +27,16 @@ enum class LockType { None, Pin, Pattern }
 data class LockSettings(
     val type: LockType = LockType.None,
     val biometric: Boolean = false,
+    /** Вход лицом/слабой биометрией (BIOMETRIC_WEAK, без ключа Keystore). */
+    val biometricWeak: Boolean = false,
     /** Через сколько секунд в фоне блокировать приложение; 0 — сразу. */
     val autoLockSeconds: Int = 0,
     /** Скрывать содержимое в «Недавних» и запрещать скриншоты (FLAG_SECURE). */
     val secureScreen: Boolean = false,
 )
+
+/** Уровень биометрии устройства: отпечаток/сильное лицо, слабое лицо (большинство телефонов) или ничего. */
+enum class BiometricLevel { None, Weak, Strong }
 
 sealed interface VerifyResult {
     data object Success : VerifyResult
@@ -70,6 +75,7 @@ class AppLock(context: Context) {
         return LockSettings(
             type = type,
             biometric = type != LockType.None && prefs.getBoolean(KEY_BIOMETRIC, false),
+            biometricWeak = prefs.getBoolean(KEY_BIOMETRIC_WEAK, false),
             autoLockSeconds = prefs.getInt(KEY_AUTO_LOCK, 0),
             secureScreen = prefs.getBoolean(KEY_SECURE, false),
         )
@@ -178,19 +184,27 @@ class AppLock(context: Context) {
         _settings.update { it.copy(secureScreen = enabled) }
     }
 
-    fun setBiometric(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_BIOMETRIC, enabled).commit()
+    fun setBiometric(enabled: Boolean, weak: Boolean = false) {
+        val w = enabled && weak
+        prefs.edit().putBoolean(KEY_BIOMETRIC, enabled).putBoolean(KEY_BIOMETRIC_WEAK, w).commit()
         if (!enabled) deleteBiometricKey()
-        _settings.update { it.copy(biometric = enabled) }
+        _settings.update { it.copy(biometric = enabled, biometricWeak = w) }
     }
 
     // --- Отпечаток ---
 
-    fun biometricAvailable(): Boolean {
-        val manager = appContext.getSystemService(BiometricManager::class.java) ?: return false
-        return manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
-                BiometricManager.BIOMETRIC_SUCCESS
+    fun biometricLevel(): BiometricLevel {
+        val manager = appContext.getSystemService(BiometricManager::class.java) ?: return BiometricLevel.None
+        return when {
+            manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS ->
+                BiometricLevel.Strong
+            manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS ->
+                BiometricLevel.Weak
+            else -> BiometricLevel.None
+        }
     }
+
+    fun biometricAvailable(): Boolean = biometricLevel() != BiometricLevel.None
 
     /** Создаёт ключ Keystore, который требует отпечаток при каждом использовании. */
     fun prepareBiometricKey(): Boolean = try {
@@ -249,6 +263,7 @@ class AppLock(context: Context) {
         const val KEY_SALT = "salt"
         const val KEY_HASH = "hash"
         const val KEY_BIOMETRIC = "biometric"
+        const val KEY_BIOMETRIC_WEAK = "biometric_weak"
         const val KEY_AUTO_LOCK = "auto_lock_seconds"
         const val KEY_SECURE = "secure_screen_v2"
         const val KEY_FAILED = "failed_attempts"

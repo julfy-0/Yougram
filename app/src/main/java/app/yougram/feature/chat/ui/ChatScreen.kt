@@ -186,6 +186,12 @@ fun ChatScreen(
     threadMode: Boolean = false,
 ) {
     val state by viewModel.state.collectAsState()
+    // Секретный чат: запрещаем скриншоты и запись экрана (FLAG_SECURE) во всех окнах чата.
+    androidx.compose.runtime.DisposableEffect(state.isSecret) {
+        if (state.isSecret) app.yougram.core.ui.SecureScreen.enter()
+        onDispose { if (state.isSecret) app.yougram.core.ui.SecureScreen.leave() }
+    }
+    app.yougram.core.ui.SecureWindowEffect()
     val senders by viewModel.senders.collectAsState()
     val replies by viewModel.replies.collectAsState()
     val glass by settings.glass.collectAsState()
@@ -609,11 +615,16 @@ fun ChatScreen(
                                 )
                                 YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
                             }
-                            if ((subtitleOverride ?: state.subtitle).isNotEmpty()) {
+                            val headerSubtitle = state.typing ?: subtitleOverride ?: state.subtitle
+                            if (headerSubtitle.isNotEmpty()) {
                                 Text(
-                                    subtitleOverride ?: state.subtitle,
+                                    headerSubtitle,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (state.isOnline) androidx.compose.ui.graphics.Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = when {
+                                        state.typing != null -> MaterialTheme.colorScheme.primary
+                                        state.isOnline -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -991,6 +1002,7 @@ fun ChatScreen(
 
     actionMessage?.let { message ->
         val sender = message.senderUserId
+        val tw by viewModel.typingWatch.collectAsState()
         var available by remember(message.id) { mutableStateOf(DefaultReactions) }
         LaunchedEffect(message.id) {
             viewModel.availableReactions(message.id).takeIf { it.isNotEmpty() }?.let { available = it }
@@ -1001,6 +1013,8 @@ fun ChatScreen(
             canEdit = message.isOutgoing && message.media == null && message.call == null && message.id !in state.deletedIds,
             canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.ANIMATION || it == MediaKind.STICKER || it == MediaKind.DOCUMENT },
             canShadowBan = sender != null && !message.isOutgoing,
+            canWatchTyping = state.isGroup && sender != null && !message.isOutgoing,
+            watchingTyping = sender != null && tw.watches(viewModel.chatId, sender),
             reactions = available,
             onDismiss = { actionMessage = null },
             onReact = { viewModel.react(message.id, it) },
@@ -1028,6 +1042,7 @@ fun ChatScreen(
             },
             onDelete = { deleteMessage = message },
             onShadowBan = { sender?.let { viewModel.shadowBan(it) } },
+            onToggleTypingWatch = { sender?.let { viewModel.toggleTypingWatch(it) } },
         )
     }
 

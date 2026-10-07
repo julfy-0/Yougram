@@ -37,6 +37,7 @@ import app.yougram.feature.security.data.LockType
 import app.yougram.feature.security.data.VerifyResult
 import app.yougram.feature.security.ui.PatternPad
 import app.yougram.feature.security.ui.PinEntry
+import app.yougram.feature.security.data.BiometricLevel
 import app.yougram.feature.security.ui.showBiometricPrompt
 import app.yougram.feature.settings.component.ChoiceDialog
 import app.yougram.feature.settings.component.SectionLabel
@@ -100,15 +101,28 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
             return
         }
         if (!appLock.biometricAvailable()) {
-            toast("Отпечатки не настроены или недоступны на устройстве")
+            toast("Отпечаток или лицо не настроены в системе")
+            return
+        }
+        if (appLock.biometricLevel() == BiometricLevel.Weak) {
+            // Лицо без «сильной» биометрии: Keystore-ключ недоступен, проверяем системным запросом.
+            val ok = showBiometricPrompt(
+                context = context,
+                appLock = appLock,
+                title = "Подтвердите лицо или отпечаток",
+                onSuccess = { appLock.setBiometric(true, weak = true) },
+                weak = true,
+            )
+            if (!ok) toast("Не удалось включить вход по лицу")
             return
         }
         val shown = appLock.prepareBiometricKey() && showBiometricPrompt(
             context = context,
             appLock = appLock,
-            title = "Подтвердите отпечаток",
+            title = "Подтвердите отпечаток или лицо",
             onSuccess = { appLock.setBiometric(true) },
             onCancel = { appLock.deleteBiometricKey() },
+            weak = false,
         )
         if (!shown) {
             appLock.deleteBiometricKey()
@@ -140,7 +154,7 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
             if (enabled) {
                 item {
                     SwitchRow(
-                        "Отпечаток пальца",
+                        "Отпечаток или лицо",
                         settings.biometric,
                         ::onBiometricChange,
                         subtitle = "Разблокировка без ввода кода",

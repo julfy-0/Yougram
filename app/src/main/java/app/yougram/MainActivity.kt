@@ -166,7 +166,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applySecureFlag(secure: Boolean) {
-        // Разрешаем скриншоты и запись экрана во всех режимах.
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Скриншоты разрешены везде, кроме секретных чатов (их флаг держит SecureWindowEffect).
+        if (app.yougram.core.ui.SecureScreen.count.value > 0) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 }

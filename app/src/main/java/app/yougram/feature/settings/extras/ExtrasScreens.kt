@@ -152,6 +152,7 @@ fun GhostModeScreen(settings: SettingsRepository, contentPadding: PaddingValues)
 @Composable
 fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: PaddingValues) {
     val p by settings.spyPrefs.collectAsState()
+    val tw by settings.typingWatch.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var editFolder by remember { mutableStateOf(false) }
@@ -183,6 +184,14 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
         SettingsFootnote(
             "Запоминает последний известный онлайн людей со скрытым последним посещением (по их сообщениям). " +
                     "Вы увидите очень приблизительно, когда они были в сети в последний раз."
+        )
+        SettingGroup {
+            item { SwitchRow("Показывать, что делает собеседник", tw.enabled, { v -> settings.updateTypingWatch { t -> t.copy(enabled = v) } }) }
+            item { SwitchRow("В личных чатах", tw.inPrivate, { v -> settings.updateTypingWatch { t -> t.copy(inPrivate = v) } }) }
+        }
+        SettingsFootnote(
+            "Статус «печатает…», «записывает голосовое» и т. п. в шапке чата. Сам набираемый текст Telegram не передаёт. " +
+                    "В группах выбранных людей добавляйте через долгий тап по их сообщению → «Следить за набором»."
         )
         SettingGroup {
             item {

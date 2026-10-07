@@ -30,6 +30,7 @@ import dev.g000sha256.tdl.dto.ChatMemberStatusRestricted
 import dev.g000sha256.tdl.dto.ChatNotificationSettings
 import dev.g000sha256.tdl.dto.ChatTypeBasicGroup
 import dev.g000sha256.tdl.dto.ChatTypePrivate
+import dev.g000sha256.tdl.dto.ChatTypeSecret
 import dev.g000sha256.tdl.dto.ChatTypeSupergroup
 import dev.g000sha256.tdl.dto.File as TdFile
 import dev.g000sha256.tdl.dto.FormattedText
@@ -57,6 +58,15 @@ import dev.g000sha256.tdl.dto.MessageInteractionInfo
 import dev.g000sha256.tdl.dto.MessagePaidMedia
 import dev.g000sha256.tdl.dto.MessagePhoto
 import dev.g000sha256.tdl.dto.MessageReplyToMessage
+import dev.g000sha256.tdl.dto.ChatAction
+import dev.g000sha256.tdl.dto.ChatActionCancel
+import dev.g000sha256.tdl.dto.ChatActionChoosingSticker
+import dev.g000sha256.tdl.dto.ChatActionRecordingVideoNote
+import dev.g000sha256.tdl.dto.ChatActionRecordingVoiceNote
+import dev.g000sha256.tdl.dto.ChatActionTyping
+import dev.g000sha256.tdl.dto.ChatActionUploadingDocument
+import dev.g000sha256.tdl.dto.ChatActionUploadingPhoto
+import dev.g000sha256.tdl.dto.ChatActionUploadingVideo
 import dev.g000sha256.tdl.dto.MessageSenderChat
 import dev.g000sha256.tdl.dto.MessageSenderUser
 import dev.g000sha256.tdl.dto.MessageSticker
@@ -113,6 +123,8 @@ data class ChatInfo(
     val canSendMessages: Boolean = true,
     val isChannel: Boolean = false,
     val isGroup: Boolean = false,
+    /** Секретный чат: скриншоты и запись экрана запрещены. */
+    val isSecret: Boolean = false,
     val avatarFileId: Int? = null,
     /** Вы не состоите в канале/группе и можете подписаться (вступить). */
     val canJoin: Boolean = false,
@@ -405,6 +417,9 @@ data class ContentEvent(
 /** Собеседник прочитал исходящие сообщения до [lastMessageId] включительно. */
 data class ReadEvent(val chatId: Long, val lastMessageId: Long, val at: Int)
 
+/** Действие собеседника в чате; [label] == null — действие закончилось. */
+data class TypingEvent(val chatId: Long, val userId: Long, val label: String?)
+
 /** Данные архива шпиона для открытого чата. */
 data class SpySnapshot(
     val deleted: List<MessageItem>,
@@ -441,6 +456,9 @@ class ChatRepository(
 
     private val _readEvents = MutableSharedFlow<ReadEvent>(extraBufferCapacity = 64)
     val readEvents: SharedFlow<ReadEvent> = _readEvents.asSharedFlow()
+
+    private val _typingEvents = MutableSharedFlow<TypingEvent>(extraBufferCapacity = 64)
+    val typingEvents: SharedFlow<TypingEvent> = _typingEvents.asSharedFlow()
 
     private val _reactionEvents = MutableSharedFlow<ReactionEvent>(extraBufferCapacity = 64)
     val reactionEvents: SharedFlow<ReactionEvent> = _reactionEvents.asSharedFlow()
@@ -766,6 +784,22 @@ class ChatRepository(
                 _readEvents.tryEmit(ReadEvent(update.chatId, update.lastReadOutboxMessageId, at))
             }
         }
+        // Статус набора: только ЛС и/или выбранные люди в группах.
+        scope.launch {
+            client.chatActionUpdates.collect { update ->
+                val p = settings.typingWatch.value
+                if (!p.enabled) return@collect
+                val userId = (update.senderId as? MessageSenderUser)?.userId ?: return@collect
+                if (userId == _ownUserId.value) return@collect
+                val allowed = when (chatKind(update.chatId)) {
+                    ChatKind.PRIVATE -> p.inPrivate
+                    ChatKind.GROUP -> p.watches(update.chatId, userId)
+                    ChatKind.CHANNEL -> false
+                }
+                if (!allowed) return@collect
+                _typingEvents.tryEmit(TypingEvent(update.chatId, userId, actionLabel(update.action)))
+            }
+        }
         scope.launch {
             client.userStatusUpdates.collect { update ->
                 if (!settings.spyPrefs.value.saveLastOnline) return@collect
@@ -794,6 +828,18 @@ class ChatRepository(
         if (items.isEmpty() || !(p.saveDeleted || p.saveEdits || p.saveReadDate)) return
         if (!p.saveInBots && chatMeta(items.first().chatId).isBot) return
         io { spy.upsert(items) }
+    }
+
+    private fun actionLabel(a: ChatAction): String? = when (a) {
+        is ChatActionCancel -> null
+        is ChatActionTyping -> "печатает"
+        is ChatActionRecordingVoiceNote -> "записывает голосовое"
+        is ChatActionRecordingVideoNote -> "записывает кружок"
+        is ChatActionUploadingPhoto -> "отправляет фото"
+        is ChatActionUploadingVideo -> "отправляет видео"
+        is ChatActionUploadingDocument -> "отправляет файл"
+        is ChatActionChoosingSticker -> "выбирает стикер"
+        else -> "что-то делает"
     }
 
     private suspend fun chatMeta(chatId: Long): ChatMeta {
@@ -1012,6 +1058,7 @@ class ChatRepository(
             canSendMessages = canSend,
             isChannel = isChannel,
             isGroup = isGroup,
+            isSecret = type is ChatTypeSecret,
             avatarFileId = avatar?.id,
             canJoin = notMember && !canSend,
         )

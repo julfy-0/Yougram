@@ -32,6 +32,8 @@ import kotlinx.coroutines.sync.withLock
 data class ChatUiState(
     val title: String = "",
     val subtitle: String = "",
+    /** «печатает…» / «Имя печатает…», пока собеседник что-то делает; иначе null. */
+    val typing: String? = null,
     val isOnline: Boolean = false,
     /** Порядок: новые сообщения в начале списка (для LazyColumn с reverseLayout). */
     val messages: List<MessageItem> = emptyList(),
@@ -41,6 +43,7 @@ data class ChatUiState(
     val canSendMessages: Boolean = true,
     val isChannel: Boolean = false,
     val isGroup: Boolean = false,
+    val isSecret: Boolean = false,
     val avatarFileId: Int? = null,
     /** Можно подписаться на канал / вступить в группу. */
     val canJoin: Boolean = false,
@@ -90,6 +93,25 @@ class ChatViewModel(
         if (threadId != 0L) repository.setActiveThread(chatId, 0L)
         super.onCleared()
     }
+
+    val typingWatch = settings.typingWatch
+
+    private val typingNow = LinkedHashMap<Long, String>()
+    private val typingJobs = HashMap<Long, Job>()
+    private val typingNames = HashMap<Long, String>()
+
+    private suspend fun publishTyping() {
+        for (id in typingNow.keys) if (id !in typingNames) typingNames[id] = repository.userName(id)
+        val group = _state.value.isGroup
+        val text = if (typingNow.isEmpty()) null else {
+            typingNow.entries.map { (id, label) -> if (group) "${typingNames[id]} $label" else label }
+                .joinToString(", ") + "…"
+        }
+        _state.update { it.copy(typing = text) }
+    }
+
+    /** Следить / не следить за набором этого человека в группе. */
+    fun toggleTypingWatch(userId: Long) = settings.toggleTypingWatch(chatId, userId)
 
     private val _search = MutableStateFlow(ChatSearchState())
     val search: StateFlow<ChatSearchState> = _search.asStateFlow()
@@ -407,6 +429,24 @@ class ChatViewModel(
             }
         }
         viewModelScope.launch {
+            repository.typingEvents.collect { e ->
+                if (e.chatId != chatId) return@collect
+                typingJobs.remove(e.userId)?.cancel()
+                if (e.label == null) {
+                    typingNow.remove(e.userId)
+                } else {
+                    typingNow[e.userId] = e.label
+                    // Telegram сам не присылает «стоп» при тайм-ауте: гасим через 6 с.
+                    typingJobs[e.userId] = viewModelScope.launch {
+                        delay(6_000)
+                        typingNow.remove(e.userId)
+                        publishTyping()
+                    }
+                }
+                publishTyping()
+            }
+        }
+        viewModelScope.launch {
             repository.reactionEvents.collect { event ->
                 if (event.chatId != chatId) return@collect
                 _state.update { s ->
@@ -455,6 +495,7 @@ class ChatViewModel(
                         canSendMessages = chatInfo.canSendMessages,
                         isChannel = chatInfo.isChannel,
                         isGroup = chatInfo.isGroup,
+                        isSecret = chatInfo.isSecret,
                         avatarFileId = chatInfo.avatarFileId,
                         canJoin = chatInfo.canJoin,
                         deletedIds = s.deletedIds + deletedFrom(low).map { it.id },

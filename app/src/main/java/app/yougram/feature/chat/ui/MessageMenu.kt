@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,8 @@ fun MessageMenu(
     canEdit: Boolean,
     canSave: Boolean,
     canShadowBan: Boolean,
+    canWatchTyping: Boolean,
+    watchingTyping: Boolean,
     reactions: List<String>,
     onDismiss: () -> Unit,
     onReact: (String) -> Unit,
@@ -78,6 +81,7 @@ fun MessageMenu(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onShadowBan: () -> Unit,
+    onToggleTypingWatch: () -> Unit,
 ) {
     val mine = message.reactions.filter { it.chosen }.map { it.emoji }.toSet()
     Dialog(onDismissRequest = onDismiss) {
@@ -125,6 +129,10 @@ fun MessageMenu(
                     MenuItem(Icons.AutoMirrored.Filled.Send, "Переслать") { onForward(); onDismiss() }
                     MenuItem(Icons.Filled.PushPin, "Закрепить") { onPin(); onDismiss() }
                     if (canEdit) MenuItem(Icons.Filled.Edit, "Изменить") { onEdit(); onDismiss() }
+                    if (canWatchTyping) MenuItem(
+                        Icons.Filled.Visibility,
+                        if (watchingTyping) "Не следить за набором" else "Следить за набором",
+                    ) { onToggleTypingWatch(); onDismiss() }
                     if (canShadowBan) MenuItem(Icons.Filled.VisibilityOff, "Теневой бан автора") { onShadowBan(); onDismiss() }
                     MenuItem(Icons.Filled.Delete, "Удалить", tint = MaterialTheme.colorScheme.error) { onDelete(); onDismiss() }
                 }

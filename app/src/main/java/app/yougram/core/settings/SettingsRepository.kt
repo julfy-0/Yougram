@@ -192,6 +192,16 @@ data class FilterPrefs(
     val shadowBanned: List<ShadowBanned> = emptyList(),
 )
 
+/** Статус набора («печатает…»): только ЛС и/или выбранные люди в группах. */
+data class TypingWatchPrefs(
+    val enabled: Boolean = false,
+    val inPrivate: Boolean = true,
+    /** Выбранные люди в группах: "chatId:userId". */
+    val watched: Set<String> = emptySet(),
+) {
+    fun watches(chatId: Long, userId: Long): Boolean = "$chatId:$userId" in watched
+}
+
 class SettingsRepository(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("yougram_settings", Context.MODE_PRIVATE)
@@ -510,6 +520,35 @@ class SettingsRepository(private val context: Context) {
             .putString("s_folder", s.folderName)
             .putInt("s_max_folder", s.maxFolderIndex)
             .apply()
+    }
+
+    // Статус набора.
+    private val _typingWatch = MutableStateFlow(
+        TypingWatchPrefs(
+            enabled = prefs.getBoolean("tw_enabled", false),
+            inPrivate = prefs.getBoolean("tw_private", true),
+            watched = prefs.getStringSet("tw_watched", emptySet()).orEmpty().toSet(),
+        )
+    )
+    val typingWatch: StateFlow<TypingWatchPrefs> = _typingWatch.asStateFlow()
+
+    fun updateTypingWatch(transform: (TypingWatchPrefs) -> TypingWatchPrefs) {
+        val t = transform(_typingWatch.value)
+        _typingWatch.value = t
+        prefs.edit()
+            .putBoolean("tw_enabled", t.enabled)
+            .putBoolean("tw_private", t.inPrivate)
+            .putStringSet("tw_watched", t.watched)
+            .apply()
+    }
+
+    /** Добавляет/убирает человека из списка слежки в группе; при добавлении включает функцию. */
+    fun toggleTypingWatch(chatId: Long, userId: Long) {
+        val key = "$chatId:$userId"
+        updateTypingWatch { t ->
+            if (key in t.watched) t.copy(watched = t.watched - key)
+            else t.copy(enabled = true, watched = t.watched + key)
+        }
     }
 
     // Фильтры сообщений.

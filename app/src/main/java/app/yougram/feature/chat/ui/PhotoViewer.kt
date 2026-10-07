@@ -44,10 +44,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.yougram.core.ui.component.rememberFileBitmap
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import app.yougram.core.settings.GlassSettings
 import app.yougram.core.ui.glass.SystemBarsGlass
+import app.yougram.core.ui.glass.backdropSource
+import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.rememberBackdropState
 import app.yougram.feature.chat.data.FileState
 import app.yougram.feature.chat.data.MediaItem
 import kotlinx.coroutines.flow.flowOf
+
+private val ViewerGlass = GlassSettings(blurRadius = 28f, opacity = 0.35f)
 
 /**
  * Полноэкранный просмотр фото чата: листание влево-вправо между всеми загруженными фото,
@@ -57,34 +67,39 @@ import kotlinx.coroutines.flow.flowOf
 fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewModel, onDismiss: () -> Unit) {
     val pagerState = rememberPagerState(initialPage = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { items.size }
     var zoomed by remember { mutableStateOf(false) }
+    val backdrop = rememberBackdropState()
     LaunchedEffect(pagerState.currentPage) { zoomed = false }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        app.yougram.core.ui.SecureWindowEffect()
         SystemBarsGlass(Modifier.fillMaxSize(), background = Color.Black) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = !zoomed,
-                beyondViewportPageCount = 1,
-                key = { items[it].fileId },
-            ) { page ->
-                ZoomablePhoto(
-                    media = items[page],
-                    viewModel = viewModel,
-                    isCurrent = page == pagerState.currentPage,
-                    onZoomChange = { if (page == pagerState.currentPage) zoomed = it },
-                )
+            // Источник для размытия: только фото, без счётчика и кнопки.
+            Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = !zoomed,
+                    beyondViewportPageCount = 1,
+                    key = { items[it].fileId },
+                ) { page ->
+                    ZoomablePhoto(
+                        media = items[page],
+                        viewModel = viewModel,
+                        isCurrent = page == pagerState.currentPage,
+                        onZoomChange = { if (page == pagerState.currentPage) zoomed = it },
+                    )
+                }
             }
             if (items.size > 1) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.5f),
-                    modifier = Modifier
+                Box(
+                    Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp),
+                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp)
+                        .glass(backdrop, ViewerGlass, CircleShape, Color.Black)
+                        .border(0.6.dp, Color.White.copy(alpha = 0.22f), CircleShape),
                 ) {
                     Text(
                         "${pagerState.currentPage + 1} из ${items.size}",
@@ -94,11 +109,15 @@ fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewMode
                     )
                 }
             }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
+            Box(
+                Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), start = 4.dp),
+                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 6.dp, start = 12.dp)
+                    .size(40.dp)
+                    .glass(backdrop, ViewerGlass, CircleShape, Color.Black)
+                    .border(0.6.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
             }

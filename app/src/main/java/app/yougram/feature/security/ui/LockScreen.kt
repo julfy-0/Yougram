@@ -179,7 +179,7 @@ private fun LockScreen(appLock: AppLock) {
                 )
                 if (settings.biometric) {
                     Spacer(Modifier.height(16.dp))
-                    TextButton(onClick = { tryBiometric() }) { Text("Отпечаток пальца") }
+                    TextButton(onClick = { tryBiometric() }) { Text("Отпечаток или лицо") }
                 }
             } else {
                 PinEntry(
@@ -195,7 +195,7 @@ private fun LockScreen(appLock: AppLock) {
                     extraKey = if (settings.biometric) {
                         {
                             IconButton(onClick = { tryBiometric() }) {
-                                Icon(Icons.Filled.Fingerprint, contentDescription = "Отпечаток пальца")
+                                Icon(Icons.Filled.Fingerprint, contentDescription = "Отпечаток или лицо")
                             }
                         }
                     } else null,
