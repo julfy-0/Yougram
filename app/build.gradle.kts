@@ -112,6 +112,11 @@ dependencies {
 
     // Compose BOM 2025.09.00 в†’ Compose 1.9.1
     implementation(platform(libs.androidx.compose.bom))
+    // Material 3 Expressive (LoadingIndicator, MotionScheme, ButtonDefaults.shapes) есть только в material3 1.4+.
+    // Побеждает более новая версия BOM; когда libs.versions.toml обновится до 2025.09.00, эту строку можно убрать.
+    implementation(platform("androidx.compose:compose-bom:2025.09.00"))
+    // Явная версия: в логе сборки видна ранняя alpha material3 (MaterialExpressiveTheme там internal), стабильная 1.4.0 новее.
+    implementation("androidx.compose.material3:material3:1.4.0")
 
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
