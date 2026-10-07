@@ -1,0 +1,11 @@
+{
+  "id": "com.yougram.example.hello",
+  "name": "Hello World",
+  "version": "2.0.0",
+  "api": "1.0",
+  "author": "Yougram Example",
+  "description": "Встроенный пример C++ плагина (SDK 2): команда /ping отвечает pong.",
+  "entry": "libyg_example_hello.so",
+  "bundled": true,
+  "permissions": ["chat.send", "hooks"]
+}
