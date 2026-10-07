@@ -83,7 +83,7 @@ fun SettingsPageContent(
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
         SettingsPage.Language -> LanguageScreen(contentPadding)
         SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client, container.accountManager, onNavigate)
-        SettingsPage.Update -> Box(Modifier.fillMaxSize()) // полноэкранный экран рисуется поверх панелей в MainScreen
+        SettingsPage.Update -> UpdateScreen(container.updater, container.telegram.client, contentPadding)
         SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
         SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)

@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 import kotlin.math.min
+import androidx.compose.foundation.shape.CircleShape
 
 class SettingGroupScope {
     internal val items = mutableListOf<@Composable () -> Unit>()
@@ -113,7 +114,7 @@ fun SettingRow(
     ) {
         run {
             Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(shownIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import app.yougram.plugin.NativePluginManager
+import app.yougram.plugin.PluginApi
 import app.yougram.feature.stories.StoriesRepository
 
 /** Простой ручной DI-контейнер: один TDLib-клиент на всё приложение. */
@@ -28,6 +29,11 @@ class AppContainer(private val context: Context) {
     val updater = AppUpdater(context.applicationContext, appScope)
     val stories = StoriesRepository(telegram)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
+
+    /** API плагинов: команды, пункты меню, хуки. UI читает pluginApi.commands / pluginApi.actions. */
+    val pluginApi = PluginApi(context.applicationContext, telegram, chatRepository, plugins)
+        .also { plugins.api = it }
+
     val accountRepository = AccountRepository(telegram, accountManager)
     val callAudio = CallAudio(context.applicationContext)
     val notificationCenter = NotificationCenter(context.applicationContext, telegram, appScope, chatRepository, settings)

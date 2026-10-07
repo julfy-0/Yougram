@@ -1194,7 +1194,9 @@ class ChatRepository(
         }
     }
 
-    suspend fun sendText(chatId: Long, text: String, replyToId: Long? = null) {
+    suspend fun sendText(chatId: Long, rawText: String, replyToId: Long? = null, fromPlugin: Boolean = false) {
+        // Плагинные отправки идут мимо хука, иначе плагин зациклится на собственных сообщениях.
+        val text = if (fromPlugin) rawText else plugins?.beforeSend(chatId, rawText, replyToId) ?: return
         client.sendMessage(
             chatId = chatId,
             topicId = topicParam(chatId),
@@ -1998,8 +2000,8 @@ class ChatRepository(
                 ?.takeIf { it.messageId != 0L }
                 ?.let { ReplyRef(it.chatId, it.messageId) },
             reactions = interactionInfo.toReactions(),
-            commentCount = interactionInfo?.replyInfo?.replyCount ?: 0,
-            hasComments = interactionInfo?.replyInfo != null,
+            commentCount = if (isChannelPost) interactionInfo?.replyInfo?.replyCount ?: 0 else 0,
+            hasComments = isChannelPost && interactionInfo?.replyInfo != null,
             threadId = (topicId as? MessageTopicThread)?.messageThreadId ?: 0L,
             paidMessageStars = paidMessageStarCount,
         )

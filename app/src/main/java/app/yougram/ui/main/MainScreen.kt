@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -101,7 +102,7 @@ import app.yougram.ui.glass.backdropSource
 import app.yougram.ui.glass.glass
 import app.yougram.ui.glass.rememberBackdropState
 import app.yougram.ui.settings.SettingsPage
-import app.yougram.ui.settings.UpdateScreen
+import app.yougram.ui.settings.UpdateGlassBar
 import app.yougram.ui.settings.SettingsPageContent
 import app.yougram.ui.settings.LocalOpenAccountManager
 import app.yougram.ui.settings.AccountManagerContent
@@ -189,6 +190,16 @@ fun MainScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var barsVisible by rememberSaveable { mutableStateOf(true) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
+
+    // История переходов (вкладка + страница настроек): жест «назад» возвращает на предыдущий экран.
+    val backStack = remember { mutableStateListOf<Pair<MainTab, SettingsPage>>() }
+    fun navigateTo(newTab: MainTab, newPage: SettingsPage) {
+        if (newTab == tab && newPage == settingsPage) return
+        backStack.add(tab to settingsPage)
+        if (backStack.size > 30) backStack.removeAt(0)
+        tab = newTab
+        settingsPage = newPage
+    }
     var accountSheetOpen by remember { mutableStateOf(false) }
 
     val chatListViewModel: ChatListViewModel = viewModel(
@@ -253,9 +264,17 @@ fun MainScreen(
         label = "underSearchBlur",
     )
 
-    BackHandler(enabled = inSettingsSubpage) {
-        settingsPage = settingsPage.parent
+    fun goBack() {
+        if (backStack.isNotEmpty()) {
+            val (previousTab, previousPage) = backStack.removeAt(backStack.lastIndex)
+            tab = previousTab
+            settingsPage = previousPage
+        } else if (inSettingsSubpage) {
+            settingsPage = settingsPage.parent
+        }
     }
+
+    BackHandler(enabled = backStack.isNotEmpty() || inSettingsSubpage) { goBack() }
 
     BackHandler(enabled = searching) {
         searching = false
@@ -344,7 +363,7 @@ fun MainScreen(
                                     page = currentPage,
                                     container = container,
                                     contentPadding = contentPadding,
-                                    onNavigate = { settingsPage = it },
+                                    onNavigate = { navigateTo(MainTab.Settings, it) },
                                     onOpenChat = onOpenChat,
                                 )
                             }
@@ -358,7 +377,7 @@ fun MainScreen(
                                 query = query,
                                 contentPadding = contentPadding,
                                 onOpen = {
-                                    settingsPage = it
+                                    navigateTo(MainTab.Settings, it)
                                     searching = false
                                     query = ""
                                 },
@@ -386,7 +405,7 @@ fun MainScreen(
                 query = ""
             },
             onBack = if (inSettingsSubpage) {
-                { settingsPage = settingsPage.parent }
+                { goBack() }
             } else null,
             folders = if (showFolders) folders else emptyList(),
             selectedFolder = folderId,
@@ -404,21 +423,32 @@ fun MainScreen(
         )
 
         // Нижняя панель остаётся на месте при прокрутке: прячется только верхняя.
-        GlassBottomBar(
-            selected = tab,
-            onSelect = {
-                tab = it
-                searching = false
-                query = ""
-            },
-            onSearch = { searching = true },
-            showSearch = !chatPrefs.searchOnTop,
-            backdrop = backdrop,
-            glass = glass,
-            bottomInset = bottomInset,
-            progress = { 1f },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        // На странице «Обновление» вместо навигации — панель с кнопкой в том же стеклянном стиле.
+        if (tab == MainTab.Settings && settingsPage == SettingsPage.Update) {
+            UpdateGlassBar(
+                updater = container.updater,
+                backdrop = backdrop,
+                glass = glass,
+                bottomInset = bottomInset,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        } else {
+            GlassBottomBar(
+                selected = tab,
+                onSelect = {
+                    navigateTo(it, settingsPage)
+                    searching = false
+                    query = ""
+                },
+                onSearch = { searching = true },
+                showSearch = !chatPrefs.searchOnTop,
+                backdrop = backdrop,
+                glass = glass,
+                bottomInset = bottomInset,
+                progress = { 1f },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
 
         // Стекло под системной панелью навигации. Рисуется поверх «таблетки», поэтому она уезжает «под» него.
         Box(
@@ -441,19 +471,6 @@ fun MainScreen(
                 accountManager = container.accountManager,
                 fileState = container.chatRepository::fileState,
                 onDismiss = { accountSheetOpen = false },
-            )
-        }
-
-        // «Обновление клиента»: на весь экран, поверх верхней и нижней панелей.
-        AnimatedVisibility(
-            visible = tab == MainTab.Settings && settingsPage == SettingsPage.Update,
-            enter = slideInVertically(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { it / 6 } + fadeIn(tween(ScreenAnimationMillis)),
-            exit = slideOutVertically(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { it / 6 } + fadeOut(tween(ScreenAnimationMillis / 2)),
-        ) {
-            UpdateScreen(
-                updater = container.updater,
-                client = container.telegram.client,
-                onBack = { settingsPage = settingsPage.parent },
             )
         }
     }
@@ -492,8 +509,8 @@ private fun GlassTopBar(
             .fillMaxWidth()
             .height(
                 topInset + TopBarContentHeight +
-                    (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
-                    (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
+                        (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
+                        (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
             )
             .glass(backdrop, glass, RectangleShape),
     ) {
@@ -512,13 +529,13 @@ private fun GlassTopBar(
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     (
-                        fadeIn(tween(SearchAnimationMillis, delayMillis = 60)) +
-                            slideInHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { it / 5 } +
-                            scaleIn(tween(SearchAnimationMillis, easing = FastOutSlowInEasing), initialScale = 0.94f)
-                        ).togetherWith(
-                        fadeOut(tween(SearchAnimationMillis / 2)) +
-                            slideOutHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { -it / 8 },
-                    )
+                            fadeIn(tween(SearchAnimationMillis, delayMillis = 60)) +
+                                    slideInHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { it / 5 } +
+                                    scaleIn(tween(SearchAnimationMillis, easing = FastOutSlowInEasing), initialScale = 0.94f)
+                            ).togetherWith(
+                            fadeOut(tween(SearchAnimationMillis / 2)) +
+                                    slideOutHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { -it / 8 },
+                        )
                 },
                 label = "searchField",
             ) { isSearching ->
