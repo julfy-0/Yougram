@@ -2,9 +2,13 @@ package app.yougram.core.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -37,6 +41,15 @@ val Accents = listOf(
     Accent("Фиолетовый", Color(0xFF8E24AA)),
 )
 
+/** Крупные скругления Material 3 Expressive. */
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(32.dp),
+)
+
 private val DarkText = Color(0xFFF2F2F2)
 private val DarkTextVariant = Color(0xFFD0D0D0)
 
@@ -59,7 +72,12 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     }
     val colorScheme = if (dark) base.withLightText() else base
     val typography = rememberTypography(settings.fontPath)
-    MaterialTheme(colorScheme = colorScheme, typography = typography) {
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+        motionScheme = MotionScheme.expressive(),
+        shapes = ExpressiveShapes,
+        typography = typography,
+    ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = colorScheme.background,

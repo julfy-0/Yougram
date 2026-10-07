@@ -62,14 +62,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -185,7 +185,7 @@ fun ProfileScreen(
 
     SystemBarsGlass(Modifier.fillMaxSize()) {
         if (details == null) {
-            if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
+            if (state.loading) LoadingIndicator(Modifier.align(Alignment.Center))
         } else {
             val actions = actionsFor(details, context, onOpenChat, startCall, viewModel::toggleMute) { confirmLeave = true }
             val media = remember(state.shared) { state.shared.filter { it.media?.kind in MediaKinds } }
@@ -214,7 +214,7 @@ fun ProfileScreen(
                 when {
                     state.sharedLoading && tab != ProfileTab.DELETED -> item(key = "loading") {
                         Box(Modifier.animateItem().fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                            LoadingIndicator(Modifier.size(28.dp))
                         }
                     }
                     tab == ProfileTab.MEDIA -> {

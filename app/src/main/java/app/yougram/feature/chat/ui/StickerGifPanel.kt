@@ -18,10 +18,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -62,7 +62,7 @@ fun StickerThumb(sticker: StickerItem, viewModel: ChatViewModel, size: Dp, onCli
         when {
             bitmap != null -> Image(bitmap, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
             needsFull -> Text(sticker.emoji, fontSize = 28.sp)
-            else -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            else -> LoadingIndicator(Modifier.size(24.dp))
         }
     }
 }
@@ -168,7 +168,7 @@ private fun GifThumb(gif: GifItem, viewModel: ChatViewModel, onClick: () -> Unit
     ) {
         when {
             bitmap != null -> Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            fileId != null && state.active -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            fileId != null && state.active -> LoadingIndicator(Modifier.size(24.dp))
             else -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

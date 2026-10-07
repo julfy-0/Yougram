@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -123,7 +123,7 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         ) {
             val tint = MaterialTheme.colorScheme.onPrimary
             when {
-                full.active -> CircularProgressIndicator(Modifier.size(28.dp), color = tint, strokeWidth = 2.5.dp)
+                full.active -> LoadingIndicator(Modifier.size(28.dp), color = tint)
                 full.path == null -> Icon(Icons.Filled.Download, null, tint = tint)
                 active -> Icon(Icons.Filled.Pause, null, tint = tint)
                 else -> Icon(Icons.Filled.PlayArrow, null, tint = tint)
@@ -201,7 +201,7 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
                 contentAlignment = Alignment.Center,
             ) {
                 if (full.active) {
-                    CircularProgressIndicator(Modifier.size(36.dp), color = Color.White, strokeWidth = 2.5.dp)
+                    LoadingIndicator(Modifier.size(36.dp), color = Color.White)
                 } else {
                     Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }

@@ -13,11 +13,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import app.yougram.core.ui.component.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -45,7 +45,7 @@ fun DossierSheet(viewModel: ProfileViewModel, onDismiss: () -> Unit) {
         val d = dossier
         if (d == null) {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                if (loading) CircularProgressIndicator(Modifier.size(32.dp))
+                if (loading) LoadingIndicator(Modifier.size(32.dp))
                 else Text("Нет данных", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {

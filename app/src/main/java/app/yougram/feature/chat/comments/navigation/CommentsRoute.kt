@@ -3,10 +3,10 @@ package app.yougram.feature.chat.comments.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -47,7 +47,7 @@ fun NavGraphBuilder.commentsRoute(navController: NavHostController, container: A
             resolved == null -> Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
+            ) { LoadingIndicator() }
 
             resolved.second == 0L -> Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),

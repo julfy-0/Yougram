@@ -34,13 +34,13 @@ import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -163,7 +163,7 @@ fun AboutScreen(
                         title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
                         onClick = openUpdate,
                         below = {
-                            LinearProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
+                            LinearWavyProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
                         },
                     )
                     is UpdateState.Ready -> SettingRow(

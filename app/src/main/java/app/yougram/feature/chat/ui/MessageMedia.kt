@@ -27,7 +27,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -164,7 +165,7 @@ private fun StickerView(media: MediaItem, viewModel: ChatViewModel, full: FileSt
                 LoopingVideo(path, Modifier.fillMaxSize(), crop = false)
             }
             fallback != null -> Image(fallback, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            else -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            else -> LoadingIndicator(Modifier.size(24.dp))
         }
     }
 }
@@ -285,14 +286,13 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
 @Composable
 private fun DownloadProgress(state: FileState, modifier: Modifier, color: Color) {
     if (state.total > 0) {
-        CircularProgressIndicator(
+        CircularWavyProgressIndicator(
             progress = { (state.downloaded.toFloat() / state.total).coerceIn(0f, 1f) },
             modifier = modifier,
             color = color,
-            strokeWidth = 2.5.dp,
         )
     } else {
-        CircularProgressIndicator(modifier = modifier, color = color, strokeWidth = 2.5.dp)
+        LoadingIndicator(modifier = modifier, color = color)
     }
 }
 

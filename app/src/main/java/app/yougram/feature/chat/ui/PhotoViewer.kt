@@ -19,7 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -191,13 +191,12 @@ private fun ZoomablePhoto(media: MediaItem, viewModel: ChatViewModel, isCurrent:
             )
         }
         if (fullBitmap == null && isCurrent) {
-            CircularProgressIndicator(
+            LoadingIndicator(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                     .size(32.dp),
                 color = Color.White,
-                strokeWidth = 3.dp,
             )
         }
     }

@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -99,7 +99,7 @@ fun CommentsScreen(
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.background)) {
             when {
-                state.loading && state.comments.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                state.loading && state.comments.isEmpty() -> LoadingIndicator(Modifier.align(Alignment.Center))
                 state.error -> Text(
                     "Комментарии недоступны",
                     Modifier.align(Alignment.Center),

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ChatBubble
@@ -40,13 +41,13 @@ fun CommentsButton(
     val accent = MaterialTheme.colorScheme.primary
     val label = if (count > 0) commentsLabel(count) else "Оставить комментарий"
 
-    Column(modifier) {
-        if (attached) Box(Modifier.fillMaxWidth().height(1.dp).background(accent.copy(alpha = 0.18f)))
+    // Внутри пузыря кнопка «парит» с небольшим отступом от текста и краёв пузыря.
+    Column(if (attached) modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp) else modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (attached) Modifier.background(accent.copy(alpha = 0.10f))
+                    if (attached) Modifier.clip(RoundedCornerShape(16.dp)).background(accent.copy(alpha = 0.10f))
                     else Modifier.clip(CircleShape).background(accent.copy(alpha = 0.16f)),
                 )
                 .clickable(onClick = onClick)

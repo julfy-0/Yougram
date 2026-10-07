@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -89,7 +89,7 @@ fun GlobalSearchScreen(
             item(key = "status") {
                 Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
                     when {
-                        loading -> CircularProgressIndicator()
+                        loading -> LoadingIndicator()
                         state.error != null -> Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error)
                         else -> Text("Ничего не найдено", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -117,7 +117,7 @@ fun GlobalSearchScreen(
         if (state.loadingMessages && state.messages.isNotEmpty()) {
             item(key = "more-loader") {
                 Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    LoadingIndicator(Modifier.size(24.dp))
                 }
             }
         }

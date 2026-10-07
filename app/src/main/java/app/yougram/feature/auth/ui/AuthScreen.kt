@@ -27,10 +27,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -100,7 +100,7 @@ fun AuthScreen(viewModel: AuthViewModel) {
                                 AuthStep.Loading, AuthStep.Ready -> Box(
                                     Modifier.fillMaxWidth().padding(vertical = 24.dp),
                                     contentAlignment = Alignment.Center,
-                                ) { CircularProgressIndicator() }
+                                ) { LoadingIndicator() }
 
                                 AuthStep.MissingCredentials -> AuthNotice(
                                     icon = Icons.Filled.Warning,

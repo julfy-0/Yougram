@@ -20,8 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -80,7 +80,7 @@ fun ChatOrTopics(
         forum == null -> Box(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center,
-        ) { CircularProgressIndicator() }
+        ) { LoadingIndicator() }
 
         forum == true -> ForumTopicsScreen(
             repository = container.chatRepository,
@@ -174,7 +174,7 @@ fun ForumTopicsScreen(
                     modifier = Modifier.align(Alignment.Center),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                list == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                list == null -> LoadingIndicator(Modifier.align(Alignment.Center))
                 list.isEmpty() -> Text(
                     "Тем пока нет",
                     modifier = Modifier.align(Alignment.Center),

@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,7 +46,7 @@ fun ContactsScreen(
     }
     Box(Modifier.fillMaxSize()) {
         when {
-            state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center))
             contacts.isEmpty() -> Text(
                 state.error ?: if (state.contacts.isEmpty()) "Контактов нет" else "Ничего не найдено",
                 Modifier.align(Alignment.Center).padding(contentPadding),

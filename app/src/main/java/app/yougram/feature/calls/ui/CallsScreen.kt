@@ -21,7 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -124,7 +124,7 @@ fun CallsScreen(
             }
         }
         when {
-            state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center))
             calls.isEmpty() -> Text(
                 state.error ?: if (state.calls.isEmpty()) "Звонков нет" else "Ничего не найдено",
                 Modifier.align(Alignment.Center),

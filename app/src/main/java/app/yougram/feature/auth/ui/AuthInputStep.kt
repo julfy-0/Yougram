@@ -20,8 +20,8 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import app.yougram.core.ui.component.Button
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -159,7 +159,7 @@ fun AuthInputStep(
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) {
             if (busy) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp, color = LocalContentColor.current)
+                LoadingIndicator(Modifier.size(22.dp), color = LocalContentColor.current)
             } else {
                 Text("Далее", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.width(8.dp))

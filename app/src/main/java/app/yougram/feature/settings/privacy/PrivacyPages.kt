@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.privacy
 
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -128,6 +128,6 @@ fun WebsitesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingV
 @Composable
 private fun LoadingBox() {
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+        LoadingIndicator()
     }
 }

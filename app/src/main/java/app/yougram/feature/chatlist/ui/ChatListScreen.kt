@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -33,7 +34,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -114,7 +114,7 @@ fun ChatListScreen(
 
     Box(Modifier.fillMaxSize()) {
         when {
-            chats.isEmpty() && error == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            chats.isEmpty() && error == null -> LoadingIndicator(Modifier.align(Alignment.Center))
             chats.isEmpty() -> Text(
                 error.orEmpty(),
                 Modifier.align(Alignment.Center).padding(contentPadding),

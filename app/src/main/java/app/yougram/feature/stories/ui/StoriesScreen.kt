@@ -42,8 +42,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,7 +52,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -279,7 +279,7 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
             }
         }
         if (!ready && !s.failed) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            LoadingIndicator(Modifier.align(Alignment.Center), color = Color.White)
         }
         if (s.failed) {
             Text("История недоступна", color = Color.White, modifier = Modifier.align(Alignment.Center))
@@ -499,7 +499,7 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                 )
                 when {
                     viewers.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                     }
                     viewers.error != null -> Text(viewers.error!!, modifier = Modifier.padding(20.dp))
                     viewers.list.isEmpty() -> Text("Пока никто не посмотрел", modifier = Modifier.padding(20.dp))
