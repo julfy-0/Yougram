@@ -49,7 +49,7 @@ class AppContainer(private val context: Context) {
     val authRepository = AuthRepository(telegram)
     val spy = SpyStore(context.applicationContext)
     val updater = AppUpdater(context.applicationContext, appScope)
-    val stories = StoriesRepository(telegram)
+    val stories = StoriesRepository(telegram, appScope)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
 
     /** API плагинов: команды, пункты меню, хуки. UI читает pluginApi.commands / pluginApi.actions. */

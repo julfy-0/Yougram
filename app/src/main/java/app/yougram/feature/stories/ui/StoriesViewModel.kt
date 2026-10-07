@@ -7,60 +7,59 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.feature.chat.data.ChatItem
 import app.yougram.feature.chat.data.ChatRepository
+import app.yougram.feature.stories.data.ChatMeta
 import app.yougram.feature.stories.data.StoriesRepository
 import app.yougram.feature.stories.data.StoryRef
-import dev.g000sha256.tdl.dto.Story
-import dev.g000sha256.tdl.dto.StoryInfo
-import java.io.File
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Лента историй для списка чатов. Всегда содержит «Моя история» первой, даже если историй нет. */
 class StoriesViewModel(
     private val repository: StoriesRepository,
     private val chats: ChatRepository,
 ) : ViewModel() {
-    private val _stories = MutableStateFlow<List<StoryRef>>(emptyList())
-    val stories: StateFlow<List<StoryRef>> = _stories.asStateFlow()
-    private val _story = MutableStateFlow<Story?>(null)
-    val story: StateFlow<Story?> = _story.asStateFlow()
-    private val _mediaPath = MutableStateFlow<String?>(null)
-    val mediaPath: StateFlow<String?> = _mediaPath.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val meta = MutableStateFlow<Map<Long, ChatMeta>>(emptyMap())
 
-    // Список чатов при создании VM обычно ещё пуст — ждём первую порцию и только потом ищем истории.
-    init { viewModelScope.launch { chats.chats.first { it.isNotEmpty() }; refresh() } }
-
-    fun refresh() = viewModelScope.launch {
-        val ids = chats.chats.value.take(60).map(ChatItem::id)
-        _stories.value = repository.activeStories(ids)
-            .map { ref ->
-                val chat = chats.chats.value.firstOrNull { it.id == ref.chatId }
-                ref.copy(title = chat?.title ?: "История", avatarPath = chat?.avatarPath)
+    val stories: StateFlow<List<StoryRef>> =
+        combine(repository.refs, chats.chats, meta) { refs, chatList, extra ->
+            val byId = chatList.associateBy(ChatItem::id)
+            refs.map { ref ->
+                val chat = byId[ref.chatId]
+                val m = extra[ref.chatId]
+                ref.copy(
+                    title = if (ref.isOwn) "Моя история" else chat?.title ?: m?.title ?: ref.title,
+                    avatarPath = chat?.avatarPath ?: m?.avatarPath,
+                )
             }
-            // Непросмотренные — первыми.
-            .sortedByDescending { it.unread }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.refs.value)
+
+    init {
+        repository.start()
+        // Для авторов, которых нет в списке чатов (или для себя), подтягиваем имя и аватар отдельно.
+        viewModelScope.launch {
+            repository.refs.collect { refs ->
+                val known = chats.chats.value.map(ChatItem::id).toSet()
+                refs.filter { it.chatId != 0L && (it.isOwn || it.chatId !in known) && it.chatId !in meta.value }
+                    .forEach { ref ->
+                        launch { repository.chatMeta(ref.chatId)?.let { m -> meta.update { it + (ref.chatId to m) } } }
+                    }
+            }
+        }
+        viewModelScope.launch {
+            repository.refresh(emptyList())
+            chats.chats.first { it.isNotEmpty() }
+            refresh()
+        }
     }
 
-    fun open(ref: StoryRef) = viewModelScope.launch {
-        // chatId == 0 — «Моя история»: открывается экран публикации.
-        if (ref.chatId == 0L) return@launch
-        runCatching {
-            _story.value = repository.loadStory(ref.chatId, ref.info.storyId)
-            val file = File.createTempFile("yougram_story_", ".jpg")
-            _mediaPath.value = repository.downloadStoryMedia(_story.value!!, file)
-            repository.openStory(ref.chatId, ref.info.storyId)
-        }.onFailure { _error.value = it.message ?: "Не удалось открыть историю" }
-    }
-
-    fun close() { _story.value = null; _mediaPath.value = null }
-
-    fun publishPhoto(path: String, caption: String = "") = viewModelScope.launch {
-        runCatching { repository.postPhoto(path, caption); refresh() }
-            .onFailure { _error.value = it.message ?: "Не удалось опубликовать историю" }
+    fun refresh() {
+        viewModelScope.launch { repository.refresh(chats.chats.value.take(60).map(ChatItem::id)) }
     }
 
     companion object {

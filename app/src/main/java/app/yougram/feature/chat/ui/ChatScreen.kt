@@ -722,7 +722,8 @@ fun ChatScreen(
                     Modifier
                         .fillMaxWidth()
                         .onSizeChanged { bottomBarHeightPx = it.height }
-                        .glass(backdrop, glass, RectangleShape)
+                        // В комментариях общей панели нет: размытие у самого поля ввода.
+                        .then(if (threadMode) Modifier else Modifier.glass(backdrop, glass, RectangleShape))
                         .padding(
                             start = 12.dp,
                             end = 12.dp,
@@ -732,11 +733,39 @@ fun ChatScreen(
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     // Поле ввода-«таблетка».
+                    val pillShape = RoundedCornerShape(28.dp)
                     Surface(
-                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 56.dp)
+                            .then(
+                                if (threadMode) {
+                                    Modifier.glass(
+                                        backdrop,
+                                        glass,
+                                        pillShape,
+                                        tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    )
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                        shape = pillShape,
                         // Полупрозрачное поле: сквозь него просвечивают обои и размытый фон панели.
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = InputFieldAlpha),
+                        // В комментариях фон поля рисует само стекло (размытие + подкраска).
+                        color = if (threadMode) {
+                            androidx.compose.ui.graphics.Color.Transparent
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = InputFieldAlpha)
+                        },
+                        border = if (threadMode) {
+                            androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                            )
+                        } else {
+                            null
+                        },
                     ) {
                         Row(
                             Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

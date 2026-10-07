@@ -67,7 +67,7 @@ import app.yougram.feature.main.ui.MainScreen
 import app.yougram.feature.profile.ui.ProfileScreen
 import app.yougram.feature.profile.ui.ProfileViewModel
 import app.yougram.feature.stories.ui.StoriesScreen
-import app.yougram.feature.stories.ui.StoriesViewModel
+import app.yougram.feature.stories.ui.StoryViewerViewModel
 import kotlinx.coroutines.launch
 
 private const val ROUTE_SPLASH = "splash"
@@ -248,12 +248,12 @@ fun YougramNavHost(container: AppContainer) {
                     route = ROUTE_STORIES,
                     arguments = listOf(navArgument("chatId") { type = NavType.LongType }, navArgument("storyId") { type = NavType.IntType }),
                 ) { entry ->
-                    val vm: StoriesViewModel = viewModel(
-                        factory = StoriesViewModel.factory(container.stories, container.chatRepository),
-                    )
                     val chatId = entry.arguments?.getLong("chatId") ?: 0L
                     val storyId = entry.arguments?.getInt("storyId") ?: 0
-                    LaunchedEffect(chatId, storyId) { vm.open(app.yougram.feature.stories.data.StoryRef(chatId, dev.g000sha256.tdl.dto.StoryInfo(storyId, 0, false, false))) }
+                    val vm: StoryViewerViewModel = viewModel(
+                        key = "story-$chatId-$storyId",
+                        factory = StoryViewerViewModel.factory(container.stories, container.chatRepository, chatId, storyId),
+                    )
                     StoriesScreen(viewModel = vm, onBack = { navController.popBackStack() })
                 }
                 composable(
