@@ -1,9 +1,5 @@
 package app.yougram
 
-import app.yougram.ui.glass.LocalPlates
-import app.yougram.ui.LocalYougramBanners
-import app.yougram.ui.LocalOwnCustomBanner
-import app.yougram.ui.OwnCustomBanner
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,27 +9,31 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import app.yougram.data.AuthStep
-import app.yougram.data.ConnectionService
-import app.yougram.data.NotificationCenter
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import app.yougram.data.LockType
-import app.yougram.ui.YougramNavHost
-import app.yougram.ui.security.LockGate
-import app.yougram.ui.theme.YougramTheme
-import app.yougram.ui.theme.isDarkTheme
-import androidx.compose.runtime.CompositionLocalProvider
-import app.yougram.ui.glass.LocalGlass
-import app.yougram.ui.LocalBadgeChecker
-import app.yougram.ui.LocalCreatorUsers
-import app.yougram.ui.LocalGoldUsers
-import app.yougram.ui.LocalYougramUsers
+import androidx.core.content.ContextCompat
+import app.yougram.core.ui.component.LocalOwnCustomBanner
+import app.yougram.core.ui.component.OwnCustomBanner
+import app.yougram.core.ui.glass.LocalGlass
+import app.yougram.core.ui.glass.LocalPlates
+import app.yougram.core.ui.theme.YougramTheme
+import app.yougram.core.ui.theme.isDarkTheme
+import app.yougram.feature.auth.data.AuthStep
+import app.yougram.feature.badge.ui.LocalBadgeChecker
+import app.yougram.feature.badge.ui.LocalCreatorUsers
+import app.yougram.feature.badge.ui.LocalGoldUsers
+import app.yougram.feature.badge.ui.LocalYougramBanners
+import app.yougram.feature.badge.ui.LocalYougramUsers
+import app.yougram.feature.notifications.ConnectionService
+import app.yougram.feature.notifications.NotificationCenter
+import app.yougram.feature.security.data.LockType
+import app.yougram.feature.security.ui.LockGate
+import app.yougram.navigation.YougramNavHost
 
 class MainActivity : ComponentActivity() {
     private val container by lazy { (application as YougramApp).container }

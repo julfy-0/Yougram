@@ -1,7 +1,7 @@
 package app.yougram
 
 import android.app.Application
-import app.yougram.data.AppContainer
+import app.yougram.core.di.AppContainer
 
 class YougramApp : Application() {
 

@@ -53,12 +53,12 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <service
-            android:name=".data.CallService"
+            android:name=".feature.calls.data.CallService"
             android:exported="false"
             android:foregroundServiceType="phoneCall|microphone" />
 
         <service
-            android:name=".data.ConnectionService"
+            android:name=".feature.notifications.ConnectionService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -67,11 +67,11 @@
         </service>
 
         <receiver
-            android:name=".data.NotificationActionReceiver"
+            android:name=".feature.notifications.NotificationActionReceiver"
             android:exported="false" />
 
         <receiver
-            android:name=".data.BootReceiver"
+            android:name=".feature.notifications.BootReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

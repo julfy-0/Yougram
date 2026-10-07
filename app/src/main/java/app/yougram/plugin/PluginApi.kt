@@ -4,9 +4,14 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import app.yougram.data.ChatRepository
-import app.yougram.data.TelegramClient
-import app.yougram.data.getOrThrow
+import app.yougram.core.telegram.TelegramClient
+import app.yougram.core.telegram.getOrThrow
+import app.yougram.feature.chat.data.ChatRepository
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,11 +26,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.ConcurrentHashMap
 
 object PluginPermission {
     const val CHAT_READ = "chat.read"
