@@ -25,32 +25,25 @@
     <application
         android:name=".YougramApp"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_yougram"
-       
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Yougram">
 
         <activity
             android:name=".MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|density"
             android:windowSoftInputMode="adjustResize">
-        </activity>
-
-        <!-- Один включённый activity-alias = один реальный значок в Launcher. -->
-        <activity-alias android:name=".YougramIconYougram" android:enabled="true" android:exported="true" android:targetActivity=".MainActivity" android:icon="@mipmap/ic_yougram_yougram">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
-        <activity-alias android:name=".YougramIconDark" android:enabled="false" android:exported="true" android:targetActivity=".MainActivity" android:icon="@mipmap/ic_yougram_dark" />
-        <activity-alias android:name=".YougramIconGold" android:enabled="false" android:exported="true" android:targetActivity=".MainActivity" android:icon="@mipmap/ic_yougram_gold" />
-        <activity-alias android:name=".YougramIconClassic" android:enabled="false" android:exported="true" android:targetActivity=".MainActivity" android:icon="@mipmap/ic_yougram_classic" />
-        <activity-alias android:name=".YougramIconNeon" android:enabled="false" android:exported="true" android:targetActivity=".MainActivity" android:icon="@mipmap/ic_yougram_neon" />
+        </activity>
+
 
         <activity
             android:name=".RestartActivity"

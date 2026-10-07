@@ -16,6 +16,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
@@ -59,7 +60,7 @@ fun openExternally(context: Context, url: String) {
     }
 }
 
-private class LinkToken(val start: Int, val end: Int, val value: String, val mention: Boolean)
+private class LinkToken(val start: Int, val end: Int, val value: String, val mention: Boolean, val emojiId: Long = 0L)
 
 /** Текст сообщения, в котором ссылки и @юзернеймы подсвечены и кликабельны. */
 @Composable
@@ -68,10 +69,11 @@ fun rememberLinkified(
     linkColor: Color,
     onOpen: (String) -> Unit,
     onMention: (String) -> Unit = {},
+    emojis: List<CustomEmojiSpan> = emptyList(),
 ): AnnotatedString {
     val currentOpen by rememberUpdatedState(onOpen)
     val currentMention by rememberUpdatedState(onMention)
-    return remember(text, linkColor) {
+    return remember(text, linkColor, emojis) {
         val tokens = ArrayList<LinkToken>()
         for (match in UrlPattern.findAll(text)) {
             var url = match.value
@@ -86,6 +88,13 @@ fun rememberLinkified(
             if ((0 until urlCount).any { start >= tokens[it].start && start < tokens[it].end }) continue
             tokens += LinkToken(start, match.range.last + 1, match.groupValues[1], mention = true)
         }
+        val textTokens = tokens.size
+        for (e in emojis) {
+            val end = e.offset + e.length
+            if (e.length <= 0 || e.offset < 0 || end > text.length) continue
+            if ((0 until textTokens).any { e.offset < tokens[it].end && end > tokens[it].start }) continue
+            tokens += LinkToken(e.offset, end, "", mention = false, emojiId = e.id)
+        }
         tokens.sortBy { it.start }
 
         buildAnnotatedString {
@@ -93,7 +102,9 @@ fun rememberLinkified(
             for (t in tokens) {
                 if (t.start < cursor) continue
                 append(text.substring(cursor, t.start))
-                if (t.mention) {
+                if (t.emojiId != 0L) {
+                    appendInlineContent(customEmojiKey(t.emojiId), text.substring(t.start, t.end))
+                } else if (t.mention) {
                     withLink(
                         LinkAnnotation.Clickable(
                             tag = "mention",

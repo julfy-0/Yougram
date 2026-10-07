@@ -194,7 +194,7 @@ fun ChatScreen(
     val powerSaving by settings.powerSaving.collectAsState()
     val appContext = LocalContext.current
     val lowRam = remember(appContext) {
-        (appContext.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.isLowRamDevice == true
+        app.yougram.core.ui.DeviceProfile.tier(appContext) == app.yougram.core.ui.DeviceTier.Low
     }
     // Размытие под сообщениями дорогое: на слабых устройствах, в энергосбережении и при сплошных пузырях его нет.
     val bubbleBlurOn = chatPrefs.bubbleBlur && chatPrefs.bubbleOpacity < 100 && !powerSaving && !lowRam
@@ -976,7 +976,17 @@ fun ChatScreen(
     }
 
     viewerMedia?.let { media ->
-        PhotoViewer(media = media, viewModel = viewModel, onDismiss = { viewerMedia = null })
+        // Все фото загруженной части чата от старых к новым; открытое фото — стартовая страница.
+        val gallery = visibleMessages.asReversed()
+            .mapNotNull { it.media }
+            .filter { it.kind == MediaKind.PHOTO && !it.locked }
+        val start = gallery.indexOfFirst { it.fileId == media.fileId }
+        PhotoViewer(
+            items = if (start >= 0) gallery else listOf(media),
+            startIndex = start.coerceAtLeast(0),
+            viewModel = viewModel,
+            onDismiss = { viewerMedia = null },
+        )
     }
 
     actionMessage?.let { message ->
@@ -1261,12 +1271,16 @@ private fun MessageBubble(
                                 if (mine) ownText else MaterialTheme.colorScheme.primary,
                                 LocalOpenLink.current,
                                 LocalOpenUsername.current,
+                                message.emojis,
                             )
+                            val emojiSize = (textSize * 1.25f).sp
+                            val inline = rememberEmojiInlineContent(message.emojis, viewModel, emojiSize, viewModel.animateEmoji)
                             val shown = remember(linked, searchQuery, matchColor) {
                                 linked.highlightMatches(searchQuery, matchColor)
                             }
                             Text(
                                 shown,
+                                inlineContent = inline,
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = textSize.sp,

@@ -25,14 +25,6 @@ data class GlassSettings(
 
 enum class ThemeMode { System, Light, Dark }
 
-enum class AppIconStyle(val key: String, val title: String, val componentClass: String) {
-    Yougram("yougram", "Yougram", "app.yougram.YougramIconYougram"),
-    Dark("dark", "Тёмная", "app.yougram.YougramIconDark"),
-    Gold("gold", "Золотая", "app.yougram.YougramIconGold"),
-    Classic("classic", "Классика", "app.yougram.YougramIconClassic"),
-    Neon("neon", "Неон", "app.yougram.YougramIconNeon"),
-}
-
 /** Настройки темы: режим, системные цвета (Material You) или свой акцентный цвет. */
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.Dark,
@@ -43,7 +35,6 @@ data class ThemeSettings(
     val fontPath: String? = null,
     /** Имя файла шрифта для показа в настройках. */
     val fontName: String? = null,
-    val appIcon: AppIconStyle = AppIconStyle.Yougram,
 )
 
 /** Локальные настройки уведомлений (применятся, когда появятся push-уведомления). */
@@ -230,15 +221,9 @@ class SettingsRepository(private val context: Context) {
             accent = prefs.getInt(KEY_ACCENT, 0),
             fontPath = prefs.getString(KEY_FONT_PATH, null)?.takeIf { java.io.File(it).exists() },
             fontName = prefs.getString(KEY_FONT_NAME, null),
-            appIcon = AppIconStyle.entries.firstOrNull { it.key == prefs.getString(KEY_APP_ICON, AppIconStyle.Yougram.key) } ?: AppIconStyle.Yougram,
         )
     )
     val theme: StateFlow<ThemeSettings> = _theme.asStateFlow()
-
-    init {
-        // Восстанавливаем выбранный alias после запуска/обновления приложения.
-        setAppIcon(_theme.value.appIcon)
-    }
 
     fun setThemeMode(mode: ThemeMode) {
         _theme.update { it.copy(mode = mode) }
@@ -259,23 +244,6 @@ class SettingsRepository(private val context: Context) {
     fun setCustomFont(path: String?, name: String?) {
         _theme.update { it.copy(fontPath = path, fontName = if (path == null) null else name) }
         prefs.edit().putString(KEY_FONT_PATH, path).putString(KEY_FONT_NAME, if (path == null) null else name).apply()
-    }
-
-    /** Меняет реальный значок приложения в Launcher через activity-alias. */
-    fun setAppIcon(style: AppIconStyle) {
-        _theme.update { it.copy(appIcon = style) }
-        prefs.edit().putString(KEY_APP_ICON, style.key).apply()
-        val pm = context.packageManager
-        AppIconStyle.entries.forEach { icon ->
-            runCatching {
-                pm.setComponentEnabledSetting(
-                    android.content.ComponentName(context, icon.componentClass),
-                    if (icon == style) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                    else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    android.content.pm.PackageManager.DONT_KILL_APP,
-                )
-            }
-        }
     }
 
     fun resetGlass() {
@@ -618,7 +586,6 @@ class SettingsRepository(private val context: Context) {
         const val KEY_MODE = "theme_mode"
         const val KEY_DYNAMIC = "theme_dynamic"
         const val KEY_ACCENT = "theme_accent"
-        const val KEY_APP_ICON = "theme_app_icon"
         const val KEY_FONT_PATH = "theme_font_path"
         const val KEY_FONT_NAME = "theme_font_name"
         const val KEY_POWER = "power_saving"

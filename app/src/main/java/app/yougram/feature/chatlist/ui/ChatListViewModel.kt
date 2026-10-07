@@ -11,17 +11,54 @@ import app.yougram.feature.chat.data.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
 
     val chats: StateFlow<List<ChatItem>> = repository.chats
     val folders: StateFlow<List<ChatFolderItem>> = repository.folders
-    val archivedChats: StateFlow<List<ChatItem>> = repository.archivedChats
 
-    private val _archiveOpen = MutableStateFlow(false)
-    /** true — вместо главного списка показан архив. */
-    val archiveOpen: StateFlow<Boolean> = _archiveOpen.asStateFlow()
+    private val _selected = MutableStateFlow<Set<Long>>(emptySet())
+    /** Выбранные долгим нажатием чаты; пусто — режим выбора выключен. */
+    val selected: StateFlow<Set<Long>> = _selected.asStateFlow()
+
+    fun toggleSelected(chatId: Long) = _selected.update { if (chatId in it) it - chatId else it + chatId }
+
+    fun clearSelection() { _selected.value = emptySet() }
+
+    private fun selectedChats() = chats.value.filter { it.id in _selected.value }
+
+    private fun forSelected(action: suspend (ChatItem) -> Unit) {
+        val items = selectedChats()
+        clearSelection()
+        viewModelScope.launch {
+            items.forEach { item ->
+                try {
+                    action(item)
+                } catch (e: Exception) {
+                    _error.value = e.message
+                }
+            }
+        }
+    }
+
+    /** Если все выбранные уже без звука — включает звук, иначе выключает. */
+    fun muteSelected() {
+        val mute = !selectedChats().all { it.muted }
+        forSelected { repository.setMuted(it.id, mute) }
+    }
+
+    fun archiveSelected() = forSelected { repository.setChatArchived(it.id, true) }
+
+    fun deleteSelected() = forSelected { repository.removeChat(it.id) }
+
+    /** Если все выбранные закреплены — открепляет, иначе закрепляет (в текущей папке). */
+    fun pinSelected() {
+        val key = _selectedFolder.value
+        val pin = !selectedChats().all { (key ?: 0) in it.pinnedLists }
+        forSelected { repository.setPinned(it.id, key, pin) }
+    }
 
     private val _selectedFolder = MutableStateFlow<Int?>(null)
     /** id выбранной папки; null — вкладка «Все». */
@@ -39,18 +76,9 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     fun selectFolder(id: Int?) {
-        _archiveOpen.value = false
+        clearSelection()
         _selectedFolder.value = id
         loadMore()
-    }
-
-    fun openArchive() {
-        _archiveOpen.value = true
-        loadMore()
-    }
-
-    fun closeArchive() {
-        _archiveOpen.value = false
     }
 
     fun setArchived(chatId: Long, archived: Boolean) {
@@ -65,13 +93,12 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
 
     /** Подгружает следующую порцию текущего списка чатов; безопасно вызывать часто. */
     fun loadMore() {
-        val archive = _archiveOpen.value
-        val key = if (archive) ARCHIVE_KEY else _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
+        val key = _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
         if (key in loading || key in allLoaded) return
         loading += key
         viewModelScope.launch {
             try {
-                if (!repository.loadChats(folderId = key.takeIf { !archive }, archive = archive)) allLoaded += key
+                if (!repository.loadChats(folderId = key)) allLoaded += key
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
@@ -81,8 +108,6 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     companion object {
-        private const val ARCHIVE_KEY = Int.MIN_VALUE
-
         fun factory(repository: ChatRepository): ViewModelProvider.Factory = viewModelFactory {
             initializer { ChatListViewModel(repository) }
         }

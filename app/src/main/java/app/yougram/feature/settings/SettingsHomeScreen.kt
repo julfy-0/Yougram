@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -124,6 +125,7 @@ enum class SettingsPage(val title: String) {
     DataStorage("Данные и память"),
     Plugins("Плагины"),
     Folders("Папки с чатами"),
+    Archive("Архив"),
     Devices("Устройства"),
     PowerSaving("Энергосбережение"),
     Language("Язык"),
@@ -220,6 +222,7 @@ fun SettingsHomeScreen(
             "Чаты" to listOf(
                 HomeEntry("Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, null, SettingsPage.ChatSettings),
                 HomeEntry("Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, null, SettingsPage.Folders),
+                HomeEntry("Архив", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
                 HomeEntry("Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
             ),
             "Данные и язык" to listOf(

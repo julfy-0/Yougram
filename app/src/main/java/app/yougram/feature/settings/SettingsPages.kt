@@ -40,6 +40,7 @@ import app.yougram.feature.settings.extras.ShadowBanScreen
 import app.yougram.feature.settings.extras.SharedFiltersScreen
 import app.yougram.feature.settings.extras.SpyModeScreen
 import app.yougram.feature.settings.general.AccountScreen
+import app.yougram.feature.settings.general.ArchiveScreen
 import app.yougram.feature.settings.general.ChatSettingsScreen
 import app.yougram.feature.settings.general.DataStorageScreen
 import app.yougram.feature.settings.general.FoldersScreen
@@ -106,6 +107,7 @@ fun SettingsPageContent(
         SettingsPage.DataStorage -> DataStorageScreen(details, container.settings, contentPadding)
         SettingsPage.Plugins -> PluginsScreen(container.plugins, contentPadding)
         SettingsPage.Folders -> FoldersScreen(details, contentPadding)
+        SettingsPage.Archive -> ArchiveScreen(container.chatRepository, contentPadding, onOpenChat)
         SettingsPage.Devices -> DevicesScreen(details, contentPadding)
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
         SettingsPage.Language -> LanguageScreen(contentPadding)

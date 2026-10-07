@@ -51,6 +51,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -226,6 +235,21 @@ fun MainScreen(
     // Папки — часть верхней панели (только на вкладке «Чаты»), поэтому списку чатов нужен отступ больше.
     val folders by chatListViewModel.folders.collectAsState()
     val selectedFolder by chatListViewModel.selectedFolder.collectAsState()
+    val allChats by chatListViewModel.chats.collectAsState()
+    val selection by chatListViewModel.selected.collectAsState()
+    val selectionActive = tab == MainTab.Chats && selection.isNotEmpty()
+    val selectedChats = remember(allChats, selection) { allChats.filter { it.id in selection } }
+    var confirmDelete by remember { mutableStateOf(false) }
+    // Число чатов с непрочитанными (без учёта чатов без звука) для бейджей на вкладках папок.
+    val folderUnread = remember(allChats, folders) {
+        val unread = allChats.filter { it.unreadCount > 0 && !it.muted }
+        buildMap<Int?, Int> {
+            put(null, unread.size)
+            folders.forEach { f -> put(f.id, unread.count { (it.folderOrders[f.id] ?: 0L) != 0L }) }
+        }
+    }
+    // Режим выбора: панель всегда видна и сбрасывается при смене вкладки.
+    LaunchedEffect(tab) { chatListViewModel.clearSelection() }
     val folderId = selectedFolder?.takeIf { id -> folders.any { it.id == id } }
     val showFolders = tab == MainTab.Chats && folders.isNotEmpty()
     val showStories = tab == MainTab.Chats && storyRefs.isNotEmpty() && !searching
@@ -250,7 +274,7 @@ fun MainScreen(
     // Анимация 0..1 читается только в фазе layout (через лямбды), поэтому не вызывает рекомпозиций.
     val barsProgress = animateFloatAsState(
         // В настройках верхняя панель не прячется никогда.
-        targetValue = if (barsVisible || searching || tab == MainTab.Settings) 1f else 0f,
+        targetValue = if (barsVisible || searching || selectionActive || tab == MainTab.Settings) 1f else 0f,
         animationSpec = tween(BarsAnimationMillis, easing = FastOutSlowInEasing),
         label = "barsProgress",
     )
@@ -259,7 +283,7 @@ fun MainScreen(
 
     // Пока открыт поиск, всё, что под ним (список чатов / настройки), плавно размывается.
     val underSearchBlur by animateDpAsState(
-        targetValue = if (searching) SearchBlurRadius else 0.dp,
+        targetValue = if (searching && app.yougram.core.ui.rememberDeviceTier() != app.yougram.core.ui.DeviceTier.Low) SearchBlurRadius else 0.dp,
         animationSpec = tween(SearchAnimationMillis, easing = FastOutSlowInEasing),
         label = "underSearchBlur",
     )
@@ -408,6 +432,15 @@ fun MainScreen(
                 { goBack() }
             } else null,
             folders = if (showFolders) folders else emptyList(),
+            folderUnread = folderUnread,
+            selectionCount = if (selectionActive) selection.size else 0,
+            selectionAllMuted = selectedChats.isNotEmpty() && selectedChats.all { it.muted },
+            selectionAllPinned = selectedChats.isNotEmpty() && selectedChats.all { (folderId ?: 0) in it.pinnedLists },
+            onClearSelection = chatListViewModel::clearSelection,
+            onMuteSelected = chatListViewModel::muteSelected,
+            onArchiveSelected = chatListViewModel::archiveSelected,
+            onDeleteSelected = { confirmDelete = true },
+            onPinSelected = chatListViewModel::pinSelected,
             selectedFolder = folderId,
             onSelectFolder = chatListViewModel::selectFolder,
             stories = if (showStories) storyRefs else emptyList(),
@@ -421,6 +454,21 @@ fun MainScreen(
             progress = { barsProgress.value },
             modifier = Modifier.align(Alignment.TopCenter),
         )
+
+        if (confirmDelete) {
+            AlertDialog(
+                onDismissRequest = { confirmDelete = false },
+                title = { Text("Удалить чаты?") },
+                text = { Text("Будет удалено чатов: ${selection.size}. Из групп и каналов вы выйдете, переписка у вас очистится.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDelete = false
+                        chatListViewModel.deleteSelected()
+                    }) { Text("Удалить") }
+                },
+                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            )
+        }
 
         // Нижняя панель остаётся на месте при прокрутке: прячется только верхняя.
         // На странице «Обновление» вместо навигации — панель с кнопкой в том же стеклянном стиле.
@@ -486,6 +534,15 @@ private fun GlassTopBar(
     onCloseSearch: () -> Unit,
     onBack: (() -> Unit)?,
     folders: List<ChatFolderItem>,
+    folderUnread: Map<Int?, Int>,
+    selectionCount: Int,
+    selectionAllMuted: Boolean,
+    selectionAllPinned: Boolean,
+    onClearSelection: () -> Unit,
+    onMuteSelected: () -> Unit,
+    onArchiveSelected: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    onPinSelected: () -> Unit,
     selectedFolder: Int?,
     onSelectFolder: (Int?) -> Unit,
     stories: List<StoryRef>,
@@ -559,6 +616,39 @@ private fun GlassTopBar(
                         IconButton(onClick = onCloseSearch) {
                             Icon(Icons.Filled.Close, contentDescription = "Закрыть поиск")
                         }
+                    } else if (selectionCount > 0) {
+                        IconButton(onClick = onClearSelection) {
+                            Icon(Icons.Filled.Close, contentDescription = "Отменить выбор")
+                        }
+                        Text(selectionCount.toString(), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = onMuteSelected) {
+                            Icon(
+                                if (selectionAllMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+                                contentDescription = if (selectionAllMuted) "Включить звук" else "Выключить звук",
+                            )
+                        }
+                        IconButton(onClick = onArchiveSelected) {
+                            Icon(Icons.Filled.Archive, contentDescription = "В архив")
+                        }
+                        IconButton(onClick = onDeleteSelected) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Удалить")
+                        }
+                        var moreOpen by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { moreOpen = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "Ещё")
+                            }
+                            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (selectionAllPinned) "Открепить" else "Закрепить") },
+                                    onClick = {
+                                        moreOpen = false
+                                        onPinSelected()
+                                    },
+                                )
+                            }
+                        }
                     } else {
                         if (onBack != null) {
                             Box(
@@ -599,6 +689,7 @@ private fun GlassTopBar(
         if (folders.isNotEmpty()) {
             FolderTabs(
                 folders = folders,
+                unread = folderUnread,
                 selected = selectedFolder,
                 onSelect = onSelectFolder,
                 modifier = Modifier.align(Alignment.BottomStart),
@@ -611,6 +702,7 @@ private fun GlassTopBar(
 @Composable
 private fun FolderTabs(
     folders: List<ChatFolderItem>,
+    unread: Map<Int?, Int>,
     selected: Int?,
     onSelect: (Int?) -> Unit,
     modifier: Modifier = Modifier,
@@ -624,15 +716,15 @@ private fun FolderTabs(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FolderChip("Все", selected == null) { onSelect(null) }
+        FolderChip("Все", selected == null, unread[null] ?: 0) { onSelect(null) }
         folders.forEach { folder ->
-            FolderChip(folder.title, selected == folder.id) { onSelect(folder.id) }
+            FolderChip(folder.title, selected == folder.id, unread[folder.id] ?: 0) { onSelect(folder.id) }
         }
     }
 }
 
 @Composable
-private fun FolderChip(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
@@ -640,12 +732,26 @@ private fun FolderChip(text: String, selected: Boolean, onClick: () -> Unit) {
         else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
     ) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-        )
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            if (unread > 0) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 6.dp),
+                ) {
+                    Text(
+                        if (unread > 99) "99+" else unread.toString(),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+        }
     }
 }
 

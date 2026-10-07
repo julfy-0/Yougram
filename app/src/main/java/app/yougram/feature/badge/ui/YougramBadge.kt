@@ -58,30 +58,30 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
             else -> BadgeKind.NORMAL
         }
 
-        val bgModifier = when (currentKind) {
-            BadgeKind.CREATOR -> Modifier.background(Brush.linearGradient(listOf(Color(0xFF00B0FF), Color(0xFF0055FF))))
-            BadgeKind.GOLD -> Modifier.background(Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000))))
-            BadgeKind.NORMAL -> Modifier.background(Color(0xFF424242))
+        // Значок рисуется своей PNG-картинкой для каждого вида метки, без подложки и обрезки.
+        val badgeRes = when (currentKind) {
+            BadgeKind.CREATOR -> R.drawable.ic_badge_blue
+            BadgeKind.GOLD -> R.drawable.ic_badge_gold
+            BadgeKind.NORMAL -> R.drawable.ic_badge_normal
         }
 
         Box(
             modifier
                 .size(size)
-                .clip(CircleShape)
-                .then(bgModifier)
                 .clickable {
                     badgeKind = currentKind
                     showInfo = true
                 },
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                painter = painterResource(id = badgeRes),
                 contentDescription = when (currentKind) {
                     BadgeKind.CREATOR -> "Создатель Yougram"
                     BadgeKind.GOLD -> "Помощник Yougram"
                     BadgeKind.NORMAL -> "Пользователь Yougram"
                 },
-                modifier = Modifier.fillMaxSize().scale(1.7f),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

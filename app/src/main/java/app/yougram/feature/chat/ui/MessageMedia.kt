@@ -73,8 +73,10 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
         val playable = (media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
             media.mimeType != "image/gif"
         when {
-            media.kind == MediaKind.PHOTO -> onOpenPhoto(media)
             media.kind == MediaKind.STICKER -> Unit
+            // Не скачанное фото: первый тап скачивает его (блюр уходит), следующий — открывает просмотр.
+            media.kind == MediaKind.PHOTO && path == null -> if (!full.active) viewModel.download(media.fileId, 16)
+            media.kind == MediaKind.PHOTO -> onOpenPhoto(media)
             path != null && playable -> viewer = true
             path != null -> openFile(context, path, media.mimeType)
             !full.active -> viewModel.download(media.fileId, 16)
@@ -94,6 +96,7 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
 /** Заглушка платного медиа: размытое превью, замок и цена в звёздах. */
 @Composable
 private fun LockedPaidMedia(media: MediaItem) {
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
     val mini = remember(media.miniThumb) {
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
@@ -108,7 +111,7 @@ private fun LockedPaidMedia(media: MediaItem) {
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
-        mini?.let { Image(it, null, Modifier.fillMaxSize().blur(24.dp), contentScale = ContentScale.Crop) }
+        mini?.let { Image(it, null, Modifier.fillMaxSize().then(if (lowTier) Modifier else Modifier.blur(24.dp)), contentScale = ContentScale.Crop) }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
@@ -188,6 +191,11 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
     val gifBitmap = if (media.kind == MediaKind.ANIMATION && media.mimeType == "image/gif") {
         rememberFileBitmap(full.path, 1024)
     } else null
+    // Пока полный файл не скачан, превью размыто. На слабом железе вместо blur показываем только крошечную миниатюру:
+    // растянутая, она и так выглядит размытой.
+    val blurred = full.path == null
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    val blurMod = if (blurred && !lowTier) Modifier.blur(24.dp) else Modifier
 
     Box(
         Modifier
@@ -199,10 +207,12 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         contentAlignment = Alignment.Center,
     ) {
         mini?.let {
-            Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Image(it, null, Modifier.fillMaxSize().then(blurMod), contentScale = ContentScale.Crop)
         }
-        previewBitmap?.let {
-            Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (!(blurred && lowTier)) {
+            previewBitmap?.let {
+                Image(it, null, Modifier.fillMaxSize().then(blurMod), contentScale = ContentScale.Crop)
+            }
         }
         gifBitmap?.let {
             Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -210,7 +220,18 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         if (animPath != null) {
             LoopingVideo(animPath, Modifier.fillMaxSize())
         }
-        if (media.kind != MediaKind.PHOTO && animPath == null && gifBitmap == null) {
+        if (blurred) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (full.active) {
+                    DownloadProgress(full, Modifier.size(36.dp), Color.White)
+                } else {
+                    Icon(Icons.Filled.Download, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+            }
+        } else if (media.kind != MediaKind.PHOTO && animPath == null && gifBitmap == null) {
             Box(
                 Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,

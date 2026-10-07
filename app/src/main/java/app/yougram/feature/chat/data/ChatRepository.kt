@@ -3,6 +3,7 @@ package app.yougram.feature.chat.data
 import android.content.Context
 import app.yougram.core.di.AppContainer
 import app.yougram.core.settings.SettingsRepository
+import app.yougram.core.ui.component.CustomEmojiSpan
 import app.yougram.core.settings.SpyPrefs
 import app.yougram.core.telegram.TelegramClient
 import app.yougram.core.telegram.TelegramException
@@ -60,6 +61,7 @@ import dev.g000sha256.tdl.dto.MessageSenderChat
 import dev.g000sha256.tdl.dto.MessageSenderUser
 import dev.g000sha256.tdl.dto.MessageSticker
 import dev.g000sha256.tdl.dto.MessageText
+import dev.g000sha256.tdl.dto.TextEntityTypeCustomEmoji
 import dev.g000sha256.tdl.dto.MessageTopic
 import dev.g000sha256.tdl.dto.MessageTopicForum
 import dev.g000sha256.tdl.dto.MessageTopicThread
@@ -134,6 +136,14 @@ data class ChatItem(
     val folderOrders: Map<Int, Long> = emptyMap(),
     /** Порядок в архиве; 0 — чат не в архиве. */
     val archiveOrder: Long = 0L,
+    /** Уведомления чата выключены. */
+    val muted: Boolean = false,
+    /** Где чат закреплён: 0 — главный список, id папки — папка. */
+    val pinnedLists: Set<Int> = emptySet(),
+    /** Последнее сообщение отправлено мной. */
+    val lastOutgoing: Boolean = false,
+    /** Последнее моё сообщение прочитано собеседником. */
+    val lastRead: Boolean = false,
 )
 
 /** Папка с чатами. */
@@ -280,6 +290,8 @@ data class MessageItem(
     val threadId: Long = 0L,
     /** Сколько звёзд отправитель заплатил за это сообщение (платные сообщения); 0 — обычное. */
     val paidMessageStars: Long = 0L,
+    /** Премиум-эмодзи в тексте (offset/length в символах [text]). */
+    val emojis: List<CustomEmojiSpan> = emptyList(),
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -526,7 +538,18 @@ class ChatRepository(
         val folderOrders: Map<Int, Long> = emptyMap(),
         /** Позиция в архиве; 0 — чата в архиве нет. */
         val archiveOrder: Long = 0L,
+        val muted: Boolean = false,
+        /** Где закреплён: 0 — главный список, id папки — папка. */
+        val pinnedLists: Set<Int> = emptySet(),
+        val lastReadOutboxId: Long = 0L,
     )
+
+    /** Ключ списка для закрепа: 0 — главный, id папки; архив и прочее не учитываем. */
+    private fun pinKey(list: dev.g000sha256.tdl.dto.ChatList): Int? = when (list) {
+        is ChatListMain -> 0
+        is ChatListFolder -> list.chatFolderId
+        else -> null
+    }
 
     private val chatStates = MutableStateFlow<Map<Long, ChatState>>(emptyMap())
 
@@ -574,6 +597,9 @@ class ChatRepository(
                     avatarPath = if (avatarDone) avatar?.local?.path?.takeIf { it.isNotEmpty() } else null,
                     folderOrders = folderOrders,
                     archiveOrder = archiveOrder,
+                    muted = chat.notificationSettings.muteFor > 0,
+                    pinnedLists = chat.positions.filter { it.isPinned }.mapNotNull { pinKey(it.list) }.toSet(),
+                    lastReadOutboxId = chat.lastReadOutboxMessageId,
                 )
                 chatStates.update { it + (chat.id to state) }
                 if (avatar != null && !avatarDone) downloadAvatar(avatar.id)
@@ -628,6 +654,7 @@ class ChatRepository(
                         order = order,
                         folderOrders = folderOrders,
                         archiveOrder = update.positions.firstOrNull { it.list is ChatListArchive }?.order ?: 0L,
+                        pinnedLists = update.positions.filter { it.isPinned }.mapNotNull { pinKey(it.list) }.toSet(),
                     ))
                 }
                 publish()
@@ -639,11 +666,15 @@ class ChatRepository(
                 if (list is ChatListMain || list is ChatListFolder || list is ChatListArchive) {
                     chatStates.update { map ->
                         val state = map[update.chatId] ?: return@update map
+                        val key = pinKey(list)
+                        val pinned = if (key == null) state.pinnedLists
+                        else if (update.position.isPinned) state.pinnedLists + key else state.pinnedLists - key
                         val new = when (list) {
-                            is ChatListMain -> state.copy(order = update.position.order)
+                            is ChatListMain -> state.copy(order = update.position.order, pinnedLists = pinned)
                             is ChatListArchive -> state.copy(archiveOrder = update.position.order)
                             is ChatListFolder -> state.copy(
                                 folderOrders = state.folderOrders + (list.chatFolderId to update.position.order),
+                                pinnedLists = pinned,
                             )
                             else -> state
                         }
@@ -651,6 +682,15 @@ class ChatRepository(
                     }
                     publish()
                 }
+            }
+        }
+        scope.launch {
+            client.chatNotificationSettingsUpdates.collect { update ->
+                chatStates.update { map ->
+                    val state = map[update.chatId] ?: return@update map
+                    map + (update.chatId to state.copy(muted = update.notificationSettings.muteFor > 0))
+                }
+                publish()
             }
         }
         scope.launch {
@@ -715,6 +755,11 @@ class ChatRepository(
         }
         scope.launch {
             client.chatReadOutboxUpdates.collect { update ->
+                chatStates.update { map ->
+                    val state = map[update.chatId] ?: return@update map
+                    map + (update.chatId to state.copy(lastReadOutboxId = update.lastReadOutboxMessageId))
+                }
+                publish()
                 if (!settings.spyPrefs.value.saveReadDate) return@collect
                 val at = now()
                 io { spy.markRead(update.chatId, update.lastReadOutboxMessageId, at) }
@@ -1936,10 +1981,33 @@ class ChatRepository(
                 avatarPath = state.avatarPath,
                 folderOrders = state.folderOrders,
                 archiveOrder = state.archiveOrder,
+                muted = state.muted,
+                pinnedLists = state.pinnedLists,
+                lastOutgoing = state.lastMessage?.isOutgoing == true,
+                lastRead = state.lastMessage?.let { it.isOutgoing && it.id <= state.lastReadOutboxId } == true,
             )
         }
         _chats.value = all.filter { it.order != 0L }.sortedByDescending { it.order }
         _archivedChats.value = all.filter { it.archiveOrder != 0L }.sortedByDescending { it.archiveOrder }
+    }
+
+    /** Закрепляет чат в главном списке ([folderId] = null) или в папке. */
+    suspend fun setPinned(chatId: Long, folderId: Int?, pinned: Boolean) {
+        val list = if (folderId == null) ChatListMain() else ChatListFolder(chatFolderId = folderId)
+        client.toggleChatIsPinned(chatList = list, chatId = chatId, isPinned = pinned).getOrThrow()
+    }
+
+    /** Убирает чат из списка: из групп и каналов выходит, переписку у себя очищает. */
+    suspend fun removeChat(chatId: Long) {
+        val type = client.getChat(chatId = chatId).getOrThrow().type
+        if (type is ChatTypeSupergroup || type is ChatTypeBasicGroup) {
+            runCatching { client.leaveChat(chatId = chatId).getOrThrow() }
+            runCatching {
+                client.deleteChatHistory(chatId = chatId, removeFromChatList = true, revoke = false).getOrThrow()
+            }
+        } else {
+            client.deleteChatHistory(chatId = chatId, removeFromChatList = true, revoke = false).getOrThrow()
+        }
     }
 
     /** Переносит чат в архив или возвращает в главный список. */
@@ -2073,7 +2141,38 @@ class ChatRepository(
             hasComments = isChannelPost && interactionInfo?.replyInfo != null,
             threadId = (topicId as? MessageTopicThread)?.messageThreadId ?: 0L,
             paidMessageStars = paidMessageStarCount,
+            emojis = emojisOf(c),
         )
+    }
+
+    /** Премиум-эмодзи из форматированного текста или подписи; обычный текст без сущностей даёт пустой список. */
+    private fun emojisOf(c: MessageContent): List<CustomEmojiSpan> {
+        val formatted = when (c) {
+            is MessageText -> c.text
+            is MessagePhoto -> c.caption
+            is MessageVideo -> c.caption
+            is MessageAnimation -> c.caption
+            is MessageDocument -> c.caption
+            is MessageVoiceNote -> c.caption
+            else -> null
+        } ?: return emptyList()
+        return formatted.entities.orEmpty().filterNotNull().mapNotNull { e ->
+            (e.type as? TextEntityTypeCustomEmoji)?.let { CustomEmojiSpan(e.offset, e.length, it.customEmojiId) }
+        }
+    }
+
+    private val customEmojiCache = ConcurrentHashMap<Long, StickerItem>()
+
+    /** Стикер премиум-эмодзи по id (с кэшем); null, если TDLib его не нашёл. */
+    suspend fun customEmoji(id: Long): StickerItem? {
+        customEmojiCache[id]?.let { return it }
+        val sticker = withContext(Dispatchers.IO) {
+            runCatching {
+                client.getCustomEmojiStickers(customEmojiIds = longArrayOf(id)).getOrThrow()
+                    .stickers.orEmpty().filterNotNull().firstOrNull()
+            }.getOrNull()
+        } ?: return null
+        return mapSticker(sticker).also { customEmojiCache[id] = it }
     }
 
     private companion object {

@@ -18,6 +18,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 
 /** Медленно дрейфующие размытые цветные пятна за стеклянной карточкой входа. */
 @Composable
@@ -44,6 +48,25 @@ fun AuthBackground(modifier: Modifier = Modifier) {
         label = "blobC",
     )
     val alpha = if (dark) 0.42f else 0.5f
+
+    if (rememberDeviceTier() == DeviceTier.Low) {
+        // Слабое железо: статичные радиальные градиенты вместо анимации с blur(72.dp).
+        Box(modifier.fillMaxSize().background(scheme.background)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                fun blob(color: Color, r: Float, c: Offset) = drawCircle(
+                    brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center = c, radius = r),
+                    radius = r,
+                    center = c,
+                )
+                blob(scheme.primary, w * 0.8f, Offset(w * 0.25f, h * 0.15f))
+                blob(scheme.tertiary, w * 0.75f, Offset(w * 0.8f, h * 0.65f))
+                blob(scheme.secondary, w * 0.7f, Offset(w * 0.3f, h * 0.95f))
+            }
+        }
+        return
+    }
 
     Box(modifier.fillMaxSize().background(scheme.background)) {
         Canvas(Modifier.fillMaxSize().blur(72.dp)) {

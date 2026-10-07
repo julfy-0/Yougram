@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -27,6 +28,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.GlassSettings
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 
 /**
  * Состояние «фона для размытия».
@@ -52,14 +55,20 @@ fun rememberBackdropState(): BackdropState {
 }
 
 /** Помечает содержимое, которое должно просвечивать (размытым) под панелями. Сами панели в него класть нельзя. */
-fun Modifier.backdropSource(state: BackdropState): Modifier = this
-    .onGloballyPositioned { state.sourceOffset = it.positionInRoot() }
-    .drawWithContent {
-        state.layer.record {
-            this@drawWithContent.drawContent()
-        }
-        drawContent()
+fun Modifier.backdropSource(state: BackdropState): Modifier = composed {
+    if (rememberDeviceTier() == DeviceTier.Low) {
+        Modifier // на слабом железе копию экрана не записываем: размытия всё равно не будет
+    } else {
+        Modifier
+            .onGloballyPositioned { state.sourceOffset = it.positionInRoot() }
+            .drawWithContent {
+                state.layer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawContent()
+            }
     }
+}
 
 /** Фон панели: размытая копия того, что под ней, и поверх — подкраска с заданной плотностью. */
 @Composable
@@ -70,6 +79,8 @@ fun Modifier.glass(
     tint: Color = MaterialTheme.colorScheme.surface,
 ): Modifier {
     val density = LocalDensity.current
+    // На слабом железе размытие не рисуем вовсе: только подкраска (чуть плотнее, чтобы текст читался).
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
     var myOffset by remember { mutableStateOf(Offset.Zero) }
 
     SideEffect {
@@ -77,7 +88,7 @@ fun Modifier.glass(
         if (radiusPx != state.appliedBlurPx) {
             state.appliedBlurPx = radiusPx
             state.layer.renderEffect =
-                if (radiusPx > 0.5f) BlurEffect(radiusPx, radiusPx, TileMode.Clamp) else null
+                if (!lowTier && radiusPx > 0.5f) BlurEffect(radiusPx, radiusPx, TileMode.Clamp) else null
         }
     }
 
@@ -86,7 +97,7 @@ fun Modifier.glass(
         .clip(shape)
         .drawBehind {
             // При почти сплошной подкраске размытая копия всё равно не видна — не тратим на неё GPU.
-            if (settings.opacity < OPAQUE_THRESHOLD) {
+            if (!lowTier && settings.opacity < OPAQUE_THRESHOLD) {
                 val layer = state.layer
                 // Слой могли ещё не записать (первый кадр после входа на экран) или уже освободить:
                 // рисование такого слоя может уронить приложение, поэтому пропускаем.
@@ -95,8 +106,9 @@ fun Modifier.glass(
                     runCatching { translate(delta.x, delta.y) { drawLayer(layer) } }
                 }
             }
-            drawRect(tint.copy(alpha = settings.opacity))
+            drawRect(tint.copy(alpha = if (lowTier) maxOf(settings.opacity, LOW_TIER_MIN_ALPHA) else settings.opacity))
         }
 }
 
 private const val OPAQUE_THRESHOLD = 0.98f
+private const val LOW_TIER_MIN_ALPHA = 0.85f

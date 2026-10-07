@@ -579,6 +579,12 @@ class ChatViewModel(
 
     fun download(fileId: Int, priority: Int = 8) = repository.download(fileId, priority)
 
+    /** Стикер премиум-эмодзи по id. */
+    suspend fun customEmoji(id: Long) = repository.customEmoji(id)
+
+    /** Анимировать ли эмодзи в тексте: в энергосбережении показываем только статичные. */
+    val animateEmoji: Boolean get() = !settings.powerSaving.value
+
     /** Подписаться на канал / вступить в группу, затем обновить права и подзаголовок. */
     fun join() {
         if (_state.value.joining) return

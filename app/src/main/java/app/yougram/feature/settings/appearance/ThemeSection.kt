@@ -29,7 +29,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import app.yougram.core.settings.AppIconStyle
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.settings.ThemeMode
 import app.yougram.core.ui.theme.Accents
@@ -139,26 +138,6 @@ fun ThemeSection(settings: SettingsRepository) {
             }
         }
 
-        SettingGroup {
-            item {
-                val selectedIcon = theme.appIcon
-                SettingRow(
-                    title = "Иконка приложения",
-                    subtitle = "Сейчас: ${selectedIcon.title}. Нажмите вариант, чтобы сразу сменить значок",
-                    below = {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(AppIconStyle.entries) { style ->
-                                androidx.compose.material3.FilterChip(
-                                    selected = selectedIcon == style,
-                                    onClick = { settings.setAppIcon(style) },
-                                    label = { androidx.compose.material3.Text(style.title) },
-                                )
-                            }
-                        }
-                    },
-                )
-            }
-        }
     }
 }
 

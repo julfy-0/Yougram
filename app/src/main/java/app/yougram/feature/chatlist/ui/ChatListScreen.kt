@@ -6,6 +6,14 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.PlateArea
@@ -71,18 +82,14 @@ fun ChatListScreen(
     val folders by viewModel.folders.collectAsState()
     val selectedId by viewModel.selectedFolder.collectAsState()
     val error by viewModel.error.collectAsState()
-    val archived by viewModel.archivedChats.collectAsState()
-    val archiveOpen by viewModel.archiveOpen.collectAsState()
-
-    BackHandler(enabled = archiveOpen) { viewModel.closeArchive() }
+    val selection by viewModel.selected.collectAsState()
+    BackHandler(enabled = selection.isNotEmpty()) { viewModel.clearSelection() }
 
     // Если выбранная папка исчезла (удалена в другом клиенте) — возвращаемся на «Все».
     val folderId = selectedId?.takeIf { id -> folders.any { it.id == id } }
 
-    val visible = remember(chats, archived, archiveOpen, query, folderId) {
-        val base = if (archiveOpen) {
-            archived
-        } else if (folderId == null) {
+    val visible = remember(chats, query, folderId) {
+        val base = if (folderId == null) {
             chats
         } else {
             chats
@@ -103,12 +110,12 @@ fun ChatListScreen(
         }.collect { nearEnd -> if (nearEnd) viewModel.loadMore() }
     }
     // При смене папки показываем список с начала.
-    LaunchedEffect(folderId, archiveOpen) { listState.scrollToItem(0) }
+    LaunchedEffect(folderId) { listState.scrollToItem(0) }
 
     Box(Modifier.fillMaxSize()) {
         when {
-            chats.isEmpty() && archived.isEmpty() && !archiveOpen && error == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-            chats.isEmpty() && archived.isEmpty() && !archiveOpen -> Text(
+            chats.isEmpty() && error == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            chats.isEmpty() -> Text(
                 error.orEmpty(),
                 Modifier.align(Alignment.Center).padding(contentPadding),
                 color = MaterialTheme.colorScheme.error,
@@ -124,31 +131,11 @@ fun ChatListScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (archiveOpen) {
-                    item(key = "archive_back") {
-                        ArchiveRow(
-                            title = "Архив",
-                            subtitle = "Назад к чатам",
-                            unread = 0,
-                            onClick = viewModel::closeArchive,
-                        )
-                    }
-                } else if (folderId == null && query.isBlank() && archived.isNotEmpty()) {
-                    item(key = "archive_entry") {
-                        ArchiveRow(
-                            title = "Архив",
-                            subtitle = archived.joinToString(", ", limit = 3) { it.title },
-                            unread = archived.sumOf { it.unreadCount },
-                            onClick = viewModel::openArchive,
-                        )
-                    }
-                }
                 if (visible.isEmpty()) {
                     item(key = "empty") {
                         Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
                             Text(
                                 when {
-                                    archiveOpen && query.isBlank() -> "Архив пуст"
                                     query.isBlank() && folderId != null -> "В папке нет чатов"
                                     else -> "Ничего не найдено"
                                 },
@@ -163,10 +150,11 @@ fun ChatListScreen(
                     val interaction = remember(chat.id) { MutableInteractionSource() }
                     val pressed by interaction.collectIsPressedAsState()
                     val selected = chat.id == selectedChatId
+                    val checked = chat.id in selection
                     val topBase = if (index == 0) 24.dp else 6.dp
                     val bottomBase = if (index == visible.size - 1) 24.dp else 6.dp
                     val radiusBoost by animateDpAsState(
-                        targetValue = if (pressed || selected) 30.dp else 0.dp,
+                        targetValue = if (pressed || selected || checked) 30.dp else 0.dp,
                         animationSpec = tween(180),
                         label = "chatCornerBoost",
                     )
@@ -183,17 +171,20 @@ fun ChatListScreen(
                             bottomStart = bottomRadius,
                             bottomEnd = bottomRadius,
                         ),
-                        color = if (selected) {
+                        color = if (selected || checked) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                         } else plateColor(PlateArea.Chats),
                     ) {
                         ChatRow(
                             chat,
                             lines,
-                            onClick = { onOpenChat(chat.id) },
+                            pinned = (folderId ?: 0) in chat.pinnedLists,
+                            checked = checked,
+                            onClick = {
+                                if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
+                            },
+                            onLongClick = { viewModel.toggleSelected(chat.id) },
                             interactionSource = interaction,
-                            archived = archiveOpen,
-                            onToggleArchive = { viewModel.setArchived(chat.id, !archiveOpen) },
                         )
                     }
                 }
@@ -230,11 +221,10 @@ private fun ChatRow(
     lines: Int,
     onClick: () -> Unit,
     interactionSource: MutableInteractionSource,
-    archived: Boolean,
-    onToggleArchive: () -> Unit,
+    pinned: Boolean,
+    checked: Boolean,
+    onLongClick: () -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    Box {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,12 +232,26 @@ private fun ChatRow(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-                onLongClick = { menuOpen = true },
+                onLongClick = onLongClick,
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(title = chat.title, path = chat.avatarPath)
+        Box {
+            Avatar(title = chat.title, path = chat.avatarPath)
+            if (checked) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = "Выбрано", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -259,6 +263,14 @@ private fun ChatRow(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 YougramBadge(chat.id, Modifier.padding(start = 4.dp))
+                if (chat.muted) {
+                    Icon(
+                        Icons.Filled.NotificationsOff,
+                        contentDescription = "Без звука",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                    )
+                }
             }
             Text(
                 chat.lastMessage,
@@ -271,14 +283,27 @@ private fun ChatRow(
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (chat.lastMessageDate != 0) {
-                Text(
-                    DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(chat.lastMessageDate * 1000L)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (chat.lastOutgoing) {
+                        Icon(
+                            if (chat.lastRead) Icons.Filled.DoneAll else Icons.Filled.Done,
+                            contentDescription = if (chat.lastRead) "Прочитано" else "Отправлено",
+                            tint = if (chat.lastRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 4.dp).size(16.dp),
+                        )
+                    }
+                    Text(
+                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(chat.lastMessageDate * 1000L)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (chat.unreadCount > 0) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (chat.muted) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+                ) {
                     Text(
                         chat.unreadCount.toString(),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -286,54 +311,15 @@ private fun ChatRow(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
+            } else if (pinned) {
+                Icon(
+                    Icons.Filled.PushPin,
+                    contentDescription = "Закреплён",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
-    }
-    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-        DropdownMenuItem(
-            text = { Text(if (archived) "Вернуть из архива" else "В архив") },
-            onClick = {
-                menuOpen = false
-                onToggleArchive()
-            },
-        )
-    }
     }
 }
 
-@Composable
-private fun ArchiveRow(title: String, subtitle: String, unread: Int, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = plateColor(PlateArea.Chats),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Avatar(title = title, path = null)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (unread > 0) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.outline) {
-                    Text(
-                        unread.toString(),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.surface,
-                    )
-                }
-            }
-        }
-    }
-}

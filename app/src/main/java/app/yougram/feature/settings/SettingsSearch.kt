@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CameraAlt
@@ -66,6 +67,7 @@ private val searchEntries = listOf(
     SearchEntry("Устройства", "Активные сеансы", Icons.Filled.Laptop, SettingsPage.Devices, "сеансы сессии"),
     SearchEntry("Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, SettingsPage.ChatSettings, "размер текста анимации пузыри обои поиск сверху"),
     SearchEntry("Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, SettingsPage.Folders, "папки"),
+    SearchEntry("Архив", "Архивные чаты", Icons.Filled.Archive, SettingsPage.Archive, "архив архивные чаты"),
     SearchEntry("Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, SettingsPage.Notifications, "звук сигнал бейдж вибрация"),
     SearchEntry("Данные и память", "Кэш, автозагрузка медиа", Icons.Filled.PieChart, SettingsPage.DataStorage, "кэш память автозагрузка медиа трафик"),
     SearchEntry("Язык", null, Icons.Filled.Language, SettingsPage.Language, "язык локализация"),
