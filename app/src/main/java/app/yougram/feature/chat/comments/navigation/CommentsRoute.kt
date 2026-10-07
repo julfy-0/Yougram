@@ -3,7 +3,7 @@ package app.yougram.feature.chat.comments.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.LoadingIndicator
+import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import app.yougram.core.ui.component.TextButton

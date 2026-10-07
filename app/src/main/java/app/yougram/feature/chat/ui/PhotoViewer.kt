@@ -19,7 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.LoadingIndicator
+import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -64,7 +64,18 @@ private val ViewerGlass = GlassSettings(blurRadius = 28f, opacity = 0.35f)
  * счётчик «N из M», зум щипком и двойным тапом (в приближении листание отключается, жест двигает картинку).
  */
 @Composable
-fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewModel, onDismiss: () -> Unit) {
+fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewModel, onDismiss: () -> Unit) =
+    PhotoViewer(items, startIndex, { viewModel.fileState(it) }, { id, priority -> viewModel.download(id, priority) }, onDismiss)
+
+/** Версия просмотрщика без привязки к ChatViewModel: источник файлов передаётся лямбдами. */
+@Composable
+fun PhotoViewer(
+    items: List<MediaItem>,
+    startIndex: Int,
+    fileState: (Int) -> kotlinx.coroutines.flow.Flow<FileState>,
+    download: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val pagerState = rememberPagerState(initialPage = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { items.size }
     var zoomed by remember { mutableStateOf(false) }
     val backdrop = rememberBackdropState()
@@ -87,7 +98,8 @@ fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewMode
                 ) { page ->
                     ZoomablePhoto(
                         media = items[page],
-                        viewModel = viewModel,
+                        fileState = fileState,
+                        download = download,
                         isCurrent = page == pagerState.currentPage,
                         onZoomChange = { if (page == pagerState.currentPage) zoomed = it },
                     )
@@ -127,14 +139,20 @@ fun PhotoViewer(items: List<MediaItem>, startIndex: Int, viewModel: ChatViewMode
 
 /** Одна страница просмотра: превью, пока грузится оригинал; зум и перетаскивание. */
 @Composable
-private fun ZoomablePhoto(media: MediaItem, viewModel: ChatViewModel, isCurrent: Boolean, onZoomChange: (Boolean) -> Unit) {
-    val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
+private fun ZoomablePhoto(
+    media: MediaItem,
+    fileState: (Int) -> kotlinx.coroutines.flow.Flow<FileState>,
+    download: (Int, Int) -> Unit,
+    isCurrent: Boolean,
+    onZoomChange: (Boolean) -> Unit,
+) {
+    val full by remember(media.fileId) { fileState(media.fileId) }.collectAsState(FileState())
     val preview by remember(media.previewFileId) {
-        media.previewFileId?.let(viewModel::fileState) ?: flowOf(FileState())
+        media.previewFileId?.let { fileState(it) } ?: flowOf(FileState())
     }.collectAsState(FileState())
     // Соседние страницы подгружаем с меньшим приоритетом, чтобы листание не ждало загрузки.
-    LaunchedEffect(media.fileId, isCurrent) { viewModel.download(media.fileId, if (isCurrent) 32 else 16) }
-    LaunchedEffect(media.previewFileId) { media.previewFileId?.let { viewModel.download(it, 24) } }
+    LaunchedEffect(media.fileId, isCurrent) { download(media.fileId, if (isCurrent) 32 else 16) }
+    LaunchedEffect(media.previewFileId) { media.previewFileId?.let { download(it, 24) } }
 
     val fullBitmap = rememberFileBitmap(full.path, 2048)
     val previewBitmap = rememberFileBitmap(preview.path, 1024)

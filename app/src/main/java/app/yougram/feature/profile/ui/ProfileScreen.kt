@@ -62,7 +62,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.LoadingIndicator
+import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -140,6 +140,8 @@ fun ProfileScreen(
     var tab by remember { mutableStateOf(ProfileTab.MEDIA) }
     var confirmLeave by remember { mutableStateOf(false) }
     var showDossier by remember { mutableStateOf(false) }
+    var photoViewer by remember { mutableStateOf<MediaItem?>(null) }
+    var videoViewer by remember { mutableStateOf<MediaItem?>(null) }
     var pendingVideo by remember { mutableStateOf(false) }
     val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val userId = state.details?.id
@@ -183,6 +185,23 @@ fun ProfileScreen(
         }
     }
 
+    photoViewer?.let { opened ->
+        val gallery = remember(state.shared) {
+            state.shared.mapNotNull { it.media }.filter { it.kind == MediaKind.PHOTO && !it.locked }
+        }
+        val start = gallery.indexOfFirst { it.fileId == opened.fileId }
+        app.yougram.feature.chat.ui.PhotoViewer(
+            items = if (start >= 0) gallery else listOf(opened),
+            startIndex = start.coerceAtLeast(0),
+            fileState = { viewModel.fileState(it) },
+            download = { id, priority -> viewModel.download(id, priority) },
+            onDismiss = { photoViewer = null },
+        )
+    }
+    videoViewer?.let { opened ->
+        ProfileVideoDialog(opened, viewModel) { videoViewer = null }
+    }
+
     SystemBarsGlass(Modifier.fillMaxSize()) {
         if (details == null) {
             if (state.loading) LoadingIndicator(Modifier.align(Alignment.Center))
@@ -222,7 +241,13 @@ fun ProfileScreen(
                         items3(media) { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 row.forEach { message ->
-                                    MediaThumb(message.media!!, viewModel, Modifier.weight(1f).aspectRatio(1f))
+                                    val item = message.media!!
+                                    MediaThumb(
+                                        item,
+                                        viewModel,
+                                        Modifier.weight(1f).aspectRatio(1f),
+                                        onClick = { if (item.kind == MediaKind.PHOTO) photoViewer = item else videoViewer = item },
+                                    )
                                 }
                                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                             }
@@ -230,7 +255,7 @@ fun ProfileScreen(
                     }
                     tab == ProfileTab.FILES -> {
                         if (files.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context) } } }
+                        files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context, viewModel) } } }
                     }
                     tab == ProfileTab.LINKS -> {
                         if (links.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
@@ -548,7 +573,7 @@ private fun EmptyHint(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: Modifier) {
+private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: Modifier, onClick: () -> Unit) {
     val previewId = media.previewFileId
     val preview by remember(previewId) {
         previewId?.let(viewModel::fileState) ?: flowOf(FileState())
@@ -562,7 +587,8 @@ private fun MediaThumb(media: MediaItem, viewModel: ProfileViewModel, modifier: 
     Box(
         modifier
             .clip4()
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         mini?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
@@ -621,13 +647,31 @@ private fun Modifier.fadeInOnce(durationMs: Int): Modifier {
 private fun Modifier.clip4(): Modifier = this.then(Modifier.clip(RoundedCornerShape(4.dp)))
 
 @Composable
-private fun FileRow(media: MediaItem, context: Context) {
+private fun FileRow(media: MediaItem, context: Context, viewModel: ProfileViewModel) {
+    val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
+    var pendingOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingOpen, full.path) {
+        val path = full.path
+        if (pendingOpen && path != null) {
+            pendingOpen = false
+            app.yougram.feature.chat.ui.openFile(context, path, media.mimeType)
+        }
+    }
     SettingGroup {
         item {
             SettingRow(
                 title = media.name.ifEmpty { media.kind.label },
-                subtitle = Formatter.formatShortFileSize(context, media.size),
+                subtitle = if (full.active) "Загрузка…" else Formatter.formatShortFileSize(context, media.size),
                 icon = Icons.Filled.Description,
+                onClick = {
+                    val path = full.path
+                    if (path != null) {
+                        app.yougram.feature.chat.ui.openFile(context, path, media.mimeType)
+                    } else {
+                        pendingOpen = true
+                        if (!full.active) viewModel.download(media.fileId, 16)
+                    }
+                },
             )
         }
     }
@@ -661,5 +705,20 @@ private fun openUrl(context: Context, url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(full)))
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(context, "Нет приложения для открытия ссылки", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** Видео из профиля: скачивает файл и открывает во встроенном проигрывателе. */
+@Composable
+private fun ProfileVideoDialog(media: MediaItem, viewModel: ProfileViewModel, onDismiss: () -> Unit) {
+    val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
+    LaunchedEffect(media.fileId) { viewModel.download(media.fileId, 32) }
+    val path = full.path
+    if (path != null) {
+        app.yougram.feature.chat.ui.VideoViewerDialog(path, onDismiss)
+    } else {
+        androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+        }
     }
 }

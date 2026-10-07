@@ -787,13 +787,11 @@ class ChatRepository(
         // Статус набора: только ЛС и/или выбранные люди в группах.
         scope.launch {
             client.chatActionUpdates.collect { update ->
-                val p = settings.typingWatch.value
-                if (!p.enabled) return@collect
                 val userId = (update.senderId as? MessageSenderUser)?.userId ?: return@collect
                 if (userId == _ownUserId.value) return@collect
                 val allowed = when (chatKind(update.chatId)) {
-                    ChatKind.PRIVATE -> p.inPrivate
-                    ChatKind.GROUP -> p.watches(update.chatId, userId)
+                    ChatKind.PRIVATE -> true
+                    ChatKind.GROUP -> true
                     ChatKind.CHANNEL -> false
                 }
                 if (!allowed) return@collect
@@ -829,6 +827,16 @@ class ChatRepository(
         if (!p.saveInBots && chatMeta(items.first().chatId).isBot) return
         io { spy.upsert(items) }
     }
+
+    /** Команды бота для личного чата с ботом (пусто, если чат не с ботом или команд нет). */
+    suspend fun botCommands(chatId: Long): List<Pair<String, String>> = runCatching {
+        val type = client.getChat(chatId = chatId).getOrThrow().type as? ChatTypePrivate
+            ?: return@runCatching emptyList()
+        val user = client.getUser(userId = type.userId).getOrThrow()
+        if (user.type !is UserTypeBot) return@runCatching emptyList()
+        val full = client.getUserFullInfo(userId = type.userId).getOrThrow()
+        full.botInfo?.commands?.map { it.command to it.description }.orEmpty()
+    }.getOrDefault(emptyList())
 
     private fun actionLabel(a: ChatAction): String? = when (a) {
         is ChatActionCancel -> null

@@ -85,9 +85,16 @@ import app.yougram.feature.settings.component.SettingsFootnote
 import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.component.SwitchRow
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.luminance
 import kotlinx.coroutines.launch
 
-private enum class ChatDialog { NameColor, Microphone, Distance }
+private enum class ChatDialog { NameColor, OwnBubble, OtherBubble, Microphone, Distance }
+
+private val BubblePalette = listOf(
+    0xFF2A2C31L, 0xFF3B3F46L, 0xFF1F3A5FL, 0xFF2E5E8CL, 0xFF1F5D50L, 0xFF3B7A3BL,
+    0xFF6B4E9BL, 0xFF8E3B6BL, 0xFF9A3B3BL, 0xFFB5651DL, 0xFFE9EAEEL, 0xFFDDE8F7L,
+    0xFFDDF2DDL, 0xFFFFE9C7L, 0xFFF7DDE8L, 0xFFE8DDF7L,
+)
 
 /** Палитра цветов имени (как в Telegram). */
 private val NameColors = listOf(
@@ -202,6 +209,26 @@ fun ChatSettingsScreen(
                         onClick = { onNavigate(SettingsPage.Appearance) },
                     )
                 }
+            }
+        }
+
+        SectionLabel("Цвет блоков с сообщениями")
+        SettingGroup {
+            item {
+                SettingRow(
+                    "Цвет моих сообщений",
+                    icon = Icons.Filled.Palette,
+                    onClick = { dialog = ChatDialog.OwnBubble },
+                    trailing = { BubbleColorDot(prefs.ownBubbleColor) },
+                )
+            }
+            item {
+                SettingRow(
+                    "Цвет чужих сообщений",
+                    icon = Icons.Filled.Palette,
+                    onClick = { dialog = ChatDialog.OtherBubble },
+                    trailing = { BubbleColorDot(prefs.otherBubbleColor) },
+                )
             }
         }
 
@@ -382,6 +409,24 @@ fun ChatSettingsScreen(
     }
 
     when (dialog) {
+        ChatDialog.OwnBubble -> BubbleColorDialog(
+            title = "Цвет моих сообщений",
+            selected = prefs.ownBubbleColor,
+            onSelect = { v ->
+                update { it.copy(ownBubbleColor = v) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        ChatDialog.OtherBubble -> BubbleColorDialog(
+            title = "Цвет чужих сообщений",
+            selected = prefs.otherBubbleColor,
+            onSelect = { v ->
+                update { it.copy(otherBubbleColor = v) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
         ChatDialog.NameColor -> NameColorDialog(
             selected = prefs.nameColor,
             onSelect = { i ->
@@ -454,7 +499,8 @@ private fun ChatPreview(prefs: ChatPrefs) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
                 shape = shape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = prefs.bubbleOpacity / 100f),
+                color = (if (prefs.otherBubbleColor != 0L) Color(prefs.otherBubbleColor) else MaterialTheme.colorScheme.surfaceContainerHigh).copy(alpha = prefs.bubbleOpacity / 100f),
+                contentColor = if (prefs.otherBubbleColor != 0L) (if (Color(prefs.otherBubbleColor).luminance() > 0.5f) Color.Black else Color.White) else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.Start).widthIn(max = 280.dp),
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -478,8 +524,8 @@ private fun ChatPreview(prefs: ChatPrefs) {
             }
             Surface(
                 shape = shape,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = prefs.bubbleOpacity / 100f),
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = (if (prefs.ownBubbleColor != 0L) Color(prefs.ownBubbleColor) else MaterialTheme.colorScheme.primaryContainer).copy(alpha = prefs.bubbleOpacity / 100f),
+                contentColor = if (prefs.ownBubbleColor != 0L) (if (Color(prefs.ownBubbleColor).luminance() > 0.5f) Color.Black else Color.White) else MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.align(Alignment.End),
             ) {
                 Row(
@@ -638,6 +684,56 @@ private fun NameColorDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: (
             }
         },
         confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
+}
+
+@Composable
+private fun BubbleColorDot(value: Long) {
+    val color = if (value == 0L) MaterialTheme.colorScheme.surfaceContainerHigh else Color(value)
+    Box(
+        Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+    )
+}
+
+@Composable
+private fun BubbleColorDialog(title: String, selected: Long, onSelect: (Long) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                BubblePalette.chunked(4).forEach { chunk ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        chunk.forEach { value ->
+                            val color = Color(value)
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    .clickable { onSelect(value) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (value == selected) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = null,
+                                        tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSelect(0L) }) { Text("По умолчанию") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }

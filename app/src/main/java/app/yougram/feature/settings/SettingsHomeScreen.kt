@@ -56,7 +56,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material3.LoadingIndicator
+import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import app.yougram.core.ui.component.Button
 import androidx.compose.material3.ExperimentalMaterial3Api

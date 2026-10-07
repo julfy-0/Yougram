@@ -42,7 +42,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import app.yougram.core.ui.component.Button
-import androidx.compose.material3.LinearWavyProgressIndicator
+import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider

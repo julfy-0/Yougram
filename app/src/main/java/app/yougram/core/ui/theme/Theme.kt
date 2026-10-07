@@ -6,8 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
@@ -72,9 +71,8 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     }
     val colorScheme = if (dark) base.withLightText() else base
     val typography = rememberTypography(settings.fontPath)
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = colorScheme,
-        motionScheme = MotionScheme.expressive(),
         shapes = ExpressiveShapes,
         typography = typography,
     ) {

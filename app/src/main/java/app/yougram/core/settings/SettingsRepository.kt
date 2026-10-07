@@ -109,6 +109,10 @@ data class ChatPrefs(
     val bubbleOpacity: Int = 100,
     /** Блоки с сообщениями размывают фон чата (обои) под собой. */
     val bubbleBlur: Boolean = false,
+    /** Свой цвет пузырей своих сообщений, ARGB; 0 — цвет по умолчанию. */
+    val ownBubbleColor: Long = 0L,
+    /** Свой цвет пузырей чужих сообщений, ARGB; 0 — цвет по умолчанию. */
+    val otherBubbleColor: Long = 0L,
 )
 
 enum class MapPreview(val label: String) {
@@ -359,6 +363,8 @@ class SettingsRepository(private val context: Context) {
             distanceUnit = DistanceUnit.entries.getOrElse(prefs.getInt("c_distance", 0)) { DistanceUnit.Auto },
             bubbleOpacity = prefs.getInt("c_bubble_opacity", 100).coerceIn(20, 100),
             bubbleBlur = prefs.getBoolean("c_bubble_blur", false),
+            ownBubbleColor = prefs.getLong("c_bubble_own_color", 0L),
+            otherBubbleColor = prefs.getLong("c_bubble_other_color", 0L),
         )
     )
     val chatPrefs: StateFlow<ChatPrefs> = _chatPrefs.asStateFlow()
@@ -388,6 +394,8 @@ class SettingsRepository(private val context: Context) {
             .putInt("c_distance", c.distanceUnit.ordinal)
             .putInt("c_bubble_opacity", c.bubbleOpacity)
             .putBoolean("c_bubble_blur", c.bubbleBlur)
+            .putLong("c_bubble_own_color", c.ownBubbleColor)
+            .putLong("c_bubble_other_color", c.otherBubbleColor)
             .apply()
     }
 
@@ -525,7 +533,7 @@ class SettingsRepository(private val context: Context) {
     // Статус набора.
     private val _typingWatch = MutableStateFlow(
         TypingWatchPrefs(
-            enabled = prefs.getBoolean("tw_enabled", false),
+            enabled = prefs.getBoolean("tw_enabled", true),
             inPrivate = prefs.getBoolean("tw_private", true),
             watched = prefs.getStringSet("tw_watched", emptySet()).orEmpty().toSet(),
         )

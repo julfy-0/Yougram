@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SystemUpdate
 import app.yougram.core.ui.component.Button
-import androidx.compose.material3.LinearWavyProgressIndicator
+import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface

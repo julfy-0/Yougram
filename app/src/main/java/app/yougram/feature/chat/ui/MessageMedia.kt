@@ -27,8 +27,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.CircularWavyProgressIndicator
+import app.yougram.core.ui.component.LoadingIndicator
+import app.yougram.core.ui.component.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -296,7 +296,7 @@ private fun DownloadProgress(state: FileState, modifier: Modifier, color: Color)
     }
 }
 
-private fun openFile(context: Context, path: String, mimeType: String) {
+internal fun openFile(context: Context, path: String, mimeType: String) {
     try {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", File(path))
         val intent = Intent(Intent.ACTION_VIEW)

@@ -65,11 +65,12 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.LoadingIndicator
+import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,6 +87,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +101,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -150,6 +153,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.reflect.KProperty
+import app.yougram.core.settings.DraftStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -217,8 +221,15 @@ fun ChatScreen(
     val bubbleBackdrop = rememberBackdropState()
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
-    val inputHolder = remember { InputHolder() }
+    val draftContext = LocalContext.current
+    val inputHolder = remember {
+        InputHolder().also { h ->
+            val saved = DraftStore.get(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId)
+            h.value = TextFieldValue(saved, TextRange(saved.length))
+        }
+    }
     var input by inputHolder
+    var commandsOpen by remember { mutableStateOf(false) }
     var viewerMedia by remember { mutableStateOf<MediaItem?>(null) }
     var actionMessage by remember { mutableStateOf<MessageItem?>(null) }
     var replyTo by remember { mutableStateOf<MessageItem?>(null) }
@@ -259,6 +270,19 @@ fun ChatScreen(
     val inputFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var draftBeforeEdit by remember { mutableStateOf("") }
+    // Черновик: сохраняем набранное (кроме режима редактирования), при выходе из чата — сразу.
+    val latestDraft by rememberUpdatedState(if (editing == null) input else null)
+    LaunchedEffect(input, editing == null) {
+        if (editing == null) {
+            delay(400)
+            DraftStore.set(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId, input)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            latestDraft?.let { DraftStore.set(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId, it) }
+        }
+    }
     LaunchedEffect(editing?.id) {
         if (editing != null) {
             delay(200) // меню сообщения ещё закрывается
@@ -414,10 +438,33 @@ fun ChatScreen(
     // При появлении нового сообщения прокручиваем вниз (в reverseLayout это индекс 0).
     // Если чат открыт на конкретном сообщении (из поиска), стартовую прокрутку вниз пропускаем.
     var skipInitialScroll by remember { mutableStateOf(viewModel.initialMessageId != 0L) }
+    var unreadNew by remember { mutableStateOf(0) }
+    var lastNewestId by remember { mutableStateOf<Long?>(null) }
+    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    val showScrollDown by remember {
+        derivedStateOf { listState.firstVisibleItemIndex >= 20 || (unreadNew > 0 && listState.firstVisibleItemIndex > 0) }
+    }
+    LaunchedEffect(atBottom) { if (atBottom) unreadNew = 0 }
     LaunchedEffect(state.messages.firstOrNull()?.id) {
-        if (state.messages.isNotEmpty()) {
-            if (skipInitialScroll) skipInitialScroll = false
-            else if (!searchOpen) listState.animateScrollToItem(0)
+        val newest = state.messages.firstOrNull() ?: return@LaunchedEffect
+        val prevId = lastNewestId
+        lastNewestId = newest.id
+        if (skipInitialScroll) {
+            skipInitialScroll = false
+            return@LaunchedEffect
+        }
+        if (prevId == null) {
+            if (!searchOpen) listState.scrollToItem(0)
+            return@LaunchedEffect
+        }
+        // Индекс <= 2: пользователь у самого низа (после вставки список мог сдвинуться на 1–2 позиции).
+        val nearBottom = listState.firstVisibleItemIndex <= 2
+        if (newest.isOutgoing || nearBottom) {
+            if (!searchOpen) listState.animateScrollToItem(0)
+        } else {
+            val prevIndex = state.messages.indexOfFirst { it.id == prevId }
+            val fresh = if (prevIndex < 0) listOf(newest) else state.messages.take(prevIndex)
+            unreadNew += fresh.count { !it.isOutgoing }.coerceAtLeast(if (newest.isOutgoing) 0 else 1)
         }
     }
 
@@ -500,6 +547,8 @@ fun ChatScreen(
                             onReact = { emoji -> viewModel.react(message.id, emoji) },
                             onOpenComments = { onOpenComments(message.chatId, message.id) },
                             commentsEnabled = !threadMode,
+                            ownBubbleColor = chatPrefs.ownBubbleColor.takeIf { it != 0L }?.let { Color(it) },
+                            otherBubbleColor = chatPrefs.otherBubbleColor.takeIf { it != 0L }?.let { Color(it) },
                             bubbleOpacity = chatPrefs.bubbleOpacity / 100f,
                             bubbleBackdrop = if (bubbleBlurOn) bubbleBackdrop else null,
                             glassSettings = glass,
@@ -514,6 +563,87 @@ fun ChatScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Подсказки команд бота: по кнопке-меню или при вводе «/».
+        run {
+            val typedCommand = input.startsWith("/") && !input.contains(' ') && !input.contains('\n')
+            val shown = when {
+                state.botCommands.isEmpty() -> emptyList()
+                typedCommand -> state.botCommands.filter { ("/" + it.first).lowercase().startsWith(input.lowercase()) }
+                commandsOpen && input.isEmpty() -> state.botCommands
+                else -> emptyList()
+            }
+            if (shown.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 6.dp,
+                ) {
+                    LazyColumn(Modifier.heightIn(max = 260.dp)) {
+                        itemsIndexed(shown, key = { _, cmd -> cmd.first }) { _, cmd ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (typedCommand) {
+                                            input = "/" + cmd.first + " "
+                                        } else {
+                                            viewModel.send("/" + cmd.first)
+                                        }
+                                        commandsOpen = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                            ) {
+                                Text("/" + cmd.first, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                                if (cmd.second.isNotBlank()) {
+                                    Text(
+                                        cmd.second,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Кнопка «вниз» со счётчиком новых сообщений.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showScrollDown,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomBarHeight + 16.dp),
+        ) {
+            androidx.compose.material3.BadgedBox(
+                badge = {
+                    if (unreadNew > 0) {
+                        androidx.compose.material3.Badge { Text(if (unreadNew > 99) "99+" else unreadNew.toString()) }
+                    }
+                },
+            ) {
+                androidx.compose.material3.SmallFloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            if (listState.firstVisibleItemIndex > 30) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+                            unreadNew = 0
+                        }
+                    },
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Вниз")
                 }
             }
         }
@@ -803,6 +933,18 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                             } else {
+                                if (state.botCommands.isNotEmpty()) {
+                                    Icon(
+                                        Icons.Filled.Menu,
+                                        contentDescription = "Команды бота",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .clickable { commandsOpen = !commandsOpen },
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                }
                                 Icon(
                                     Icons.Filled.AddCircleOutline,
                                     contentDescription = "Файл",
@@ -1169,6 +1311,8 @@ private fun MessageBubble(
     onReact: (String) -> Unit,
     onOpenComments: () -> Unit,
     commentsEnabled: Boolean,
+    ownBubbleColor: Color?,
+    otherBubbleColor: Color?,
     bubbleOpacity: Float,
     bubbleBackdrop: BackdropState?,
     glassSettings: GlassSettings,
@@ -1177,15 +1321,18 @@ private fun MessageBubble(
 ) {
     val mine = message.isOutgoing
     // Текст своих сообщений: белый в тёмной теме, в светлой как раньше.
-    val ownText = if (app.yougram.core.ui.theme.isDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
+    val customBg = if (mine) ownBubbleColor else otherBubbleColor
+    val readableOnCustom = customBg?.let { if (it.luminance() > 0.5f) Color.Black else Color.White }
+    val ownText = readableOnCustom
+        ?: if (app.yougram.core.ui.theme.isDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
     val media = message.media
     val senderKey = message.senderKey
     // В группах у чужих сообщений показываем автора: аватарка и имя с тегом у первого сообщения серии.
     val showSenderUi = groupChat && !mine && senderKey != null
     val showName = showSenderUi && !joinedWithOlder
     val showAvatar = showSenderUi && !joinedWithOlder
-    // Кружок показывается без пузыря.
-    val bare = media?.kind == MediaKind.VIDEO_NOTE && message.text.isEmpty()
+    // Кружок и стикер показываются без пузыря.
+    val bare = (media?.kind == MediaKind.VIDEO_NOTE || media?.kind == MediaKind.STICKER) && message.text.isEmpty()
     // Кнопка комментариев прилегает к самому посту — полоса внизу пузыря.
     val withComments = commentsEnabled && message.hasComments && !bare
 
@@ -1206,7 +1353,8 @@ private fun MessageBubble(
         RoundedCornerShape(topStart = top, topEnd = cornerRadius, bottomEnd = cornerRadius, bottomStart = bottom)
     }
 
-    val baseColor = if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+    val otherColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val baseColor = customBg ?: if (mine) androidx.compose.ui.graphics.lerp(otherColor, Color.White, 0.10f) else otherColor
     val bubbleColor by animateColorAsState(
         targetValue = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else baseColor,
         animationSpec = tween(250),
@@ -1254,7 +1402,7 @@ private fun MessageBubble(
                     color = if (bubbleBackdrop != null) Color.Transparent else bubbleColor.copy(alpha = bubbleOpacity),
                     contentColor = when {
                         highlighted -> MaterialTheme.colorScheme.onTertiaryContainer
-                        mine -> ownText
+                        mine || readableOnCustom != null -> ownText
                         else -> MaterialTheme.colorScheme.onSurface
                     },
                 ) {
@@ -1283,7 +1431,11 @@ private fun MessageBubble(
                         if (message.text.isNotEmpty()) {
                             val linked = rememberLinkified(
                                 message.text,
-                                if (mine) ownText else MaterialTheme.colorScheme.primary,
+                                when {
+                                    mine -> ownText
+                                    customBg != null -> app.yougram.core.ui.theme.ensureContrast(MaterialTheme.colorScheme.primary, customBg, 4.5f)
+                                    else -> MaterialTheme.colorScheme.primary
+                                },
                                 LocalOpenLink.current,
                                 LocalOpenUsername.current,
                                 message.emojis,

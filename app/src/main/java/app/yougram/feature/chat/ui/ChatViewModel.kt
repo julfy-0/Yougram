@@ -34,6 +34,8 @@ data class ChatUiState(
     val subtitle: String = "",
     /** «печатает…» / «Имя печатает…», пока собеседник что-то делает; иначе null. */
     val typing: String? = null,
+    /** Команды бота (команда без «/», описание); пусто, если чат не с ботом. */
+    val botCommands: List<Pair<String, String>> = emptyList(),
     val isOnline: Boolean = false,
     /** Порядок: новые сообщения в начале списка (для LazyColumn с reverseLayout). */
     val messages: List<MessageItem> = emptyList(),
@@ -393,6 +395,10 @@ class ChatViewModel(
     }
 
     init {
+        viewModelScope.launch {
+            val commands = repository.botCommands(chatId)
+            if (commands.isNotEmpty()) _state.update { it.copy(botCommands = commands) }
+        }
         // Сначала подписываемся на новые сообщения, потом грузим историю — чтобы ничего не потерять.
         viewModelScope.launch {
             repository.incomingFor(chatId).collect { message ->
