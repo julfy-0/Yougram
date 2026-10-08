@@ -29,7 +29,7 @@ import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
 
-/** Выбор иконки приложения на рабочем столе: классическая или неон. */
+/** Выбор иконки приложения на рабочем столе. */
 @Composable
 fun AppIconSection() {
     val context = LocalContext.current
@@ -88,6 +88,8 @@ private fun IconPreview(icon: AppIcon) {
         val res = when (icon) {
             AppIcon.Classic -> R.mipmap.ic_launcher
             AppIcon.Neon -> R.mipmap.ic_launcher_neon
+            AppIcon.Blue -> R.mipmap.ic_launcher_blue
+            AppIcon.Green -> R.mipmap.ic_launcher_green
         }
         ContextCompat.getDrawable(context, res)?.toBitmap(160, 160)?.asImageBitmap()
     }

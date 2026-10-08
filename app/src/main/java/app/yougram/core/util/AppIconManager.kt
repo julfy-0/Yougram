@@ -11,13 +11,18 @@ import android.content.pm.PackageManager
 enum class AppIcon(val alias: String, val title: String, val subtitle: String) {
     Classic("app.yougram.LauncherClassic", "Классическая", "Серая с белой стрелкой, поддерживает тематическую иконку"),
     Neon("app.yougram.LauncherNeon", "Неон", "Светящийся градиентный контур"),
+    Blue("app.yougram.LauncherBlue", "Голубая", "Голубой градиент и прозрачный значок"),
+    Green("app.yougram.LauncherGreen", "Сине-зелёная", "Градиент от голубого к зелёному"),
 }
 
 object AppIconManager {
-    /** Какая иконка включена сейчас. Если неон не включён явно, считается классическая. */
+    /** Какая иконка включена сейчас. Если ни одна из дополнительных не включена явно, считается классическая. */
     fun current(context: Context): AppIcon {
-        val state = context.packageManager.getComponentEnabledSetting(component(context, AppIcon.Neon))
-        return if (state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) AppIcon.Neon else AppIcon.Classic
+        val pm = context.packageManager
+        return AppIcon.entries.firstOrNull {
+            it != AppIcon.Classic &&
+                pm.getComponentEnabledSetting(component(context, it)) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } ?: AppIcon.Classic
     }
 
     /** Включает выбранную иконку и выключает остальные. Приложение при этом не перезапускается. */
