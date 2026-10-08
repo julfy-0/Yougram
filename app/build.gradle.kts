@@ -141,5 +141,3 @@ dependencies {
     // Lua-плагины (LuaPluginManager, PluginManager).
     implementation("org.luaj:luaj-jse:3.0.1")
 }
-
-

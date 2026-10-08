@@ -1,6 +1,7 @@
 package app.yougram.feature.chat.ui
 
 import android.Manifest
+import android.location.Location
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -342,6 +343,32 @@ fun ChatScreen(
                 ?: Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
         }
     }
+    // «Сохранить в файлы»: путь скачанного файла ждёт, пока пользователь выберет место в проводнике.
+    var exportPath by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        val path = exportPath
+        exportPath = null
+        if (uri != null && path != null) scope.launch {
+            val ok = exportToUri(context, path, uri)
+            snackbar.showSnackbar(if (ok) "Файл сохранён" else "Не удалось сохранить")
+        }
+    }
+    // Меню «+», опрос и отправка геопозиции (с подтверждением перед отправкой).
+    var attachOpen by remember { mutableStateOf(false) }
+    var pollOpen by remember { mutableStateOf(false) }
+    var pendingLocation by remember { mutableStateOf<Location?>(null) }
+    fun fetchLocation() {
+        Toast.makeText(context, "Определяем местоположение…", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val loc = currentLocation(context)
+            if (loc != null) pendingLocation = loc
+            else Toast.makeText(context, "Не удалось определить местоположение", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.any { it }) fetchLocation()
+        else Toast.makeText(context, "Нет доступа к геолокации", Toast.LENGTH_SHORT).show()
+    }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             val isImage = context.contentResolver.getType(uri)?.startsWith("image/") == true
@@ -459,7 +486,7 @@ fun ChatScreen(
         }
         // Индекс <= 2: пользователь у самого низа (после вставки список мог сдвинуться на 1–2 позиции).
         val nearBottom = listState.firstVisibleItemIndex <= 2
-        if (newest.isOutgoing || nearBottom) {
+        if (newest.isOutgoing || (nearBottom && chatPrefs.autoScrollNew)) {
             if (!searchOpen) listState.animateScrollToItem(0)
         } else {
             val prevIndex = state.messages.indexOfFirst { it.id == prevId }
@@ -945,15 +972,44 @@ fun ChatScreen(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                 }
-                                Icon(
-                                    Icons.Filled.AddCircleOutline,
-                                    contentDescription = "Файл",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .clickable { filePicker.launch(arrayOf("*/*")) },
-                                )
+                                Box {
+                                    Icon(
+                                        Icons.Filled.AddCircleOutline,
+                                        contentDescription = "Прикрепить",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .clickable { attachOpen = true },
+                                    )
+                                    AttachMenu(
+                                        expanded = attachOpen,
+                                        onDismiss = { attachOpen = false },
+                                        onFile = { filePicker.launch(arrayOf("*/*")) },
+                                        onMedia = {
+                                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                                        },
+                                        onPoll = { pollOpen = true },
+                                        onLocation = {
+                                            val granted = listOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            ).any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+                                            if (granted) fetchLocation() else locationPermission.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                                ),
+                                            )
+                                        },
+                                        onVoice = {
+                                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                                PackageManager.PERMISSION_GRANTED
+                                            ) beginRecording() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                        },
+                                        onRound = { openVideoRecorder() },
+                                    )
+                                }
                                 Spacer(Modifier.width(12.dp))
                                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                     if (input.isEmpty()) {
@@ -1121,6 +1177,28 @@ fun ChatScreen(
         }
     }
 
+    if (pollOpen) {
+        PollDialog(
+            onDismiss = { pollOpen = false },
+            onSend = { question, options, anonymous, multiple -> viewModel.sendPoll(question, options, anonymous, multiple) },
+        )
+    }
+
+    pendingLocation?.let { loc ->
+        AlertDialog(
+            onDismissRequest = { pendingLocation = null },
+            title = { Text("Отправить геопозицию?") },
+            text = { Text("%.5f, %.5f (точность ~%d м)".format(loc.latitude, loc.longitude, loc.accuracy.toInt())) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.sendLocation(loc.latitude, loc.longitude, loc.accuracy.toDouble())
+                    pendingLocation = null
+                }) { Text("Отправить") }
+            },
+            dismissButton = { TextButton(onClick = { pendingLocation = null }) { Text("Отмена") } },
+        )
+    }
+
     if (videoRecorderOpen) {
         VideoNoteRecorderDialog(
             onSend = { path, seconds, length -> viewModel.sendVideoNote(path, seconds, length) },
@@ -1171,6 +1249,19 @@ fun ChatScreen(
                     } else {
                         val ok = saveToGallery(context, path, media.name, media.mimeType, media.kind)
                         snackbar.showSnackbar(if (ok) "Сохранено в галерею" else "Не удалось сохранить")
+                    }
+                }
+            },
+            onExport = {
+                val media = message.media ?: return@MessageMenu
+                scope.launch {
+                    val path = viewModel.fileState(media.fileId).first().path
+                    if (path == null) {
+                        viewModel.download(media.fileId)
+                        snackbar.showSnackbar("Файл ещё загружается, попробуйте позже")
+                    } else {
+                        exportPath = path
+                        exportLauncher.launch(media.name.ifBlank { File(path).name })
                     }
                 }
             },

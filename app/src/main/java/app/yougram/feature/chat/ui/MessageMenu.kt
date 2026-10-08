@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -76,6 +77,8 @@ fun MessageMenu(
     onReact: (String) -> Unit,
     onReply: () -> Unit,
     onSave: () -> Unit,
+    /** Сохранить через системный проводник; null — пункта нет. */
+    onExport: (() -> Unit)? = null,
     onForward: () -> Unit,
     onPin: () -> Unit,
     onEdit: () -> Unit,
@@ -126,6 +129,7 @@ fun MessageMenu(
                     }
                     MenuItem(Icons.AutoMirrored.Filled.Reply, "Ответить") { onReply(); onDismiss() }
                     if (canSave) MenuItem(Icons.Filled.Download, "Сохранить в галерею") { onSave(); onDismiss() }
+                    if (canSave && onExport != null) MenuItem(Icons.Filled.FolderOpen, "Сохранить в файлы") { onExport(); onDismiss() }
                     MenuItem(Icons.AutoMirrored.Filled.Send, "Переслать") { onForward(); onDismiss() }
                     MenuItem(Icons.Filled.PushPin, "Закрепить") { onPin(); onDismiss() }
                     if (canEdit) MenuItem(Icons.Filled.Edit, "Изменить") { onEdit(); onDismiss() }

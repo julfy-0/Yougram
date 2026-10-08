@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import app.yougram.core.ui.component.LoadingIndicator
@@ -72,15 +73,17 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
     val onClick: () -> Unit = {
         val path = full.path
         val playable = (media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
-            media.mimeType != "image/gif"
+                media.mimeType != "image/gif"
         when {
             media.kind == MediaKind.STICKER -> Unit
             // Не скачанное фото: первый тап скачивает его (блюр уходит), следующий — открывает просмотр.
-            media.kind == MediaKind.PHOTO && path == null -> if (!full.active) viewModel.download(media.fileId, 16)
+            media.kind == MediaKind.PHOTO && path == null ->
+                if (full.active) viewModel.pauseDownload(media.fileId) else viewModel.download(media.fileId, 16)
             media.kind == MediaKind.PHOTO -> onOpenPhoto(media)
             path != null && playable -> viewer = true
             path != null -> openFile(context, path, media.mimeType)
-            !full.active -> viewModel.download(media.fileId, 16)
+            full.active -> viewModel.pauseDownload(media.fileId)
+            else -> viewModel.download(media.fileId, 16)
         }
     }
     when (media.kind) {
@@ -226,8 +229,8 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
                 Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (full.active) {
-                    DownloadProgress(full, Modifier.size(36.dp), Color.White)
+                if (full.active || full.partial) {
+                    DownloadControl(full, Color.White, 36.dp)
                 } else {
                     Icon(Icons.Filled.Download, null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
@@ -263,7 +266,7 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
             contentAlignment = Alignment.Center,
         ) {
             when {
-                full.active -> DownloadProgress(full, Modifier.size(32.dp), MaterialTheme.colorScheme.onPrimary)
+                full.active || full.partial -> DownloadControl(full, MaterialTheme.colorScheme.onPrimary, 32.dp)
                 full.path != null -> Icon(Icons.Filled.Description, null, tint = MaterialTheme.colorScheme.onPrimary)
                 else -> Icon(Icons.Filled.Download, null, tint = MaterialTheme.colorScheme.onPrimary)
             }
@@ -280,6 +283,23 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** Файл скачан не до конца (загрузка на паузе). */
+private val FileState.partial get() = path == null && downloaded > 0 && total > 0
+
+/** Кольцо прогресса: во время загрузки внутри «пауза», на паузе — «скачать» (тап продолжает). */
+@Composable
+private fun DownloadControl(state: FileState, color: Color, size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        DownloadProgress(state, Modifier.fillMaxSize(), color)
+        Icon(
+            if (state.active) Icons.Filled.Pause else Icons.Filled.Download,
+            contentDescription = if (state.active) "Приостановить" else "Продолжить",
+            tint = color,
+            modifier = Modifier.size(size / 2),
+        )
     }
 }
 

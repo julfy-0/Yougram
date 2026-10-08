@@ -279,6 +279,30 @@ fun ChatSettingsScreen(
         }
         SettingsFootnote("Включено — кнопка поиска в верхней панели. Выключено — рядом с нижней панелью вкладок.")
 
+        SectionLabel("Истории")
+        SettingGroup {
+            item {
+                SwitchRow(
+                    "Скрыть истории",
+                    prefs.hideStories,
+                    { v -> update { it.copy(hideStories = v) } },
+                )
+            }
+        }
+        SettingsFootnote("Полоса историй над списком чатов не показывается.")
+
+        SectionLabel("Новые сообщения")
+        SettingGroup {
+            item {
+                SwitchRow(
+                    "Прокручивать вниз автоматически",
+                    prefs.autoScrollNew,
+                    { v -> update { it.copy(autoScrollNew = v) } },
+                )
+            }
+        }
+        SettingsFootnote("Выключено — чат остаётся на месте, о новых сообщениях сообщает кнопка «вниз». Свои сообщения прокручивают чат всегда.")
+
         SectionLabel("Смахивание влево в списке чатов")
         SettingGroup {
             item { SwipeActionPicker(prefs.swipeAction) { a -> update { it.copy(swipeAction = a) } } }

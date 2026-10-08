@@ -587,6 +587,12 @@ class ChatViewModel(
 
     fun sendDocument(path: String) = sendMedia { repository.sendDocument(chatId, path) }
 
+    fun sendPoll(question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
+        sendMedia { repository.sendPoll(chatId, question, options, anonymous, multiple) }
+
+    fun sendLocation(latitude: Double, longitude: Double, accuracy: Double) =
+        sendMedia { repository.sendLocation(chatId, latitude, longitude, accuracy) }
+
     fun sendVoice(path: String, duration: Int) = sendMedia { repository.sendVoice(chatId, path, duration) }
 
     fun sendVideoNote(path: String, duration: Int, length: Int) =
@@ -625,6 +631,8 @@ class ChatViewModel(
     fun fileState(fileId: Int): Flow<FileState> = repository.fileState(fileId)
 
     fun download(fileId: Int, priority: Int = 8) = repository.download(fileId, priority)
+
+    fun pauseDownload(fileId: Int) = repository.pauseDownload(fileId)
 
     /** Стикер премиум-эмодзи по id. */
     suspend fun customEmoji(id: Long) = repository.customEmoji(id)

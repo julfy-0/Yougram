@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -252,7 +253,7 @@ fun MainScreen(
     LaunchedEffect(tab) { chatListViewModel.clearSelection() }
     val folderId = selectedFolder?.takeIf { id -> folders.any { it.id == id } }
     val showFolders = tab == MainTab.Chats && folders.isNotEmpty()
-    val showStories = tab == MainTab.Chats && storyRefs.isNotEmpty() && !searching
+    val showStories = tab == MainTab.Chats && storyRefs.isNotEmpty() && !searching && !chatPrefs.hideStories
     val storiesTop = if (showStories) StoriesBarHeight else 0.dp
     val chatsPadding = if (folders.isNotEmpty()) {
         PaddingValues(
@@ -441,6 +442,8 @@ fun MainScreen(
             onArchiveSelected = chatListViewModel::archiveSelected,
             onDeleteSelected = { confirmDelete = true },
             onPinSelected = chatListViewModel::pinSelected,
+            canReadAll = tab == MainTab.Chats && allChats.any { it.unreadCount > 0 },
+            onReadAll = chatListViewModel::markAllRead,
             selectedFolder = folderId,
             onSelectFolder = chatListViewModel::selectFolder,
             stories = if (showStories) storyRefs else emptyList(),
@@ -543,6 +546,8 @@ private fun GlassTopBar(
     onArchiveSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
     onPinSelected: () -> Unit,
+    canReadAll: Boolean,
+    onReadAll: () -> Unit,
     selectedFolder: Int?,
     onSelectFolder: (Int?) -> Unit,
     stories: List<StoryRef>,
@@ -664,8 +669,13 @@ private fun GlassTopBar(
                             Spacer(Modifier.width(16.dp))
                         }
                         Text(title, style = MaterialTheme.typography.titleLarge)
+                        if (onBack == null && (searchOnTop || canReadAll)) Spacer(Modifier.weight(1f))
+                        if (canReadAll && onBack == null) {
+                            IconButton(onClick = onReadAll) {
+                                Icon(Icons.Filled.DoneAll, contentDescription = "Прочитать всё")
+                            }
+                        }
                         if (searchOnTop && onBack == null) {
-                            Spacer(Modifier.weight(1f))
                             IconButton(onClick = onSearch) {
                                 Icon(Icons.Filled.Search, contentDescription = "Поиск")
                             }

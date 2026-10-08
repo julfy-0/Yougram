@@ -92,6 +92,10 @@ data class ChatPrefs(
     val listLines: Int = 2,
     /** true — кнопка поиска в верхней панели, false — рядом с нижней панелью вкладок. */
     val searchOnTop: Boolean = false,
+    /** true — полоса историй над списком чатов скрыта. */
+    val hideStories: Boolean = false,
+    /** true — новое входящее сообщение прокручивает чат вниз, если вы у самого низа. */
+    val autoScrollNew: Boolean = false,
     val swipeAction: SwipeAction = SwipeAction.ChangeFolder,
     val nightAuto: Boolean = false,
     val inAppBrowser: Boolean = true,
@@ -348,6 +352,8 @@ class SettingsRepository(private val context: Context) {
             wallpaper = prefs.getLong("c_wallpaper", 0L),
             listLines = prefs.getInt("c_list_lines", 2),
             searchOnTop = prefs.getBoolean("c_search_top", false),
+            hideStories = prefs.getBoolean("c_hide_stories", false),
+            autoScrollNew = prefs.getBoolean("c_auto_scroll_new", false),
             swipeAction = SwipeAction.entries.getOrElse(prefs.getInt("c_swipe", 1)) { SwipeAction.ChangeFolder },
             nightAuto = prefs.getBoolean("c_night_auto", false),
             inAppBrowser = prefs.getBoolean("c_in_app_browser", true),
@@ -379,6 +385,8 @@ class SettingsRepository(private val context: Context) {
             .putLong("c_wallpaper", c.wallpaper)
             .putInt("c_list_lines", c.listLines)
             .putBoolean("c_search_top", c.searchOnTop)
+            .putBoolean("c_hide_stories", c.hideStories)
+            .putBoolean("c_auto_scroll_new", c.autoScrollNew)
             .putInt("c_swipe", c.swipeAction.ordinal)
             .putBoolean("c_night_auto", c.nightAuto)
             .putBoolean("c_in_app_browser", c.inAppBrowser)

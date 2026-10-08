@@ -34,6 +34,10 @@ import dev.g000sha256.tdl.dto.ChatTypeSecret
 import dev.g000sha256.tdl.dto.ChatTypeSupergroup
 import dev.g000sha256.tdl.dto.File as TdFile
 import dev.g000sha256.tdl.dto.FormattedText
+import dev.g000sha256.tdl.dto.InputMessageLocation
+import dev.g000sha256.tdl.dto.InputMessagePoll
+import dev.g000sha256.tdl.dto.InputPollOption
+import dev.g000sha256.tdl.dto.PollTypeRegular
 import dev.g000sha256.tdl.dto.InputAnimation
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
@@ -998,6 +1002,13 @@ class ChatRepository(
         }
     }
 
+    /** Приостанавливает загрузку; скачанная часть сохраняется, [download] продолжит с неё. */
+    fun pauseDownload(fileId: Int) {
+        scope.launch {
+            client.cancelDownloadFile(fileId = fileId, onlyIfPending = false)
+        }
+    }
+
     /** Запоминает состояние файла; не затирает уже известный путь устаревшими данными из старого сообщения. */
     private fun track(file: TdFile?) {
         if (file == null) return
@@ -1367,6 +1378,27 @@ class ChatRepository(
         )
     }
 
+    /**
+     * Отметить чаты прочитанными целиком (по последнему сообщению каждого чата).
+     * Вызывается явным действием пользователя, поэтому режим призрака не мешает.
+     */
+    suspend fun markChatsRead(chatIds: List<Long>) {
+        chatIds.forEach { id ->
+            runCatching {
+                val chat = client.getChat(chatId = id).getOrThrow()
+                val last = chat.lastMessage?.id ?: 0L
+                if (chat.unreadCount > 0 && last != 0L) {
+                    client.viewMessages(
+                        chatId = id,
+                        messageIds = longArrayOf(last),
+                        source = null,
+                        forceRead = true,
+                    )
+                }
+            }
+        }
+    }
+
     private fun prepareAvatar(file: TdFile) {
         track(file)
         if (!file.local.isDownloadingCompleted) download(file.id, priority = 1)
@@ -1588,8 +1620,8 @@ class ChatRepository(
                 last = e
                 val message = e.message.orEmpty().lowercase()
                 val temporaryNotFound = message.contains("message_not_found") ||
-                    message.contains("message not found") ||
-                    message.contains("message-not-found")
+                        message.contains("message not found") ||
+                        message.contains("message-not-found")
                 if (!temporaryNotFound || attempt == 3) throw e
                 delay(250L * (attempt + 1))
             }
@@ -1814,6 +1846,32 @@ class ChatRepository(
             duration = duration,
             length = length,
             selfDestructType = null,
+        ),
+    )
+
+    /** Отправляет опрос (обычный, без режима викторины). */
+    suspend fun sendPoll(chatId: Long, question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
+        sendContent(
+            chatId,
+            InputMessagePoll(
+                question = FormattedText(text = question, entities = emptyArray()),
+                options = options.map { InputPollOption(text = FormattedText(text = it, entities = emptyArray())) }.toTypedArray(),
+                isAnonymous = anonymous,
+                type = PollTypeRegular(allowMultipleAnswers = multiple),
+                openPeriod = 0,
+                closeDate = 0,
+                isClosed = false,
+            ),
+        )
+
+    /** Отправляет геопозицию (не «живую»). */
+    suspend fun sendLocation(chatId: Long, latitude: Double, longitude: Double, accuracy: Double) = sendContent(
+        chatId,
+        InputMessageLocation(
+            location = dev.g000sha256.tdl.dto.Location(latitude = latitude, longitude = longitude, horizontalAccuracy = accuracy),
+            livePeriod = 0,
+            heading = 0,
+            proximityAlertRadius = 0,
         ),
     )
 

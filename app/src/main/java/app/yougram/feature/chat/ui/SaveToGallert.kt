@@ -38,3 +38,12 @@ suspend fun saveToGallery(context: Context, path: String, name: String, mime: St
                 ?: error("open failed")
         }.isSuccess
     }
+
+/** Копирует скачанный файл туда, куда пользователь указал в системном проводнике (SAF, [uri] из CreateDocument). */
+suspend fun exportToUri(context: Context, path: String, uri: android.net.Uri): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { out -> File(path).inputStream().use { it.copyTo(out) } }
+                ?: error("open failed")
+        }.isSuccess
+    }
