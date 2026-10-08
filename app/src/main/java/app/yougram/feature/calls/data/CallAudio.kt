@@ -50,7 +50,8 @@ class CallAudio(context: Context) {
         focus = request
         am.registerAudioDeviceCallback(deviceCallback, null)
         _bluetooth.value = bluetoothDevice() != null
-        val fallback = if (isVideo) AudioRoute.SPEAKER else AudioRoute.EARPIECE
+
+        val fallback = defaultRoute()
         val preferred = if (_bluetooth.value) AudioRoute.BLUETOOTH else fallback
         setRoute(preferred)
         // Bluetooth без разрешения BLUETOOTH_CONNECT не включится: откатываемся на обычный динамик.
@@ -76,45 +77,28 @@ class CallAudio(context: Context) {
         if (!running) return
         am.mode = AudioManager.MODE_IN_COMMUNICATION
         runCatching { am.isMicrophoneMute = false }
-        val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        if (am.getStreamVolume(AudioManager.STREAM_VOICE_CALL) < max / 2) {
+        // Нулевая громкость звонка даёт «тишину» без видимой причины.
+        if (am.getStreamVolume(AudioManager.STREAM_VOICE_CALL) == 0) {
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
             runCatching { am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max / 2, 0) }
         }
-        val current = _route.value
-        runCatching { am.clearCommunicationDevice() }
-        setRoute(current)
-        @Suppress("DEPRECATION")
-        runCatching { am.isSpeakerphoneOn = (current == AudioRoute.SPEAKER) }
+        setRoute(_route.value)
     }
 
-    /** Диагностика: режим, маршрут, громкость, не заглушена ли запись и какие потоки играют. */
-    fun dump(tag: String) {
-        val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        val rec = runCatching {
-            am.activeRecordingConfigurations.joinToString { "src=${it.clientAudioSource} silenced=${it.isClientSilenced} dev=${it.audioDevice?.type}" }
-        }.getOrDefault("?")
-        val play = runCatching {
-            am.activePlaybackConfigurations.joinToString { "usage=${it.audioAttributes.usage}" }
-        }.getOrDefault("?")
-        CallLog.d(
-            "CallAudio",
-            "$tag mode=${am.mode} route=${_route.value} commDev=${am.communicationDevice?.type} " +
-                "micMute=${am.isMicrophoneMute} vol=${am.getStreamVolume(AudioManager.STREAM_VOICE_CALL)}/$max rec=[$rec] play=[$play]",
-        )
-    }
-
+    @Synchronized
     fun setRoute(target: AudioRoute) {
         val device = when (target) {
             AudioRoute.SPEAKER -> byType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
             AudioRoute.EARPIECE -> byType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
             AudioRoute.BLUETOOTH -> bluetoothDevice()
         } ?: return
-        // SecurityException без BLUETOOTH_CONNECT раньше валил приложение прямо во время звонка.
+        // SecurityException без BLUETOOTH_CONNECT не должен валить приложение во время звонка.
         val ok = runCatching { am.setCommunicationDevice(device) }.getOrDefault(false)
         if (ok) _route.value = target
     }
 
     /** Переключает по кругу: разговорный динамик → громкая связь → Bluetooth (если подключён и доступен). */
+    @Synchronized
     fun cycle() {
         val order = listOfNotNull(AudioRoute.EARPIECE, AudioRoute.SPEAKER, AudioRoute.BLUETOOTH.takeIf { _bluetooth.value })
         val from = order.indexOf(_route.value)
@@ -125,6 +109,9 @@ class CallAudio(context: Context) {
         }
     }
 
+    private fun defaultRoute() = if (video) AudioRoute.SPEAKER else AudioRoute.EARPIECE
+
+    @Synchronized
     private fun devicesChanged() {
         val hasBluetooth = bluetoothDevice() != null
         val had = _bluetooth.value
@@ -132,7 +119,7 @@ class CallAudio(context: Context) {
         if (!running) return
         when {
             hasBluetooth && !had -> setRoute(AudioRoute.BLUETOOTH)
-            !hasBluetooth && _route.value == AudioRoute.BLUETOOTH -> setRoute(if (video) AudioRoute.SPEAKER else AudioRoute.EARPIECE)
+            !hasBluetooth && _route.value == AudioRoute.BLUETOOTH -> setRoute(defaultRoute())
         }
     }
 
