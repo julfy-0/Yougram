@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.settings.PlateRepository
 import app.yougram.core.settings.SettingsRepository
+import app.yougram.feature.settings.appearance.AppIconSection
 import app.yougram.feature.settings.appearance.PlateSection
 import app.yougram.feature.settings.appearance.ThemeSection
 import app.yougram.feature.settings.component.DotSlider
@@ -37,6 +38,8 @@ fun SettingsScreen(settings: SettingsRepository, plates: PlateRepository, conten
     ) {
         SectionLabel("Тема и цвета")
         ThemeSection(settings)
+
+        AppIconSection()
 
         SectionLabel("Панели")
         SettingGroup {

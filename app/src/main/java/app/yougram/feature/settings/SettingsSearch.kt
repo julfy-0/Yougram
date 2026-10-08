@@ -48,7 +48,7 @@ private class SearchEntry(
 /** Все страницы настроек, по которым ищет кнопка поиска, когда открыта вкладка «Настройки». */
 private val searchEntries = listOf(
     SearchEntry("Настройки Yougram", "Тема, цвета, панели", Icons.Filled.Tune, SettingsPage.Appearance,
-        "внешний вид тема цвет акцент размытие блюр плотность панели стекло плашки"),
+        "внешний вид тема цвет акцент размытие блюр плотность панели стекло плашки иконка значок лаунчер неон классическая"),
     SearchEntry("Призрак, шпион, фильтры", "Скрытность и локальный архив", Icons.Filled.VisibilityOff, SettingsPage.Extras,
         "режим призрака шпион удалённые сообщения архив"),
     SearchEntry(SettingsPage.Ghost.title, null, Icons.Filled.VisibilityOff, SettingsPage.Ghost, "призрак скрытность"),
