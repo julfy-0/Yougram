@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import app.yougram.core.ui.component.rememberFileBitmap
+import app.yougram.core.util.ApkInstaller
 import app.yougram.feature.chat.data.FileState
 import app.yougram.feature.chat.data.MediaItem
 import app.yougram.feature.chat.data.MediaKind
@@ -70,16 +71,18 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
     val context = LocalContext.current
     val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
     var viewer by remember { mutableStateOf(false) }
+    var stickerSetOpen by remember { mutableStateOf(false) }
     val onClick: () -> Unit = {
         val path = full.path
         val playable = (media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
                 media.mimeType != "image/gif"
         when {
             media.kind == MediaKind.STICKER -> Unit
-            // Не скачанное фото: первый тап скачивает его (блюр уходит), следующий — открывает просмотр.
-            media.kind == MediaKind.PHOTO && path == null ->
-                if (full.active) viewModel.pauseDownload(media.fileId) else viewModel.download(media.fileId, 16)
+            // Фото открывается сразу: просмотрщик сам показывает превью и докачивает оригинал.
             media.kind == MediaKind.PHOTO -> onOpenPhoto(media)
+            // APK (скачанный) отдаём системному установщику.
+            path != null && media.kind == MediaKind.DOCUMENT && ApkInstaller.isApk(media.name, media.mimeType) ->
+                ApkInstaller.install(context, path)
             path != null && playable -> viewer = true
             path != null -> openFile(context, path, media.mimeType)
             full.active -> viewModel.pauseDownload(media.fileId)
@@ -90,9 +93,12 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
         MediaKind.DOCUMENT -> DocumentRow(media, full, onClick)
         MediaKind.VOICE -> VoiceNoteRow(media, viewModel, full)
         MediaKind.VIDEO_NOTE -> VideoNoteView(media, viewModel, full)
-        MediaKind.STICKER -> StickerView(media, viewModel, full)
+        MediaKind.STICKER -> Box(Modifier.clip(RoundedCornerShape(12.dp)).clickable { stickerSetOpen = true }) {
+            StickerView(media, viewModel, full)
+        }
         else -> VisualMedia(media, viewModel, full, onClick)
     }
+    if (stickerSetOpen && media.stickerSetId != 0L) StickerSetSheet(media.stickerSetId, viewModel) { stickerSetOpen = false }
     val viewerPath = full.path
     if (viewer && viewerPath != null) VideoViewerDialog(viewerPath) { viewer = false }
 }

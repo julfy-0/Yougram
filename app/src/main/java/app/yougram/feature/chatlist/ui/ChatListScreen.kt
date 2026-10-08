@@ -1,134 +1,223 @@
 package app.yougram.feature.chatlist.ui
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import app.yougram.feature.chat.data.ChatFolderItem
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import app.yougram.core.settings.PlateArea
+import app.yougram.core.ui.component.Avatar
+import app.yougram.core.ui.glass.plateColor
 import app.yougram.feature.chat.data.ChatItem
-import app.yougram.feature.chat.data.ChatRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import app.yougram.feature.settings.component.segmentShape
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
+/**
+ * Список чатов одной вкладки: «Все» ([folderId] = null) или выбранной папки.
+ * Каждая страница горизонтального пейджера в MainScreen — отдельный экземпляр этого списка.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ChatListScreen(
+    viewModel: ChatListViewModel,
+    query: String,
+    contentPadding: PaddingValues,
+    onOpenChat: (Long) -> Unit,
+    lines: Int = 2,
+    selectedChatId: Long? = null,
+    folderId: Int? = null,
+) {
+    val context = LocalContext.current
+    val all by viewModel.chats.collectAsState()
+    val folders by viewModel.folders.collectAsState()
+    val selection by viewModel.selected.collectAsState()
+    val error by viewModel.error.collectAsState()
 
-    val chats: StateFlow<List<ChatItem>> = repository.chats
-    val folders: StateFlow<List<ChatFolderItem>> = repository.folders
+    // Папка могла исчезнуть, пока страница ещё на экране: тогда показываем общий список.
+    val key = folderId?.takeIf { id -> folders.any { it.id == id } }
+    val chats = remember(all, key, query) {
+        val q = query.trim()
+        all.asSequence()
+            .filter { c -> if (key == null) c.order != 0L && c.archiveOrder == 0L else (c.folderOrders[key] ?: 0L) != 0L }
+            .filter { c -> q.isEmpty() || c.title.contains(q, ignoreCase = true) }
+            .sortedByDescending { c -> if (key == null) c.order else c.folderOrders[key] ?: 0L }
+            .toList()
+    }
 
-    private val _selected = MutableStateFlow<Set<Long>>(emptySet())
-    /** Выбранные долгим нажатием чаты; пусто — режим выбора выключен. */
-    val selected: StateFlow<Set<Long>> = _selected.asStateFlow()
+    LaunchedEffect(error) { error?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() } }
 
-    fun toggleSelected(chatId: Long) = _selected.update { if (chatId in it) it - chatId else it + chatId }
+    val listState = rememberLazyListState()
+    // Подгружаем следующую порцию, когда дошли почти до конца списка (или он короткий и всё влезло).
+    val nearEnd by remember(listState, chats.size) {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= chats.size - 8
+        }
+    }
+    LaunchedEffect(nearEnd, chats.size, key) { if (nearEnd) viewModel.loadMore(key) }
 
-    fun clearSelection() { _selected.value = emptySet() }
-
-    private fun selectedChats() = chats.value.filter { it.id in _selected.value }
-
-    private fun forSelected(action: suspend (ChatItem) -> Unit) {
-        val items = selectedChats()
-        clearSelection()
-        viewModelScope.launch {
-            items.forEach { item ->
-                try {
-                    action(item)
-                } catch (e: Exception) {
-                    _error.value = e.message
+    Box(Modifier.fillMaxSize()) {
+        if (chats.isEmpty()) {
+            Text(
+                "Чатов нет",
+                Modifier.align(Alignment.Center).padding(contentPadding),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            ),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            itemsIndexed(chats, key = { _, c -> c.id }) { index, chat ->
+                val selected = chat.id in selection
+                val highlighted = selected || chat.id == selectedChatId
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = segmentShape(index, chats.size),
+                    color = if (highlighted) MaterialTheme.colorScheme.primaryContainer else plateColor(PlateArea.Chats),
+                ) {
+                    ChatRow(
+                        chat = chat,
+                        lines = lines,
+                        modifier = Modifier.combinedClickable(
+                            onClick = {
+                                if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
+                            },
+                            onLongClick = { viewModel.toggleSelected(chat.id) },
+                        ),
+                    )
                 }
             }
         }
     }
+}
 
-    /** Если все выбранные уже без звука — включает звук, иначе выключает. */
-    fun muteSelected() {
-        val mute = !selectedChats().all { it.muted }
-        forSelected { repository.setMuted(it.id, mute) }
-    }
-
-    fun archiveSelected() = forSelected { repository.setChatArchived(it.id, true) }
-
-    fun deleteSelected() = forSelected { repository.removeChat(it.id) }
-
-    /** Если все выбранные закреплены — открепляет, иначе закрепляет (в текущей папке). */
-    fun pinSelected() {
-        val key = _selectedFolder.value
-        val pin = !selectedChats().all { (key ?: 0) in it.pinnedLists }
-        forSelected { repository.setPinned(it.id, key, pin) }
-    }
-
-    /** Прочитать все непрочитанные чаты текущей вкладки («Все» или выбранной папки). */
-    fun markAllRead() {
-        val key = _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
-        val ids = chats.value
-            .filter { c ->
-                c.unreadCount > 0 &&
-                        if (key == null) c.archiveOrder == 0L else (c.folderOrders[key] ?: 0L) != 0L
+@Composable
+private fun ChatRow(chat: ChatItem, lines: Int, modifier: Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(title = chat.title, path = chat.avatarPath)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    chat.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (chat.muted) {
+                    Icon(
+                        Icons.Filled.NotificationsOff,
+                        contentDescription = "Без звука",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (chat.lastOutgoing) {
+                    Icon(
+                        if (chat.lastRead) Icons.Filled.DoneAll else Icons.Filled.Done,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 2.dp).size(16.dp),
+                    )
+                }
+                Text(
+                    formatChatTime(chat.lastMessageDate),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            .map { it.id }
-        if (ids.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.markChatsRead(ids)
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-        }
-    }
-
-    private val _selectedFolder = MutableStateFlow<Int?>(null)
-    /** id выбранной папки; null — вкладка «Все». */
-    val selectedFolder: StateFlow<Int?> = _selectedFolder.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
-    // Состояние подгрузки ведётся отдельно для главного списка (ключ null) и для каждой папки.
-    private val loading = HashSet<Int?>()
-    private val allLoaded = HashSet<Int?>()
-
-    init {
-        loadMore()
-    }
-
-    fun selectFolder(id: Int?) {
-        clearSelection()
-        _selectedFolder.value = id
-        loadMore()
-    }
-
-    fun setArchived(chatId: Long, archived: Boolean) {
-        viewModelScope.launch {
-            try {
-                repository.setChatArchived(chatId, archived)
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-        }
-    }
-
-    /** Подгружает следующую порцию текущего списка чатов; безопасно вызывать часто. */
-    fun loadMore() {
-        val key = _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
-        if (key in loading || key in allLoaded) return
-        loading += key
-        viewModelScope.launch {
-            try {
-                if (!repository.loadChats(folderId = key)) allLoaded += key
-            } catch (e: Exception) {
-                _error.value = e.message
-            } finally {
-                loading -= key
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    chat.lastMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (lines >= 3) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (chat.unreadCount > 0) {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .clip(CircleShape)
+                            .background(if (chat.muted) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 7.dp, vertical = 1.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (chat.unreadCount > 999) "999+" else chat.unreadCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
             }
         }
     }
+}
 
-    companion object {
-        fun factory(repository: ChatRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatListViewModel(repository) }
-        }
+private fun formatChatTime(date: Int): String {
+    if (date == 0) return ""
+    val ms = date * 1000L
+    val now = Calendar.getInstance()
+    val then = Calendar.getInstance().apply { timeInMillis = ms }
+    val sameDay = now.get(Calendar.YEAR) == then.get(Calendar.YEAR) && now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR)
+    val pattern = when {
+        sameDay -> "HH:mm"
+        now.get(Calendar.YEAR) == then.get(Calendar.YEAR) -> "dd.MM"
+        else -> "dd.MM.yy"
     }
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(ms))
 }

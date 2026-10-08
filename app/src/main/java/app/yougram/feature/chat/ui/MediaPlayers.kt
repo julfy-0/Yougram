@@ -139,7 +139,6 @@ fun TgsSticker(path: String, modifier: Modifier = Modifier) {
 
 private val PlayerGlass = GlassSettings(blurRadius = 28f, opacity = 0.35f)
 private val PlayerSpeeds = listOf(0.5f, 1f, 1.25f, 1.5f, 2f)
-private val GlassBorder = Color.White.copy(alpha = 0.22f)
 
 private fun formatTime(ms: Int): String {
     val s = (ms / 1000).coerceAtLeast(0)
@@ -156,7 +155,6 @@ private fun GlassButton(backdrop: BackdropState, size: Dp, onClick: () -> Unit, 
         Modifier
             .size(size)
             .glass(backdrop, PlayerGlass, CircleShape, Color.Black)
-            .border(0.6.dp, GlassBorder, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { content() }
@@ -297,7 +295,6 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                             .padding(top = 36.dp, end = 16.dp)
                             .height(44.dp)
                             .glass(backdrop, PlayerGlass, RoundedCornerShape(50), Color.Black)
-                            .border(0.6.dp, GlassBorder, RoundedCornerShape(50))
                             .clickable {
                                 speedIndex = (speedIndex + 1) % PlayerSpeeds.size
                                 if (playing) applySpeed()
@@ -340,7 +337,6 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                             .padding(start = 16.dp, end = 16.dp, bottom = 28.dp)
                             .fillMaxWidth()
                             .glass(backdrop, PlayerGlass, RoundedCornerShape(28.dp), Color.Black)
-                            .border(0.6.dp, GlassBorder, RoundedCornerShape(28.dp))
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                     ) {
                         val fraction = if (dragging) dragFraction

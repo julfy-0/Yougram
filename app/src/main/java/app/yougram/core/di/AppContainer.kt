@@ -65,6 +65,9 @@ class AppContainer(private val context: Context) {
     /** Чат, который нужно открыть по тапу на уведомление; навигация сбрасывает значение после открытия. */
     val pendingOpenChat = MutableStateFlow<Long?>(null)
 
+    /** Ссылка t.me / tg://, пришедшая снаружи (из браузера или другого приложения); навигация сбрасывает значение. */
+    val pendingOpenUrl = MutableStateFlow<String?>(null)
+
     fun start() {
         CallLog.init(context.applicationContext)
         plugins.loadAll()

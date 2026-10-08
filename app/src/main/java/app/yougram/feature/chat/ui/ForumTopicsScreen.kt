@@ -2,7 +2,23 @@ package app.yougram.feature.chat.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.RectangleShape
+import app.yougram.core.settings.PlateArea
+import app.yougram.core.ui.glass.LocalGlass
+import app.yougram.core.ui.glass.backdropSource
+import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.plateColor
+import app.yougram.core.ui.glass.rememberBackdropState
+import app.yougram.feature.settings.component.segmentShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -144,29 +160,15 @@ fun ForumTopicsScreen(
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    if (showBack) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
-                    }
-                },
-                title = {
-                    Column(Modifier.clickable(onClick = onOpenChatProfile)) {
-                        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Темы",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+    // Оформление как у списка чатов: стеклянная верхняя панель с размытием, список сегментированных плашек.
+    val backdrop = rememberBackdropState()
+    val glass = LocalGlass.current
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val barHeight = topInset + 56.dp
+
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.background)) {
             val list = topics
             when {
                 list == null && failed -> Text(
@@ -180,14 +182,63 @@ fun ForumTopicsScreen(
                     modifier = Modifier.align(Alignment.Center),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                else -> LazyColumn(Modifier.fillMaxSize()) {
-                    items(list, key = { it.id }) { topic ->
-                        TopicRow(topic, onClick = { onOpenTopic(topic.id) })
-                        HorizontalDivider(
-                            Modifier.padding(start = 72.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        )
+                else -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 12.dp,
+                        end = 12.dp,
+                        top = barHeight + 8.dp,
+                        bottom = bottomInset + 24.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    itemsIndexed(list, key = { _, t -> t.id }) { index, topic ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = segmentShape(index, list.size),
+                            color = plateColor(PlateArea.Chats),
+                        ) {
+                            TopicRow(topic, onClick = { onOpenTopic(topic.id) })
+                        }
                     }
+                }
+            }
+        }
+
+        // Верхняя панель — та же стеклянная, что в списке чатов и в чате.
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(barHeight)
+                .glass(backdrop, glass, RectangleShape),
+        ) {
+            Row(
+                Modifier
+                    .padding(top = topInset)
+                    .height(56.dp)
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showBack) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+                } else {
+                    Spacer(Modifier.width(12.dp))
+                }
+                Column(Modifier.weight(1f).clickable(onClick = onOpenChatProfile)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "Темы",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -205,7 +256,7 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(accent.copy(alpha = 0.22f)),
+            Modifier.size(48.dp).clip(CircleShape).background(accent.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -220,7 +271,7 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     topic.name,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -239,7 +290,6 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val preview = if (topic.lastSender.isNotEmpty()) "${topic.lastSender}: ${topic.lastText}" else topic.lastText
                 Text(
@@ -256,7 +306,7 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
                             .padding(start = 8.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                            .padding(horizontal = 7.dp, vertical = 1.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

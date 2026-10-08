@@ -60,6 +60,25 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
         forSelected { repository.setPinned(it.id, key, pin) }
     }
 
+    /** Прочитать все непрочитанные чаты текущей вкладки («Все» или выбранной папки). */
+    fun markAllRead() {
+        val key = _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
+        val ids = chats.value
+            .filter { c ->
+                c.unreadCount > 0 &&
+                        if (key == null) c.archiveOrder == 0L else (c.folderOrders[key] ?: 0L) != 0L
+            }
+            .map { it.id }
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.markChatsRead(ids)
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+        }
+    }
+
     private val _selectedFolder = MutableStateFlow<Int?>(null)
     /** id выбранной папки; null — вкладка «Все». */
     val selectedFolder: StateFlow<Int?> = _selectedFolder.asStateFlow()
@@ -92,8 +111,8 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     /** Подгружает следующую порцию текущего списка чатов; безопасно вызывать часто. */
-    fun loadMore() {
-        val key = _selectedFolder.value?.takeIf { id -> folders.value.any { it.id == id } }
+    fun loadMore(folder: Int? = _selectedFolder.value) {
+        val key = folder?.takeIf { id -> folders.value.any { it.id == id } }
         if (key in loading || key in allLoaded) return
         loading += key
         viewModelScope.launch {

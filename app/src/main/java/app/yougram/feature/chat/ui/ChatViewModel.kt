@@ -630,6 +630,12 @@ class ChatViewModel(
 
     fun fileState(fileId: Int): Flow<FileState> = repository.fileState(fileId)
 
+    suspend fun pressButton(messageId: Long, data: ByteArray) = repository.pressInlineButton(chatId, messageId, data)
+
+    suspend fun loadStickerSetFull(setId: Long) = repository.loadStickerSetFull(setId)
+
+    suspend fun setStickerSetInstalled(setId: Long, installed: Boolean) = repository.setStickerSetInstalled(setId, installed)
+
     fun download(fileId: Int, priority: Int = 8) = repository.download(fileId, priority)
 
     fun pauseDownload(fileId: Int) = repository.pauseDownload(fileId)

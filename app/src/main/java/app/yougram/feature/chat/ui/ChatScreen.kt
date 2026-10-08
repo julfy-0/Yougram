@@ -15,6 +15,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -504,6 +505,15 @@ fun ChatScreen(
         }.collect { nearTop -> if (nearTop) viewModel.loadOlder() }
     }
 
+    // Список команд бота для подсказки (по кнопке-меню или при вводе «/»).
+    val typedCommand = input.startsWith("/") && !input.contains(' ') && !input.contains('\n')
+    val shownCommands = when {
+        state.botCommands.isEmpty() -> emptyList()
+        typedCommand -> state.botCommands.filter { ("/" + it.first).lowercase().startsWith(input.lowercase()) }
+        commandsOpen && input.isEmpty() -> state.botCommands
+        else -> emptyList()
+    }
+
     Box(Modifier.fillMaxSize()) {
         // Сообщения: прокручиваются под панелями, их размытая копия видна в панелях.
         Box(
@@ -594,30 +604,55 @@ fun ChatScreen(
             }
         }
 
-        // Подсказки команд бота: по кнопке-меню или при вводе «/».
+        // Подсказки команд бота: по кнопке-меню или при вводе «/». Стеклянная панель с размытием фона чата;
+        // появляется из-под поля ввода и уезжает обратно, строки списка плавно перестраиваются при фильтрации.
         run {
-            val typedCommand = input.startsWith("/") && !input.contains(' ') && !input.contains('\n')
-            val shown = when {
-                state.botCommands.isEmpty() -> emptyList()
-                typedCommand -> state.botCommands.filter { ("/" + it.first).lowercase().startsWith(input.lowercase()) }
-                commandsOpen && input.isEmpty() -> state.botCommands
-                else -> emptyList()
+            // Последний непустой список: пока идёт анимация закрытия, содержимое не должно пропадать.
+            var lastShown by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+            if (shownCommands.isNotEmpty()) lastShown = shownCommands
+            val plates = LocalPlates.current
+            // Радиус размытия — общий, из настроек внешнего вида (как у остальных панелей); прозрачность своя.
+            val commandsGlass = remember(glass.blurRadius, plates.commands) {
+                glass.copy(opacity = (1f - plates.commands).coerceIn(0f, 1f))
             }
-            if (shown.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 6.dp,
+            androidx.compose.animation.AnimatedVisibility(
+                visible = shownCommands.isNotEmpty(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
+                    .fillMaxWidth(),
+                enter = androidx.compose.animation.fadeIn(tween(180)) +
+                    androidx.compose.animation.scaleIn(
+                        tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                        initialScale = 0.88f,
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
+                    ) +
+                    androidx.compose.animation.slideInVertically(
+                        tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    ) { it / 4 },
+                exit = androidx.compose.animation.fadeOut(tween(140)) +
+                    androidx.compose.animation.scaleOut(
+                        tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                        targetScale = 0.92f,
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
+                    ) +
+                    androidx.compose.animation.slideOutVertically(tween(180)) { it / 5 },
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .glass(
+                            backdrop,
+                            commandsGlass,
+                            RoundedCornerShape(20.dp),
+                            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
                 ) {
                     LazyColumn(Modifier.heightIn(max = 260.dp)) {
-                        itemsIndexed(shown, key = { _, cmd -> cmd.first }) { _, cmd ->
+                        itemsIndexed(lastShown, key = { _, cmd -> cmd.first }) { _, cmd ->
                             Column(
                                 Modifier
+                                    .animateItem()
                                     .fillMaxWidth()
                                     .clickable {
                                         if (typedCommand) {
@@ -926,14 +961,7 @@ fun ChatScreen(
                         } else {
                             MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = InputFieldAlpha)
                         },
-                        border = if (threadMode) {
-                            androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                            )
-                        } else {
-                            null
-                        },
+                        border = null,
                     ) {
                         Row(
                             Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1556,6 +1584,9 @@ private fun MessageBubble(
                             onShowEdits = onShowEdits,
                             modifier = Modifier.align(Alignment.End).padding(start = 16.dp, end = 14.dp, top = 2.dp, bottom = if (withComments) 6.dp else 8.dp),
                         )
+                        if (message.buttons.isNotEmpty()) {
+                            InlineKeyboard(message, viewModel, Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp))
+                        }
                         if (withComments) {
                             CommentsButton(
                                 count = message.commentCount,

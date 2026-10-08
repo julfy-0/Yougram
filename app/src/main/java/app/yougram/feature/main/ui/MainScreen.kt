@@ -72,6 +72,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -253,6 +257,20 @@ fun MainScreen(
     LaunchedEffect(tab) { chatListViewModel.clearSelection() }
     val folderId = selectedFolder?.takeIf { id -> folders.any { it.id == id } }
     val showFolders = tab == MainTab.Chats && folders.isNotEmpty()
+
+    // Свайп влево-вправо по списку переключает папки; чипы вверху и пейджер синхронизированы в обе стороны.
+    val folderPage = folders.indexOfFirst { it.id == folderId } + 1
+    val folderPager = rememberPagerState(initialPage = folderPage) { folders.size + 1 }
+    val foldersNow = rememberUpdatedState(folders)
+    LaunchedEffect(folderPage, folders.size) {
+        if (folderPager.currentPage != folderPage) folderPager.animateScrollToPage(folderPage)
+    }
+    LaunchedEffect(folderPager) {
+        snapshotFlow { folderPager.settledPage }.collect { page ->
+            val id = foldersNow.value.getOrNull(page - 1)?.id
+            if (id != chatListViewModel.selectedFolder.value) chatListViewModel.selectFolder(id)
+        }
+    }
     val showStories = tab == MainTab.Chats && storyRefs.isNotEmpty() && !searching && !chatPrefs.hideStories
     val storiesTop = if (showStories) StoriesBarHeight else 0.dp
     val chatsPadding = if (folders.isNotEmpty()) {
@@ -343,14 +361,21 @@ fun MainScreen(
                     MainTab.Chats -> Box(Modifier.fillMaxSize()) {
                         // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
                         Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
-                            ChatListScreen(
-                                viewModel = chatListViewModel,
-                                query = "",
-                                contentPadding = chatsPadding,
-                                onOpenChat = onOpenChat,
-                                lines = chatPrefs.listLines,
-                                selectedChatId = selectedChatId,
-                            )
+                            HorizontalPager(
+                                state = folderPager,
+                                modifier = Modifier.fillMaxSize(),
+                                key = { page -> if (page == 0) -1 else foldersNow.value.getOrNull(page - 1)?.id ?: (-2 - page) },
+                            ) { page ->
+                                ChatListScreen(
+                                    viewModel = chatListViewModel,
+                                    query = "",
+                                    contentPadding = chatsPadding,
+                                    onOpenChat = onOpenChat,
+                                    lines = chatPrefs.listLines,
+                                    selectedChatId = selectedChatId,
+                                    folderId = foldersNow.value.getOrNull(page - 1)?.id,
+                                )
+                            }
                         }
                         AnimatedVisibility(
                             visible = searching && query.isNotBlank(),

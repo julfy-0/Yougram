@@ -43,6 +43,12 @@ class MainActivity : ComponentActivity() {
 
     /** Тап по уведомлению несёт id чата: передаём его навигации. */
     private fun handleIntent(intent: Intent?) {
+        // Ссылки t.me / tg:// из других приложений.
+        if (intent?.action == Intent.ACTION_VIEW) {
+            intent.dataString?.let { container.pendingOpenUrl.value = it }
+            intent.data = null
+            return
+        }
         if (intent == null || !intent.hasExtra(NotificationCenter.EXTRA_CHAT_ID)) return
         val chatId = intent.getLongExtra(NotificationCenter.EXTRA_CHAT_ID, 0L)
         intent.removeExtra(NotificationCenter.EXTRA_CHAT_ID)

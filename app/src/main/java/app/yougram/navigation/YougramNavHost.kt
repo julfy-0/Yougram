@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
 import app.yougram.core.ui.component.LoadingIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +44,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.yougram.core.di.AppContainer
+import app.yougram.core.telegram.TgLinkHandler
+import app.yougram.core.telegram.TgLinkResult
+import app.yougram.core.telegram.joinByInvite
 import app.yougram.core.ui.adaptive.DetailRoute
 import app.yougram.core.ui.adaptive.TwoPaneShell
 import app.yougram.core.ui.adaptive.decodeDetail
@@ -153,19 +159,64 @@ fun YougramNavHost(container: AppContainer) {
 
     val context = LocalContext.current
     val inAppBrowser by container.settings.inAppBrowser.collectAsState()
-    val openLink: (String) -> Unit = remember(inAppBrowser, navController, context) {
+    val scope = rememberCoroutineScope()
+    var joinPrompt by remember { mutableStateOf<TgLinkResult.JoinInvite?>(null) }
+    val linkHandler = remember(container) { TgLinkHandler(container.telegram.client) }
+
+    // Ссылки t.me / tg:// разбираем через TDLib и открываем прямо в клиенте; обычные — в браузере.
+    val openLink: (String) -> Unit = remember(inAppBrowser, navController, context, linkHandler) {
         { raw: String ->
             val url = normalizeUrl(raw)
-            if (inAppBrowser && isWebUrl(url) && !isTelegramUrl(url)) {
-                navController.navigate("browser/${Uri.encode(url)}")
-            } else {
-                openExternally(context, url)
+            val openWeb = {
+                if (inAppBrowser && isWebUrl(url)) navController.navigate("browser/${Uri.encode(url)}")
+                else openExternally(context, url)
             }
+            if (isTelegramUrl(url)) {
+                scope.launch {
+                    when (val r = runCatching { linkHandler.resolve(url) }.getOrDefault(TgLinkResult.Failed)) {
+                        is TgLinkResult.OpenChat -> openChat(r.chatId, r.messageId)
+                        is TgLinkResult.JoinInvite -> joinPrompt = r
+                        // Не открываем снаружи: наш же фильтр t.me вернул бы ссылку обратно в приложение.
+                        is TgLinkResult.OpenUrl ->
+                            if (isWebUrl(url)) navController.navigate("browser/${Uri.encode(url)}")
+                            else Toast.makeText(context, "Эта ссылка пока не поддерживается", Toast.LENGTH_SHORT).show()
+                        TgLinkResult.Failed -> Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else openWeb()
         }
+    }
+    val openLinkNow = rememberUpdatedState(openLink)
+
+    // Ссылка пришла снаружи (браузер, другое приложение): открываем после входа.
+    val pendingUrl by container.pendingOpenUrl.collectAsState()
+    LaunchedEffect(pendingUrl, step) {
+        val url = pendingUrl ?: return@LaunchedEffect
+        if (step != AuthStep.Ready) return@LaunchedEffect
+        container.pendingOpenUrl.value = null
+        openLinkNow.value(url)
+    }
+
+    joinPrompt?.let { invite ->
+        AlertDialog(
+            onDismissRequest = { joinPrompt = null },
+            title = { Text("Вступить в чат?") },
+            text = { Text(invite.title.ifBlank { "Приглашение в чат" }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    joinPrompt = null
+                    scope.launch {
+                        val id = runCatching { container.telegram.client.joinByInvite(invite.url) }.getOrNull()
+                        if (id != null) openChat(id, 0L)
+                        else Toast.makeText(context, "Не удалось вступить", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Вступить") }
+            },
+            dismissButton = { TextButton(onClick = { joinPrompt = null }) { Text("Отмена") } },
+        )
     }
 
     // Тап по @username: ищем в Telegram и открываем профиль (в планшетном режиме — в правой панели).
-    val scope = rememberCoroutineScope()
     val detailNow = rememberUpdatedState(detail)
     val openUsername: (String) -> Unit = remember(navController, context) {
         { username: String ->

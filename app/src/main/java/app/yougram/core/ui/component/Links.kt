@@ -27,7 +27,10 @@ val LocalOpenLink = staticCompositionLocalOf<(String) -> Unit> { {} }
 /** Открывает профиль по @username (без «@»): ищет пользователя или публичный чат в Telegram. */
 val LocalOpenUsername = staticCompositionLocalOf<(String) -> Unit> { {} }
 
-private val UrlPattern = Regex("""(?:https?://|www\.)[^\s<>"']+""", RegexOption.IGNORE_CASE)
+private val UrlPattern = Regex(
+    """(?<![\p{L}\p{N}_@./-])(?:https?://|www\.|tg://|(?:t|telegram)\.me/)[^\s<>"']+""",
+    RegexOption.IGNORE_CASE,
+)
 // @username: 5–32 символа, начинается с буквы. Не трогаем адреса почты (user@host) и куски ссылок.
 private val MentionPattern = Regex("""(?<![\p{L}\p{N}_@./])@([A-Za-z][A-Za-z0-9_]{3,31})(?![A-Za-z0-9_])""")
 private val SchemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")

@@ -37,7 +37,12 @@ import dev.g000sha256.tdl.dto.FormattedText
 import dev.g000sha256.tdl.dto.InputMessageLocation
 import dev.g000sha256.tdl.dto.InputMessagePoll
 import dev.g000sha256.tdl.dto.InputPollOption
-import dev.g000sha256.tdl.dto.PollTypeRegular
+import dev.g000sha256.tdl.dto.InputPollTypeRegular
+import dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeCallback
+import dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeCopyText
+import dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeUrl
+import dev.g000sha256.tdl.dto.CallbackQueryPayloadData
+import dev.g000sha256.tdl.dto.ReplyMarkupInlineKeyboard
 import dev.g000sha256.tdl.dto.InputAnimation
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
@@ -231,6 +236,8 @@ data class MediaItem(
     val locked: Boolean = false,
     /** Сколько звёзд стоит платное медиа (для заблокированного — цена открытия). */
     val paidStars: Long = 0L,
+    /** Набор, которому принадлежит стикер (0 — не стикер или набор неизвестен). */
+    val stickerSetId: Long = 0L,
 )
 
 /** Стикер для панели выбора: файл TDLib уже можно скачать и отправить обратно по id. */
@@ -245,7 +252,23 @@ data class StickerItem(
     val format: StickerFmt = StickerFmt.STATIC,
 )
 
+/** Тип кнопки inline-клавиатуры бота. */
+enum class InlineButtonKind { URL, CALLBACK, COPY, OTHER }
+
+data class InlineButton(
+    val text: String,
+    val kind: InlineButtonKind,
+    val url: String? = null,
+    val data: ByteArray? = null,
+    val copyText: String? = null,
+)
+
+/** Ответ бота на нажатие callback-кнопки. */
+data class ButtonAnswer(val text: String, val showAlert: Boolean, val url: String)
+
 data class StickerSetItem(val id: Long, val title: String, val cover: StickerItem?)
+
+data class StickerSetFull(val id: Long, val title: String, val installed: Boolean, val stickers: List<StickerItem>)
 
 data class GifItem(val fileId: Int, val thumbFileId: Int?, val width: Int, val height: Int, val duration: Int)
 
@@ -308,6 +331,8 @@ data class MessageItem(
     val paidMessageStars: Long = 0L,
     /** Премиум-эмодзи в тексте (offset/length в символах [text]). */
     val emojis: List<CustomEmojiSpan> = emptyList(),
+    /** Inline-клавиатура бота под сообщением: ряды кнопок. */
+    val buttons: List<List<InlineButton>> = emptyList(),
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -1750,6 +1775,21 @@ class ChatRepository(
             }
     }
 
+    /** Полный набор стикеров для листа «стикерпак». */
+    suspend fun loadStickerSetFull(setId: Long): StickerSetFull = withContext(Dispatchers.IO) {
+        val set = client.getStickerSet(setId = setId).getOrThrow()
+        StickerSetFull(
+            id = set.id,
+            title = set.title,
+            installed = set.isInstalled,
+            stickers = set.stickers.orEmpty().filterNotNull().map(::mapSticker),
+        )
+    }
+
+    suspend fun setStickerSetInstalled(setId: Long, installed: Boolean) = withContext(Dispatchers.IO) {
+        client.changeStickerSet(setId = setId, isInstalled = installed, isArchived = false).getOrThrow()
+    }
+
     suspend fun loadStickerSetStickers(setId: Long): List<StickerItem> = withContext(Dispatchers.IO) {
         client.getStickerSet(setId = setId).getOrThrow().stickers.orEmpty().filterNotNull().map(::mapSticker)
     }
@@ -1855,9 +1895,19 @@ class ChatRepository(
             chatId,
             InputMessagePoll(
                 question = FormattedText(text = question, entities = emptyArray()),
-                options = options.map { InputPollOption(text = FormattedText(text = it, entities = emptyArray())) }.toTypedArray(),
+                options = options.map {
+                    InputPollOption(text = FormattedText(text = it, entities = emptyArray()), media = null)
+                }.toTypedArray(),
+                description = FormattedText(text = "", entities = emptyArray()),
+                media = null,
                 isAnonymous = anonymous,
-                type = PollTypeRegular(allowMultipleAnswers = multiple),
+                allowsMultipleAnswers = multiple,
+                allowsRevoting = true,
+                membersOnly = false,
+                countryCodes = emptyArray(),
+                shuffleOptions = false,
+                hideResultsUntilCloses = false,
+                type = InputPollTypeRegular(allowAddingOptions = false),
                 openPeriod = 0,
                 closeDate = 0,
                 isClosed = false,
@@ -1869,9 +1919,6 @@ class ChatRepository(
         chatId,
         InputMessageLocation(
             location = dev.g000sha256.tdl.dto.Location(latitude = latitude, longitude = longitude, horizontalAccuracy = accuracy),
-            livePeriod = 0,
-            heading = 0,
-            proximityAlertRadius = 0,
         ),
     )
 
@@ -2255,8 +2302,36 @@ class ChatRepository(
             threadId = (topicId as? MessageTopicThread)?.messageThreadId ?: 0L,
             paidMessageStars = paidMessageStarCount,
             emojis = emojisOf(c),
+            buttons = buttonsOf(this),
         )
     }
+
+    private fun buttonsOf(m: Message): List<List<InlineButton>> {
+        val markup = m.replyMarkup as? ReplyMarkupInlineKeyboard ?: return emptyList()
+        return markup.rows.orEmpty().filterNotNull().map { row ->
+            row.orEmpty().filterNotNull().map { b ->
+                when (val t = b.type) {
+                    is InlineKeyboardButtonTypeUrl -> InlineButton(b.text, InlineButtonKind.URL, url = t.url)
+                    is InlineKeyboardButtonTypeCallback -> InlineButton(b.text, InlineButtonKind.CALLBACK, data = t.data)
+                    is InlineKeyboardButtonTypeCopyText -> InlineButton(b.text, InlineButtonKind.COPY, copyText = t.text)
+                    else -> InlineButton(b.text, InlineButtonKind.OTHER)
+                }
+            }
+        }.filter { it.isNotEmpty() }
+    }
+
+    /** Нажатие callback-кнопки: возвращает ответ бота (текст, алерт или ссылку). */
+    suspend fun pressInlineButton(chatId: Long, messageId: Long, data: ByteArray): Result<ButtonAnswer> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val a = client.getCallbackQueryAnswer(
+                    chatId = chatId,
+                    messageId = messageId,
+                    payload = CallbackQueryPayloadData(data = data),
+                ).getOrThrow()
+                ButtonAnswer(text = a.text, showAlert = a.showAlert, url = a.url)
+            }
+        }
 
     /** Премиум-эмодзи из форматированного текста или подписи; обычный текст без сущностей даёт пустой список. */
     private fun emojisOf(c: MessageContent): List<CustomEmojiSpan> {
@@ -2365,6 +2440,7 @@ class ChatRepository(
                 },
                 size = sizeOf(sticker.sticker),
                 miniThumb = null,
+                stickerSetId = sticker.setId,
             )
         }
         is MessagePaidMedia -> when (val first = media.orEmpty().filterNotNull().firstOrNull()) {

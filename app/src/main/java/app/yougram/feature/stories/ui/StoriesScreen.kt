@@ -434,7 +434,6 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                             Box(
                                 Modifier
                                     .glass(backdrop, glass, replyShape, tint = Color.Black)
-                                    .border(1.dp, Color.White.copy(alpha = 0.18f), replyShape)
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                             ) {
                                 if (reply.isEmpty()) Text("Ответить на историю…", color = Color.White.copy(alpha = 0.6f))

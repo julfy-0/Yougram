@@ -110,8 +110,7 @@ fun PhotoViewer(
                     Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp)
-                        .glass(backdrop, ViewerGlass, CircleShape, Color.Black)
-                        .border(0.6.dp, Color.White.copy(alpha = 0.22f), CircleShape),
+                        .glass(backdrop, ViewerGlass, CircleShape, Color.Black),
                 ) {
                     Text(
                         "${pagerState.currentPage + 1} из ${items.size}",
@@ -127,7 +126,6 @@ fun PhotoViewer(
                     .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 6.dp, start = 12.dp)
                     .size(40.dp)
                     .glass(backdrop, ViewerGlass, CircleShape, Color.Black)
-                    .border(0.6.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                     .clickable(onClick = onDismiss),
                 contentAlignment = Alignment.Center,
             ) {
