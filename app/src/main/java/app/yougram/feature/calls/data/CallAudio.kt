@@ -70,6 +70,39 @@ class CallAudio(context: Context) {
         _bluetooth.value = false
     }
 
+    /** Переприменяет режим, маршрут и громкость, когда нативные аудиопотоки уже открыты. */
+    @Synchronized
+    fun refresh() {
+        if (!running) return
+        am.mode = AudioManager.MODE_IN_COMMUNICATION
+        runCatching { am.isMicrophoneMute = false }
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        if (am.getStreamVolume(AudioManager.STREAM_VOICE_CALL) < max / 2) {
+            runCatching { am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max / 2, 0) }
+        }
+        val current = _route.value
+        runCatching { am.clearCommunicationDevice() }
+        setRoute(current)
+        @Suppress("DEPRECATION")
+        runCatching { am.isSpeakerphoneOn = (current == AudioRoute.SPEAKER) }
+    }
+
+    /** Диагностика: режим, маршрут, громкость, не заглушена ли запись и какие потоки играют. */
+    fun dump(tag: String) {
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        val rec = runCatching {
+            am.activeRecordingConfigurations.joinToString { "src=${it.clientAudioSource} silenced=${it.isClientSilenced} dev=${it.audioDevice?.type}" }
+        }.getOrDefault("?")
+        val play = runCatching {
+            am.activePlaybackConfigurations.joinToString { "usage=${it.audioAttributes.usage}" }
+        }.getOrDefault("?")
+        CallLog.d(
+            "CallAudio",
+            "$tag mode=${am.mode} route=${_route.value} commDev=${am.communicationDevice?.type} " +
+                "micMute=${am.isMicrophoneMute} vol=${am.getStreamVolume(AudioManager.STREAM_VOICE_CALL)}/$max rec=[$rec] play=[$play]",
+        )
+    }
+
     fun setRoute(target: AudioRoute) {
         val device = when (target) {
             AudioRoute.SPEAKER -> byType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)

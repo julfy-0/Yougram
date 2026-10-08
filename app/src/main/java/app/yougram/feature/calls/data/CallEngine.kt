@@ -26,6 +26,8 @@ interface CallEngine {
     fun setMuted(muted: Boolean)
     fun setVideoEnabled(enabled: Boolean)
     fun stop()
+    fun reopenPlayback() = Unit
+    fun debugStats(tag: String) = Unit
 }
 
 object NoCallEngine : CallEngine {

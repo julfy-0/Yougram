@@ -248,6 +248,18 @@ class CallManager(
     /** Реальное состояние медиа-соединения: таймер и «активный» режим только после CONNECTED. */
     private fun onLink(id: Int, link: EngineLink) {
         CallLog.d("CallManager", "engine link id=$id -> $link")
+        if (link == EngineLink.CONNECTED) {
+            audio.refresh()
+            scope.launch {
+                delay(700)
+                engine.reopenPlayback()
+                delay(500)
+                audio.refresh()
+                delay(1500); audio.dump("t+2.7s"); engine.debugStats("t+2.7s")
+                delay(3000); engine.debugStats("t+5.7s")
+                delay(4000); engine.debugStats("t+9.7s")
+            }
+        }
         scope.launch {
             mutex.withLock {
                 _call.update { c ->

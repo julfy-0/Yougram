@@ -208,6 +208,57 @@ class NTgCallsEngine : CallEngine {
         }
     }
 
+    override fun reopenPlayback() {
+        val inst = ntg ?: return
+        val uid = userId
+        worker.execute {
+            if (ntg !== inst) return@execute
+            runCatching {
+                inst.setStreamSources(
+                    uid,
+                    StreamMode.PLAYBACK,
+                    MediaDescription(null, AudioDescription(MediaSource.DEVICE, 48000, 1, SPEAKER_METADATA, false), null, null),
+                )
+            }.onFailure { CallLog.e(TAG, "reopenPlayback failed", it) }
+            CallLog.d(TAG, "reopenPlayback done")
+        }
+    }
+
+    override fun debugStats(tag: String) {
+        val inst = ntg ?: return
+        val uid = userId
+        worker.execute {
+            if (ntg !== inst) return@execute
+            CallLog.d(
+                TAG,
+                "stats $tag " + listOf(
+                    probe(inst, "timeCap", "time", uid, StreamMode.CAPTURE),
+                    probe(inst, "timePlay", "time", uid, StreamMode.PLAYBACK),
+                    probe(inst, "state", "getState", uid),
+                    probe(inst, "connMode", "getConnectionMode", uid),
+                    probe(inst, "cpu", "cpuUsage"),
+                ).joinToString(" "),
+            )
+        }
+    }
+
+    private fun probe(inst: NTgCalls, label: String, name: String, vararg args: Any?): String =
+        try {
+            val m = inst.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == args.size }
+            if (m == null) "$label=n/a" else "$label=" + describe(m.invoke(inst, *args))
+        } catch (t: Throwable) {
+            "$label=ERR(${t.cause?.message ?: t.message})"
+        }
+
+    private fun describe(v: Any?): String {
+        if (v == null) return "null"
+        if (v is Number || v is Boolean || v is String || v is Enum<*>) return v.toString()
+        return buildString {
+            append(v.javaClass.simpleName)
+            v.javaClass.fields.forEach { f -> runCatching { append(' ').append(f.name).append('=').append(f.get(v)) } }
+        }
+    }
+
     private fun toRtcServer(server: dev.g000sha256.tdl.dto.CallServer): RTCServer =
         when (val type = server.type) {
             is CallServerTypeTelegramReflector -> RTCServer(
