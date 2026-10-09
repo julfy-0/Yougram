@@ -583,9 +583,9 @@ class ChatViewModel(
         }
     }
 
-    fun sendPhoto(path: String) = sendMedia { repository.sendPhoto(chatId, path) }
+    fun sendPhoto(path: String, caption: String = "") = sendMedia { repository.sendPhoto(chatId, path, caption) }
 
-    fun sendDocument(path: String) = sendMedia { repository.sendDocument(chatId, path) }
+    fun sendDocument(path: String, caption: String = "") = sendMedia { repository.sendDocument(chatId, path, caption) }
 
     fun sendPoll(question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
         sendMedia { repository.sendPoll(chatId, question, options, anonymous, multiple) }
@@ -598,8 +598,8 @@ class ChatViewModel(
     fun sendVideoNote(path: String, duration: Int, length: Int) =
         sendMedia { repository.sendVideoNote(chatId, path, duration, length) }
 
-    fun sendAnimation(path: String, width: Int = 0, height: Int = 0, duration: Int = 0) =
-        sendMedia { repository.sendAnimation(chatId, path, width, height, duration) }
+    fun sendAnimation(path: String, width: Int = 0, height: Int = 0, duration: Int = 0, caption: String = "") =
+        sendMedia { repository.sendAnimation(chatId, path, width, height, duration, caption) }
 
     fun sendSticker(sticker: StickerItem) =
         sendMedia { repository.sendSticker(chatId, sticker.fileId, sticker.width, sticker.height, sticker.emoji) }

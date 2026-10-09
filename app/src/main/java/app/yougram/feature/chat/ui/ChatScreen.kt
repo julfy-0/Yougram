@@ -370,14 +370,23 @@ fun ChatScreen(
         if (result.values.any { it }) fetchLocation()
         else Toast.makeText(context, "Нет доступа к геолокации", Toast.LENGTH_SHORT).show()
     }
+    // Выбранное медиа сначала попадает в экран подготовки (подпись, поворот, обрезка), и только потом уходит.
+    var composing by remember { mutableStateOf<PendingMedia?>(null) }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
-            val isImage = context.contentResolver.getType(uri)?.startsWith("image/") == true
+            val mime = context.contentResolver.getType(uri).orEmpty()
             val path = copyToCache(context, uri)
-            when {
-                path == null -> Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
-                isImage -> viewModel.sendPhoto(path)
-                else -> viewModel.sendDocument(path)
+            if (path == null) {
+                Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+            } else {
+                composing = PendingMedia(
+                    path,
+                    when {
+                        mime == "image/gif" -> PendingKind.GIF
+                        mime.startsWith("image/") -> PendingKind.PHOTO
+                        else -> PendingKind.VIDEO
+                    },
+                )
             }
         }
     }
@@ -391,7 +400,7 @@ fun ChatScreen(
     val gifPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             copyToCache(context, uri)?.let { path ->
-                viewModel.sendAnimation(path)
+                composing = PendingMedia(path, PendingKind.GIF)
             } ?: Toast.makeText(context, "Не удалось прочитать GIF", Toast.LENGTH_SHORT).show()
         }
     }
@@ -1212,6 +1221,20 @@ fun ChatScreen(
         )
     }
 
+    composing?.let { p ->
+        MediaComposerDialog(
+            pending = p,
+            onDismiss = { composing = null },
+            onSend = { path, caption ->
+                composing = null
+                when (p.kind) {
+                    PendingKind.PHOTO -> viewModel.sendPhoto(path, caption)
+                    PendingKind.GIF -> viewModel.sendAnimation(path, caption = caption)
+                    PendingKind.VIDEO -> viewModel.sendDocument(path, caption)
+                }
+            },
+        )
+    }
     pendingLocation?.let { loc ->
         AlertDialog(
             onDismissRequest = { pendingLocation = null },
@@ -1528,7 +1551,13 @@ private fun MessageBubble(
                     Column(
                         Modifier
                             .widthIn(max = if (showSenderUi) 290.dp else 320.dp)
-                            .then(if (withComments) Modifier.width(IntrinsicSize.Max) else Modifier),
+                            .then(if (withComments) Modifier.width(IntrinsicSize.Max) else Modifier)
+                            // Подпись переносится по ширине медиа, а не растягивает пузырь шире картинки.
+                            .then(
+                                if (media != null && message.text.isNotEmpty() &&
+                                    (media.kind == MediaKind.PHOTO || media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION)
+                                ) Modifier.width(268.dp) else Modifier,
+                            ),
                     ) {
                         if (showName && senderKey != null) {
                             SenderName(

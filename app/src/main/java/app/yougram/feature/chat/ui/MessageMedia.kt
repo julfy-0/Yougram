@@ -4,6 +4,10 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
+import android.widget.ImageView
+import androidx.compose.ui.viewinterop.AndroidView
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -159,17 +163,18 @@ private fun StickerView(media: MediaItem, viewModel: ChatViewModel, full: FileSt
     val path = full.path
     val isTgs = media.mimeType == "application/x-tgsticker"
     val isWebm = media.mimeType == "video/webm"
-    val previewBitmap = rememberFileBitmap(preview.path, 512)
-    val staticBitmap = if (!isTgs && !isWebm) rememberFileBitmap(path, 512) else null
+    val previewBitmap = rememberFileBitmap(preview.path, 384)
+    val staticBitmap = if (!isTgs && !isWebm) rememberFileBitmap(path, 384) else null
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
 
     Box(Modifier.width(160.dp).aspectRatio(ratio), contentAlignment = Alignment.Center) {
         val fallback = staticBitmap ?: previewBitmap
         when {
-            path != null && isTgs -> {
+            path != null && isTgs && !lowTier -> {
                 fallback?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
                 TgsSticker(path, Modifier.fillMaxSize())
             }
-            path != null && isWebm -> {
+            path != null && isWebm && !lowTier -> {
                 fallback?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
                 LoopingVideo(path, Modifier.fillMaxSize(), crop = false)
             }
@@ -193,14 +198,16 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
     val mini = remember(media.miniThumb) {
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
-    val previewBitmap = rememberFileBitmap(preview.path, 1024)
+    val previewBitmap = rememberFileBitmap(preview.path, 640)
     val ratio = if (media.width > 0 && media.height > 0) {
         (media.width.toFloat() / media.height).coerceIn(0.6f, 1.8f)
     } else 1f
     val animPath = full.path.takeIf { media.kind == MediaKind.ANIMATION && media.mimeType != "image/gif" }
-    val gifBitmap = if (media.kind == MediaKind.ANIMATION && media.mimeType == "image/gif") {
-        rememberFileBitmap(full.path, 1024)
-    } else null
+    val isGif = media.kind == MediaKind.ANIMATION && media.mimeType == "image/gif"
+    val lowTierGif = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    // На слабом железе GIF показываем статичным первым кадром, на остальных — анимированным.
+    val gifBitmap = if (isGif && lowTierGif) rememberFileBitmap(full.path, 640) else null
+    val gifPath = full.path.takeIf { isGif && !lowTierGif }
     // Пока полный файл не скачан, превью размыто. На слабом железе вместо blur показываем только крошечную миниатюру:
     // растянутая, она и так выглядит размытой.
     val blurred = full.path == null
@@ -227,6 +234,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         gifBitmap?.let {
             Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
+        if (gifPath != null) AnimatedGif(gifPath, Modifier.fillMaxSize())
         if (animPath != null) {
             LoopingVideo(animPath, Modifier.fillMaxSize())
         }
@@ -241,7 +249,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
                     Icon(Icons.Filled.Download, null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
             }
-        } else if (media.kind != MediaKind.PHOTO && animPath == null && gifBitmap == null) {
+        } else if (media.kind != MediaKind.PHOTO && animPath == null && gifBitmap == null && gifPath == null) {
             Box(
                 Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,
@@ -334,4 +342,41 @@ internal fun openFile(context: Context, path: String, mimeType: String) {
     } catch (_: Exception) {
         Toast.makeText(context, "Не удалось открыть файл", Toast.LENGTH_SHORT).show()
     }
+}
+
+/** Анимированный GIF/WebP через ImageDecoder: декодируем сразу в размер пузыря, чтобы не держать полный кадр в памяти. */
+@Composable
+private fun AnimatedGif(path: String, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx -> ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
+        update = { view ->
+            if (view.tag != path) {
+                view.tag = path
+                runCatching {
+                    val source = ImageDecoder.createSource(File(path))
+                    val drawable = ImageDecoder.decodeDrawable(source) { decoder, info, _ ->
+                        val side = maxOf(info.size.width, info.size.height)
+                        if (side > 640) {
+                            val k = 640f / side
+                            decoder.setTargetSize(
+                                (info.size.width * k).toInt().coerceAtLeast(1),
+                                (info.size.height * k).toInt().coerceAtLeast(1),
+                            )
+                        }
+                    }
+                    view.setImageDrawable(drawable)
+                    (drawable as? AnimatedImageDrawable)?.apply {
+                        repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+                        start()
+                    }
+                }
+            }
+        },
+        onRelease = { view ->
+            (view.drawable as? AnimatedImageDrawable)?.stop()
+            view.setImageDrawable(null)
+            view.tag = null
+        },
+    )
 }

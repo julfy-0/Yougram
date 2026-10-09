@@ -43,6 +43,10 @@ data class ActiveCall(
     val muted: Boolean = false,
     val engineAvailable: Boolean = false,
     val message: String? = null,
+    /** Собеседнику уже идёт вызов (исходящий): играем гудки. */
+    val remoteRinging: Boolean = false,
+    /** Итог звонка для финального звукового сигнала. */
+    val end: CallEnd? = null,
 )
 
 /**
@@ -59,6 +63,10 @@ class CallManager(
     private val audio: CallAudio,
 ) {
     private val client get() = telegram.client
+
+    /** Звуки звонка из оригинального Telegram: соединение, гудки, занято, ошибка, завершение. */
+    private val tones by lazy { CallTones(appContext) }
+    private var tonedEndId = Int.MIN_VALUE
 
     @Volatile
     var engine: CallEngine = NoCallEngine
@@ -101,6 +109,7 @@ class CallManager(
     fun cycleRoute() = audio.cycle()
 
     fun start() {
+        scope.launch { call.collect { renderTones(it) } }
         scope.launch {
             client.callUpdates.collect { onCallUpdate(it.call) }
         }
@@ -134,7 +143,7 @@ class CallManager(
                 if (result is TdlResult.Failure) {
                     CallLog.e(TAG, "createCall failed code=${result.code} message=${result.message}")
                     val text = if (result.code == 403) "Пользователь не принимает звонки" else result.message
-                    showEnded(userId, isVideo, text)
+                    showEnded(userId, isVideo, text, CallEnd.FAILED)
                 }
                 // Дальше состояние придёт в onCallUpdate.
             } finally {
@@ -215,6 +224,7 @@ class CallManager(
                     base.copy(
                         phase = CallPhase.RINGING,
                         message = if (call.isOutgoing) (if (state.isReceived) "Звонок…" else "Соединение…") else null,
+                        remoteRinging = call.isOutgoing && state.isReceived,
                     ),
                 )
                 is CallStateExchangingKeys -> publish(base.copy(phase = CallPhase.CONNECTING, message = "Обмен ключами…"))
@@ -222,13 +232,25 @@ class CallManager(
                 is CallStateHangingUp -> {
                     markFinished(base.id)
                     stopMedia()
-                    _call.value = base.copy(phase = CallPhase.ENDED, message = "Завершение…")
+                    _call.value = base.copy(
+                        phase = CallPhase.ENDED,
+                        message = "Завершение…",
+                        end = if (base.startedAtMillis != null) CallEnd.DONE else null,
+                    )
                     clearLater(base.id, 5000)
                 }
-                is CallStateDiscarded -> finish(base, "Звонок завершён")
+                is CallStateDiscarded -> finish(
+                    base, "Звонок завершён",
+                    // Исходящий, который не дошёл до разговора и закрыт собеседником: «занято».
+                    when {
+                        base.startedAtMillis != null -> CallEnd.DONE
+                        base.isOutgoing -> CallEnd.BUSY
+                        else -> null
+                    },
+                )
                 is CallStateError -> {
                     CallLog.e(TAG, "call error code=${state.error.code} message=${state.error.message}")
-                    finish(base, state.error.message.ifEmpty { "Ошибка звонка" })
+                    finish(base, state.error.message.ifEmpty { "Ошибка звонка" }, CallEnd.FAILED)
                 }
                 else -> Unit
             }
@@ -354,18 +376,23 @@ class CallManager(
         linkJob?.cancel()
         val duration = c.startedAtMillis?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
         stopMedia()
-        _call.update { s -> if (s != null && s.id == c.id) s.copy(phase = CallPhase.ENDED, message = text) else s }
+        val end = when {
+            disconnected -> CallEnd.FAILED
+            c.startedAtMillis != null -> CallEnd.DONE
+            else -> null
+        }
+        _call.update { s -> if (s != null && s.id == c.id) s.copy(phase = CallPhase.ENDED, message = text, end = end) else s }
         if (discard) discard(c.id, c.isVideo, duration, disconnected)
         clearLater(c.id, if (disconnected) 1800 else 800)
     }
 
     /** Завершение по сообщению TDLib: звонок уже закрыт на сервере. */
-    private fun finish(base: ActiveCall, text: String) {
+    private fun finish(base: ActiveCall, text: String, end: CallEnd? = null) {
         CallLog.d(TAG, "finish id=${base.id} text=$text")
         markFinished(base.id)
         linkJob?.cancel()
         stopMedia()
-        _call.value = base.copy(phase = CallPhase.ENDED, message = text)
+        _call.value = base.copy(phase = CallPhase.ENDED, message = text, end = end)
         clearLater(base.id, 1200)
     }
 
@@ -389,15 +416,42 @@ class CallManager(
         }
     }
 
-    private fun showEnded(userId: Long, video: Boolean, text: String) {
+    private fun showEnded(userId: Long, video: Boolean, text: String, end: CallEnd? = null) {
         scope.launch {
             if (_call.value != null) return@launch
             val info = runCatching { chats.userCardInfo(userId) }.getOrNull()
             _call.value = ActiveCall(
                 id = -1, userId = userId, title = info?.first.orEmpty(), avatarFileId = info?.second,
-                isOutgoing = true, isVideo = video, phase = CallPhase.ENDED, message = text,
+                isOutgoing = true, isVideo = video, phase = CallPhase.ENDED, message = text, end = end,
             )
             clearLater(-1, 1800)
+        }
+    }
+
+    // ---------------------------------------------------------------- Звуки
+
+    /** Гудки/«соединение» по фазе звонка и одиночный сигнал при завершении (по одному разу на звонок). */
+    private fun renderTones(c: ActiveCall?) {
+        if (c == null) {
+            tonedEndId = Int.MIN_VALUE
+            tones.stop()
+            return
+        }
+        when (c.phase) {
+            CallPhase.RINGING ->
+                if (c.isOutgoing) tones.setLoop(if (c.remoteRinging) CallLoop.RINGBACK else CallLoop.CONNECTING)
+                else tones.setLoop(CallLoop.NONE) // входящий звонит рингтоном из CallService
+            CallPhase.CONNECTING -> tones.setLoop(CallLoop.CONNECTING)
+            CallPhase.ACTIVE -> tones.setLoop(CallLoop.NONE)
+            CallPhase.ENDED -> {
+                val end = c.end
+                if (end != null && tonedEndId != c.id) {
+                    tonedEndId = c.id
+                    tones.playEnd(end)
+                } else if (end == null) {
+                    tones.setLoop(CallLoop.NONE)
+                }
+            }
         }
     }
 

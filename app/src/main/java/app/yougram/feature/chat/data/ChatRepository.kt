@@ -1683,6 +1683,10 @@ class ChatRepository(
         ).getOrThrow()
     }
 
+    /** Подпись к медиа: пустая — без подписи. */
+    private fun captionOf(text: String): FormattedText? =
+        text.trim().takeIf { it.isNotEmpty() }?.let { FormattedText(text = it, entities = emptyArray()) }
+
     private suspend fun sendContent(chatId: Long, content: InputMessageContent) {
         client.sendMessage(
             chatId = chatId,
@@ -1695,7 +1699,9 @@ class ChatRepository(
     }
 
     /** Отправляет GIF/MP4-анимацию как нативное animation-сообщение Telegram. */
-    suspend fun sendAnimation(chatId: Long, path: String, width: Int = 0, height: Int = 0, duration: Int = 0) = sendContent(
+    suspend fun sendAnimation(
+        chatId: Long, path: String, width: Int = 0, height: Int = 0, duration: Int = 0, caption: String = "",
+    ) = sendContent(
         chatId,
         InputMessageAnimation(
             animation = InputAnimation(
@@ -1706,7 +1712,7 @@ class ChatRepository(
                 width = width.coerceAtLeast(0),
                 height = height.coerceAtLeast(0),
             ),
-            caption = null,
+            caption = captionOf(caption),
             showCaptionAboveMedia = false,
             hasSpoiler = false,
         ),
@@ -1834,7 +1840,7 @@ class ChatRepository(
     )
 
     /** Отправляет фото из локального файла. */
-    suspend fun sendPhoto(chatId: Long, path: String) = sendContent(
+    suspend fun sendPhoto(chatId: Long, path: String, caption: String = "") = sendContent(
         chatId,
         InputMessagePhoto(
             photo = InputPhoto(
@@ -1845,7 +1851,7 @@ class ChatRepository(
                 width = 0,
                 height = 0,
             ),
-            caption = null,
+            caption = captionOf(caption),
             showCaptionAboveMedia = false,
             selfDestructType = null,
             hasSpoiler = false,
@@ -1853,7 +1859,7 @@ class ChatRepository(
     )
 
     /** Отправляет любой файл документом (так же уходят видео из галереи). */
-    suspend fun sendDocument(chatId: Long, path: String) = sendContent(
+    suspend fun sendDocument(chatId: Long, path: String, caption: String = "") = sendContent(
         chatId,
         InputMessageDocument(
             document = InputDocument(
@@ -1861,7 +1867,7 @@ class ChatRepository(
                 thumbnail = null,
                 disableContentTypeDetection = false,
             ),
-            caption = null,
+            caption = captionOf(caption),
         ),
     )
 
