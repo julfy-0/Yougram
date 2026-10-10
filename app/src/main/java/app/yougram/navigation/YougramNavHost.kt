@@ -298,7 +298,11 @@ fun YougramNavHost(container: AppContainer) {
                     }
                     val selectedChat = detail.firstNotNullOfOrNull { (it as? DetailRoute.Chat)?.chatId }
                     if (twoPane) {
-                        BackHandler(enabled = detail.isNotEmpty()) { setDetail(detail.dropLast(1)) }
+                        val haptics = app.yougram.core.ui.rememberHaptics()
+                        BackHandler(enabled = detail.isNotEmpty()) {
+                            haptics(app.yougram.core.ui.Haptics.Kind.Tick)
+                            setDetail(detail.dropLast(1))
+                        }
                         TwoPaneShell(
                             detail = detail.lastOrNull(),
                             listPane = { mainPane(selectedChat) },

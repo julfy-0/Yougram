@@ -66,6 +66,7 @@ import dev.g000sha256.tdl.dto.MessageDocument
 import dev.g000sha256.tdl.dto.MessageInteractionInfo
 import dev.g000sha256.tdl.dto.MessagePaidMedia
 import dev.g000sha256.tdl.dto.MessagePhoto
+import dev.g000sha256.tdl.dto.MessagePoll
 import dev.g000sha256.tdl.dto.MessageReplyToMessage
 import dev.g000sha256.tdl.dto.ChatAction
 import dev.g000sha256.tdl.dto.ChatActionCancel
@@ -90,6 +91,9 @@ import dev.g000sha256.tdl.dto.MessageVoiceNote
 import dev.g000sha256.tdl.dto.PaidMediaPhoto
 import dev.g000sha256.tdl.dto.PaidMediaPreview
 import dev.g000sha256.tdl.dto.PaidMediaVideo
+import dev.g000sha256.tdl.dto.Poll
+import dev.g000sha256.tdl.dto.PollTypeQuiz
+import dev.g000sha256.tdl.dto.ReactionTypeCustomEmoji
 import dev.g000sha256.tdl.dto.ReactionTypeEmoji
 import dev.g000sha256.tdl.dto.SearchMessagesFilterEmpty
 import dev.g000sha256.tdl.dto.Sticker as TdSticker
@@ -294,10 +298,49 @@ data class ReplyRef(val chatId: Long, val messageId: Long)
 data class ReplyPreview(val author: String, val text: String)
 
 /** Реакция под сообщением: сколько поставили и ставил ли я. */
-data class ReactionItem(val emoji: String, val count: Int, val chosen: Boolean)
+data class ReactionItem(
+    val emoji: String,
+    val count: Int,
+    val chosen: Boolean,
+    /** Не 0 — реакция премиум-эмодзи; тогда [emoji] имеет вид «ce:<id>». */
+    val customEmojiId: Long = 0L,
+)
 
 /** Реакции сообщения изменились (updateMessageInteractionInfo). */
 data class ReactionEvent(val chatId: Long, val messageId: Long, val reactions: List<ReactionItem>)
+
+/** Вариант ответа опроса. */
+data class PollOptionItem(
+    val text: String,
+    val voters: Int,
+    /** Доля голосов, 0..100. */
+    val percent: Int,
+    val chosen: Boolean,
+    /** Голос за этот вариант отправляется, ответ ещё не пришёл. */
+    val beingChosen: Boolean,
+    /** Для викторины: этот вариант правильный (известно только после ответа или закрытия). */
+    val correct: Boolean = false,
+)
+
+/** Опрос в сообщении. */
+data class PollItem(
+    val id: Long,
+    val question: String,
+    val options: List<PollOptionItem>,
+    val totalVoters: Int,
+    val anonymous: Boolean,
+    val multiple: Boolean,
+    val quiz: Boolean,
+    val closed: Boolean,
+    val allowsRevoting: Boolean,
+    /** Результаты можно показывать (в опросах со скрытыми результатами — только после закрытия/голоса). */
+    val canSeeResults: Boolean,
+) {
+    val voted: Boolean get() = options.any { it.chosen }
+}
+
+/** Опрос изменился (updatePoll): TDLib присылает его без привязки к сообщению, только по [PollItem.id]. */
+data class PollEvent(val poll: PollItem)
 
 /** Модель сообщения для UI. */
 data class MessageItem(
@@ -335,6 +378,8 @@ data class MessageItem(
     val buttons: List<List<InlineButton>> = emptyList(),
     /** Служебное сообщение («участник вошёл», «чат создан»…): рисуется по центру без автора. */
     val isService: Boolean = false,
+    /** Опрос, если сообщение — опрос. */
+    val poll: PollItem? = null,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -405,6 +450,12 @@ data class ContactItem(
     val avatarFileId: Int?,
 )
 
+/** Результат проверки адреса (@username) нового канала. */
+enum class UsernameCheck { Ok, Invalid, Occupied, TooMany, Unavailable }
+
+/** Созданный чат; [warnings] — что не удалось сделать после создания (фото, описание, адрес, участники). */
+data class CreatedChat(val chatId: Long, val warnings: List<String>)
+
 /** Профиль текущего пользователя для шапки настроек. */
 data class ProfileItem(
     val id: Long,
@@ -444,6 +495,7 @@ data class ContentEvent(
     val summary: String,
     val oldText: String?,
     val at: Int,
+    val poll: PollItem? = null,
 )
 
 /** Собеседник прочитал исходящие сообщения до [lastMessageId] включительно. */
@@ -494,6 +546,9 @@ class ChatRepository(
 
     private val _reactionEvents = MutableSharedFlow<ReactionEvent>(extraBufferCapacity = 64)
     val reactionEvents: SharedFlow<ReactionEvent> = _reactionEvents.asSharedFlow()
+
+    private val _pollEvents = MutableSharedFlow<PollEvent>(extraBufferCapacity = 64)
+    val pollEvents: SharedFlow<PollEvent> = _pollEvents.asSharedFlow()
 
     private val _yougramUsers = MutableStateFlow<Set<Long>>(emptySet())
     /** Пользователи, у которых найдена метка Yougram. */
@@ -768,6 +823,11 @@ class ChatRepository(
                 )
             }
         }
+        scope.launch {
+            client.pollUpdates.collect { update ->
+                _pollEvents.tryEmit(PollEvent(update.poll.toItem()))
+            }
+        }
         // Режим шпиона: удаление, правки, прочтение, онлайн.
         scope.launch {
             client.deleteMessagesUpdates.collect { update ->
@@ -788,12 +848,14 @@ class ChatRepository(
                 val content = update.newContent
                 val text = bodyOf(content, isOutgoing = false)
                 val media = content.toMedia()
-                val summary = summaryOf(text, media)
+                val summary = (content as? MessagePoll)?.poll?.let { "📊 ${it.question.text}" } ?: summaryOf(text, media)
                 val at = now()
                 val old = io {
                     spy.recordEdit(update.chatId, update.messageId, text, summary, at, settings.spyPrefs.value.saveEdits)
                 }
-                _contentUpdates.tryEmit(ContentEvent(update.chatId, update.messageId, text, media, summary, old, at))
+                _contentUpdates.tryEmit(
+                    ContentEvent(update.chatId, update.messageId, text, media, summary, old, at, (content as? MessagePoll)?.poll?.toItem()),
+                )
                 plugins?.events?.emit("message_edited", linkedMapOf(
                     "chat_id" to update.chatId,
                     "message_id" to update.messageId,
@@ -1575,7 +1637,9 @@ class ChatRepository(
 
     /** Ставит реакцию или, если [remove], снимает свою. */
     suspend fun react(chatId: Long, messageId: Long, emoji: String, remove: Boolean = false) {
-        val type = ReactionTypeEmoji(emoji = emoji)
+        val customId = if (emoji.startsWith("ce:")) emoji.removePrefix("ce:").toLongOrNull() else null
+        val type: dev.g000sha256.tdl.dto.ReactionType =
+            if (customId != null) ReactionTypeCustomEmoji(customEmojiId = customId) else ReactionTypeEmoji(emoji = emoji)
         if (remove) {
             client.removeMessageReaction(chatId = chatId, messageId = messageId, reactionType = type).getOrThrow()
         } else {
@@ -2043,6 +2107,69 @@ class ChatRepository(
     suspend fun openPrivateChat(userId: Long): Long =
         client.createPrivateChat(userId = userId, force = false).getOrThrow().id
 
+    /** Создаёт группу с выбранными участниками; описание и фото ставятся следующими шагами. */
+    suspend fun createGroup(title: String, description: String, userIds: List<Long>, photoPath: String?): CreatedChat {
+        val created = client.createNewBasicGroupChat(
+            userIds = userIds.toLongArray(),
+            title = title.trim(),
+            messageAutoDeleteTime = 0,
+        ).getOrThrow()
+        val chatId = created.chatId
+        val warnings = ArrayList<String>()
+        val failed = created.failedToAddMembers.failedToAddMembers.size
+        if (failed > 0) warnings += "Не удалось добавить участников: $failed"
+        if (description.isNotBlank()) {
+            runCatching { client.setChatDescription(chatId = chatId, description = description.trim()).getOrThrow() }
+                .onFailure { warnings += "Не удалось сохранить описание" }
+        }
+        if (photoPath != null) {
+            runCatching { setNewChatPhoto(chatId, photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+        }
+        return CreatedChat(chatId, warnings)
+    }
+
+    /** Создаёт канал; при непустом [username] делает его публичным. */
+    suspend fun createChannel(title: String, description: String, username: String?, photoPath: String?): CreatedChat {
+        val chat = client.createNewSupergroupChat(
+            title = title.trim(),
+            isForum = false,
+            isChannel = true,
+            description = description.trim(),
+            location = null,
+            messageAutoDeleteTime = 0,
+            forImport = false,
+        ).getOrThrow()
+        val warnings = ArrayList<String>()
+        if (!username.isNullOrBlank()) {
+            val supergroupId = (chat.type as? ChatTypeSupergroup)?.supergroupId
+            val ok = supergroupId != null && runCatching {
+                client.setSupergroupUsername(supergroupId = supergroupId, username = username).getOrThrow()
+            }.isSuccess
+            if (!ok) warnings += "Не удалось задать публичный адрес, канал остался приватным"
+        }
+        if (photoPath != null) {
+            runCatching { setNewChatPhoto(chat.id, photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+        }
+        return CreatedChat(chat.id, warnings)
+    }
+
+    private suspend fun setNewChatPhoto(chatId: Long, path: String) {
+        client.setChatPhoto(
+            chatId = chatId,
+            photo = InputChatPhotoStatic(photo = InputFileLocal(path = path)),
+        ).getOrThrow()
+    }
+
+    /** Проверяет, свободен ли адрес для нового публичного канала. */
+    suspend fun checkNewChatUsername(username: String): UsernameCheck =
+        when (client.checkChatUsername(chatId = 0L, username = username).getOrThrow()) {
+            is dev.g000sha256.tdl.dto.CheckChatUsernameResultOk -> UsernameCheck.Ok
+            is dev.g000sha256.tdl.dto.CheckChatUsernameResultUsernameInvalid -> UsernameCheck.Invalid
+            is dev.g000sha256.tdl.dto.CheckChatUsernameResultUsernameOccupied -> UsernameCheck.Occupied
+            is dev.g000sha256.tdl.dto.CheckChatUsernameResultPublicChatsTooMany -> UsernameCheck.TooMany
+            else -> UsernameCheck.Unavailable
+        }
+
     /** Ищет пользователя или публичный чат по @username; null — такого нет. */
     suspend fun resolveUsername(username: String): Long? =
         client.searchPublicChat(username.trim().removePrefix("@")).okOrNull()?.id
@@ -2264,8 +2391,12 @@ class ChatRepository(
 
     private fun MessageInteractionInfo?.toReactions(): List<ReactionItem> =
         this?.reactions?.reactions.orEmpty().filterNotNull().mapNotNull { r ->
-            val type = r.type as? ReactionTypeEmoji ?: return@mapNotNull null
-            ReactionItem(type.emoji, r.totalCount, r.isChosen)
+            when (val type = r.type) {
+                is ReactionTypeEmoji -> ReactionItem(type.emoji, r.totalCount, r.isChosen)
+                is ReactionTypeCustomEmoji ->
+                    ReactionItem("ce:${type.customEmojiId}", r.totalCount, r.isChosen, type.customEmojiId)
+                else -> null
+            }
         }
 
     private fun Message.toItem(): MessageItem {
@@ -2292,6 +2423,7 @@ class ChatRepository(
             )
         }
         val body = bodyOf(c, isOutgoing)
+        val pollItem = (c as? MessagePoll)?.poll?.toItem()
         return MessageItem(
             id = id,
             chatId = chatId,
@@ -2300,7 +2432,7 @@ class ChatRepository(
             date = date,
             media = media,
             call = callItem,
-            summary = summaryOf(body, media),
+            summary = if (pollItem != null) "📊 ${pollItem.question}" else summaryOf(body, media),
             senderUserId = (senderId as? MessageSenderUser)?.userId,
             senderChatId = (senderId as? MessageSenderChat)?.chatId,
             topicId = (topicId as? MessageTopicForum)?.forumTopicId ?: 0,
@@ -2315,8 +2447,50 @@ class ChatRepository(
             emojis = emojisOf(c),
             buttons = buttonsOf(this),
             isService = c::class.simpleName?.removePrefix("Message") in ServiceContentNames,
+            poll = pollItem,
         )
     }
+
+    private fun Poll.toItem(): PollItem {
+        val quizType = type as? PollTypeQuiz
+        val correct = quizType?.correctOptionIds?.toList().orEmpty()
+        val opts = options.orEmpty().filterNotNull()
+        return PollItem(
+            id = id,
+            question = question.text,
+            options = opts.mapIndexed { index, o ->
+                PollOptionItem(
+                    text = o.text.text,
+                    voters = o.voterCount,
+                    percent = o.votePercentage,
+                    chosen = o.isChosen,
+                    beingChosen = o.isBeingChosen,
+                    correct = index in correct,
+                )
+            },
+            totalVoters = totalVoterCount,
+            anonymous = isAnonymous,
+            multiple = allowsMultipleAnswers,
+            quiz = quizType != null,
+            closed = isClosed,
+            allowsRevoting = allowsRevoting,
+            canSeeResults = canSeeResults,
+        )
+    }
+
+    /** Голос в опросе: [optionIds] — позиции выбранных вариантов (с нуля); пустой список снимает голос. */
+    suspend fun votePoll(chatId: Long, messageId: Long, optionIds: List<Int>): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching { client.setPollAnswer(chatId = chatId, messageId = messageId, optionIds = optionIds.toIntArray()).getOrThrow() }
+                .map { }
+        }
+
+    /** Закрывает опрос (может только автор/админ). */
+    suspend fun stopPoll(chatId: Long, messageId: Long): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching { client.stopPoll(chatId = chatId, messageId = messageId, replyMarkup = null).getOrThrow() }
+                .map { }
+        }
 
     private fun buttonsOf(m: Message): List<List<InlineButton>> {
         val markup = m.replyMarkup as? ReplyMarkupInlineKeyboard ?: return emptyList()

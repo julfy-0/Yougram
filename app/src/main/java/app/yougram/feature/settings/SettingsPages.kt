@@ -42,6 +42,7 @@ import app.yougram.feature.settings.extras.SpyModeScreen
 import app.yougram.feature.settings.general.AccountScreen
 import app.yougram.feature.settings.general.ArchiveScreen
 import app.yougram.feature.settings.general.ChatSettingsScreen
+import app.yougram.feature.settings.general.CreateChatScreen
 import app.yougram.feature.settings.general.DataStorageScreen
 import app.yougram.feature.settings.general.FoldersScreen
 import app.yougram.feature.settings.general.LanguageScreen
@@ -111,6 +112,15 @@ fun SettingsPageContent(
         SettingsPage.Archive -> ArchiveScreen(container.chatRepository, contentPadding, onOpenChat)
         SettingsPage.Devices -> DevicesScreen(details, contentPadding)
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
+        SettingsPage.CreateGroup, SettingsPage.CreateChannel -> CreateChatScreen(
+            channel = page == SettingsPage.CreateChannel,
+            repository = container.chatRepository,
+            contentPadding = contentPadding,
+            onCreated = { id ->
+                onNavigate(SettingsPage.Home)
+                onOpenChat(id)
+            },
+        )
         SettingsPage.Language -> LanguageScreen(contentPadding)
         SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client, container.accountManager, onNavigate)
         SettingsPage.Update -> UpdateScreen(container.updater, container.telegram.client, contentPadding)

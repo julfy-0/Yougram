@@ -226,8 +226,10 @@ fun MainScreen(
 
     // История переходов (вкладка + страница настроек): жест «назад» возвращает на предыдущий экран.
     val backStack = remember { mutableStateListOf<Pair<MainTab, SettingsPage>>() }
+    val haptics = app.yougram.core.ui.rememberHaptics()
     fun navigateTo(newTab: MainTab, newPage: SettingsPage) {
         if (newTab == tab && newPage == settingsPage) return
+        haptics(app.yougram.core.ui.Haptics.Kind.Tick)
         backStack.add(tab to settingsPage)
         if (backStack.size > 30) backStack.removeAt(0)
         tab = newTab
@@ -353,7 +355,10 @@ fun MainScreen(
         }
     }
 
-    BackHandler(enabled = backStack.isNotEmpty() || inSettingsSubpage) { goBack() }
+    BackHandler(enabled = backStack.isNotEmpty() || inSettingsSubpage) {
+        haptics(app.yougram.core.ui.Haptics.Kind.Tick)
+        goBack()
+    }
 
     BackHandler(enabled = searching) {
         searching = false

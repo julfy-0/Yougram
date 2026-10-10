@@ -426,10 +426,23 @@ class ChatViewModel(
                 _state.update { s ->
                     s.copy(
                         messages = s.messages.map {
-                            if (it.id == event.messageId) it.copy(text = event.text, media = event.media ?: it.media, summary = event.summary) else it
+                            if (it.id == event.messageId) it.copy(text = event.text, media = event.media ?: it.media, summary = event.summary, poll = event.poll ?: it.poll) else it
                         },
                         edits = if (event.oldText == null) s.edits else
                             s.edits + (event.messageId to (s.edits[event.messageId].orEmpty() + EditRecord(event.oldText, event.at))),
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            repository.pollEvents.collect { event ->
+                val poll = event.poll
+                _state.update { s ->
+                    if (s.messages.none { it.poll?.id == poll.id }) s
+                    else s.copy(
+                        messages = s.messages.map {
+                            if (it.poll?.id == poll.id) it.copy(poll = poll, summary = "📊 ${poll.question}") else it
+                        },
                     )
                 }
             }
@@ -629,6 +642,10 @@ class ChatViewModel(
     }
 
     fun fileState(fileId: Int): Flow<FileState> = repository.fileState(fileId)
+
+    suspend fun votePoll(messageId: Long, optionIds: List<Int>) = repository.votePoll(chatId, messageId, optionIds)
+
+    suspend fun stopPoll(messageId: Long) = repository.stopPoll(chatId, messageId)
 
     suspend fun pressButton(messageId: Long, data: ByteArray) = repository.pressInlineButton(chatId, messageId, data)
 

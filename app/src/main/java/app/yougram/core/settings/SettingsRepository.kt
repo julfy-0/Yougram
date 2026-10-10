@@ -132,6 +132,10 @@ data class ChatPrefs(
     val directShare: Boolean = true,
     val showSensitive: Boolean = true,
     val enterToSend: Boolean = false,
+    /** Тактильный отклик на жесты и действия. */
+    val haptics: Boolean = true,
+    /** Интенсивность тактильного отклика, %: 100 — системный отклик. */
+    val hapticsIntensity: Int = 100,
     val distanceUnit: DistanceUnit = DistanceUnit.Auto,
     /** Непрозрачность блоков с сообщениями, %: 100 — сплошные. */
     val bubbleOpacity: Int = 100,
@@ -407,6 +411,8 @@ class SettingsRepository(private val context: Context) {
             directShare = prefs.getBoolean("c_direct_share", true),
             showSensitive = prefs.getBoolean("c_sensitive", true),
             enterToSend = prefs.getBoolean("c_enter_send", false),
+            haptics = prefs.getBoolean("c_haptics", true),
+            hapticsIntensity = prefs.getInt("c_haptics_intensity", 100).coerceIn(10, 100),
             distanceUnit = DistanceUnit.entries.getOrElse(prefs.getInt("c_distance", 0)) { DistanceUnit.Auto },
             bubbleOpacity = prefs.getInt("c_bubble_opacity", 100).coerceIn(20, 100),
             bubbleBlur = prefs.getBoolean("c_bubble_blur", false),
@@ -416,9 +422,16 @@ class SettingsRepository(private val context: Context) {
     )
     val chatPrefs: StateFlow<ChatPrefs> = _chatPrefs.asStateFlow()
 
+    init {
+        app.yougram.core.ui.Haptics.enabled = _chatPrefs.value.haptics
+        app.yougram.core.ui.Haptics.intensity = _chatPrefs.value.hapticsIntensity
+    }
+
     fun updateChatPrefs(transform: (ChatPrefs) -> ChatPrefs) {
         val c = transform(_chatPrefs.value)
         _chatPrefs.value = c
+        app.yougram.core.ui.Haptics.enabled = c.haptics
+        app.yougram.core.ui.Haptics.intensity = c.hapticsIntensity
         prefs.edit()
             .putInt("c_text_size", c.textSize)
             .putInt("c_bubble_radius", c.bubbleRadius)
@@ -440,6 +453,8 @@ class SettingsRepository(private val context: Context) {
             .putBoolean("c_direct_share", c.directShare)
             .putBoolean("c_sensitive", c.showSensitive)
             .putBoolean("c_enter_send", c.enterToSend)
+            .putBoolean("c_haptics", c.haptics)
+            .putInt("c_haptics_intensity", c.hapticsIntensity)
             .putInt("c_distance", c.distanceUnit.ordinal)
             .putInt("c_bubble_opacity", c.bubbleOpacity)
             .putBoolean("c_bubble_blur", c.bubbleBlur)

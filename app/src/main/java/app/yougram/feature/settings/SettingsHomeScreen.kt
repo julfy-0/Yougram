@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.Delete
@@ -143,6 +145,8 @@ enum class SettingsPage(val title: String) {
     Archive("Архив"),
     Devices("Устройства"),
     PowerSaving("Энергосбережение"),
+    CreateGroup("Создать группу"),
+    CreateChannel("Создать канал"),
     Language("Язык"),
     About("О приложении"),
     Blocked("Чёрный список"),
@@ -275,6 +279,8 @@ fun SettingsHomeScreen(
             HomeEntry("privacy", "Конфиденциальность", "Кто видит ваши данные", Icons.Filled.VpnKey, null, SettingsPage.Privacy),
             HomeEntry("security", "Безопасность", "Пин-код, графический ключ, отпечаток", Icons.Filled.Lock, null, SettingsPage.Security),
             HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, state.devices?.toString(), SettingsPage.Devices),
+            HomeEntry("createGroup", "Создать группу", "Новая группа с участниками", Icons.Filled.Group, null, SettingsPage.CreateGroup),
+            HomeEntry("createChannel", "Создать канал", "Публичный или приватный", Icons.Filled.Campaign, null, SettingsPage.CreateChannel),
             HomeEntry("chatSettings", "Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, null, SettingsPage.ChatSettings),
             HomeEntry("folders", "Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, null, SettingsPage.Folders),
             HomeEntry("archive", "Архив", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),

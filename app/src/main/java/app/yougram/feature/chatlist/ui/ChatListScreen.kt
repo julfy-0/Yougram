@@ -143,6 +143,7 @@ fun ChatListScreen(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             itemsIndexed(chats, key = { _, c -> c.id }) { index, chat ->
+                val haptics = app.yougram.core.ui.rememberHaptics()
                 val selected = chat.id in selection
                 val highlighted = selected || chat.id == selectedChatId
                 val pinned = (key ?: 0) in chat.pinnedLists
@@ -173,7 +174,10 @@ fun ChatListScreen(
                         .swipeAfterLongPress(
                             armed = { armed },
                             onDrag = { dragX = it },
-                            onSwipe = { swipeHandler(swipeNow) },
+                            onSwipe = {
+                                haptics(app.yougram.core.ui.Haptics.Kind.Heavy)
+                                swipeHandler(swipeNow)
+                            },
                         )
                         .then(
                             if (lowTier) Modifier else Modifier.animateItem(
@@ -198,7 +202,10 @@ fun ChatListScreen(
                             onClick = {
                                 if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
                             },
-                            onLongClick = { viewModel.toggleSelected(chat.id) },
+                            onLongClick = {
+                                haptics(app.yougram.core.ui.Haptics.Kind.Click)
+                                viewModel.toggleSelected(chat.id)
+                            },
                         ),
                     )
                 }

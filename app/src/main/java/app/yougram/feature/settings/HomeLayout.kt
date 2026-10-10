@@ -11,7 +11,7 @@ object HomeLayout {
     val Default = listOf(
         HomeSection("Yougram", listOf("appearance", "extras", "plugins", "power")),
         HomeSection("Аккаунт и защита", listOf("account", "privacy", "security", "devices")),
-        HomeSection("Чаты", listOf("chatSettings", "folders", "archive", "notifications")),
+        HomeSection("Чаты", listOf("createGroup", "createChannel", "chatSettings", "folders", "archive", "notifications")),
         HomeSection("Данные и язык", listOf("data", "language")),
         HomeSection("Telegram", listOf("telegram")),
     )
@@ -35,14 +35,28 @@ object HomeLayout {
     }.toString()
 
     /** Убирает неизвестные и повторяющиеся вкладки; вкладки, которых нет в раскладке (новые), добавляет в конец. */
+    /** Куда вставлять новые вкладки в уже сохранённой раскладке: перед указанной вкладкой. */
+    private val Anchors = mapOf("createGroup" to "chatSettings", "createChannel" to "chatSettings")
+
     fun normalize(layout: List<HomeSection>, allIds: List<String>): List<HomeSection> {
         val known = allIds.toSet()
         val seen = mutableSetOf<String>()
-        val cleaned = layout.map { s -> s.copy(entries = s.entries.filter { it in known && seen.add(it) }) }
+        var result = layout.map { s -> s.copy(entries = s.entries.filter { it in known && seen.add(it) }) }
         val missing = allIds.filter { it !in seen }
-        if (missing.isEmpty()) return cleaned
-        if (cleaned.isEmpty()) return listOf(HomeSection("Настройки", missing))
-        return cleaned.dropLast(1) + cleaned.last().let { it.copy(entries = it.entries + missing) }
+        if (missing.isEmpty()) return result
+        val rest = mutableListOf<String>()
+        for (id in missing) {
+            val anchor = Anchors[id]
+            val si = if (anchor == null) -1 else result.indexOfFirst { anchor in it.entries }
+            if (si >= 0) {
+                result = result.mapIndexed { i, s ->
+                    if (i != si) s else s.copy(entries = s.entries.toMutableList().apply { add(indexOf(anchor), id) })
+                }
+            } else rest += id
+        }
+        if (rest.isEmpty()) return result
+        if (result.isEmpty()) return listOf(HomeSection("Настройки", rest))
+        return result.dropLast(1) + result.last().let { it.copy(entries = it.entries + rest) }
     }
 
     fun moveSection(l: List<HomeSection>, si: Int, dir: Int): List<HomeSection> {

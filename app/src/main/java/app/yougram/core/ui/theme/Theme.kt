@@ -131,9 +131,13 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
             color = colorScheme.background,
             contentColor = colorScheme.onBackground,
         ) {
+            val hapticIndication = app.yougram.core.ui.rememberHapticIndication(
+                androidx.compose.foundation.LocalIndication.current,
+            )
             CompositionLocalProvider(
                 LocalContentColor provides colorScheme.onBackground,
                 LocalChatBackground provides chatBackground,
+                androidx.compose.foundation.LocalIndication provides hapticIndication,
                 content = content,
             )
         }

@@ -350,6 +350,7 @@ fun ChatScreen(
         draftBeforeEdit = ""
     }
 
+    val haptics = app.yougram.core.ui.rememberHaptics()
     fun submit() {
         val e = editing
         if (e != null) {
@@ -357,6 +358,7 @@ fun ChatScreen(
             if (input.trim() != e.text.trim()) viewModel.edit(e.id, input)
             stopEditing()
         } else {
+            haptics(app.yougram.core.ui.Haptics.Kind.Confirm)
             viewModel.send(input, replyTo?.id)
             replyTo = null
             input = ""
@@ -639,7 +641,10 @@ fun ChatScreen(
                             deleted = message.id in state.deletedIds,
                             edits = state.edits[message.id].orEmpty(),
                             readAt = state.readAt[message.id],
-                            onLongPress = { actionMessage = message },
+                            onLongPress = {
+                                haptics(app.yougram.core.ui.Haptics.Kind.Heavy)
+                                actionMessage = message
+                            },
                             onShowEdits = { editsDialog = state.edits[message.id] },
                             groupChat = state.isGroup || state.isChannel,
                             sender = message.senderKey?.let { senders[it] },
@@ -1538,7 +1543,11 @@ fun ChatScreen(
             title = { Text("Удалить сообщение?") },
             text = { Text("Сообщение будет удалено у всех, если это позволяют права в чате.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.delete(message.id); deleteMessage = null }) { Text("Удалить") }
+                TextButton(onClick = {
+                    haptics(app.yougram.core.ui.Haptics.Kind.Heavy)
+                    viewModel.delete(message.id)
+                    deleteMessage = null
+                }) { Text("Удалить") }
             },
             dismissButton = { TextButton(onClick = { deleteMessage = null }) { Text("Отмена") } },
         )
@@ -1816,7 +1825,16 @@ private fun MessageBubble(
                         if (media != null) {
                             Box(Modifier.padding(4.dp)) { MessageMedia(media, viewModel, onOpenPhoto) }
                         }
-                        if (message.text.isNotEmpty()) {
+                        message.poll?.let { poll ->
+                            PollMessage(
+                                poll = poll,
+                                messageId = message.id,
+                                viewModel = viewModel,
+                                canStop = mine,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
+                            )
+                        }
+                        if (message.text.isNotEmpty() && message.poll == null) {
                             val linked = rememberLinkified(
                                 message.text,
                                 when {
@@ -1880,7 +1898,7 @@ private fun MessageBubble(
                 )
             }
             if (message.reactions.isNotEmpty()) {
-                ReactionRow(message.reactions, onReact, Modifier.padding(top = 4.dp))
+                ReactionRow(message.reactions, onReact, viewModel, Modifier.padding(top = 4.dp))
             }
             if (commentsEnabled && message.hasComments && bare) {
                 CommentsButton(
@@ -1997,6 +2015,7 @@ private fun ReplyQuote(
 private fun ReactionRow(
     reactions: List<ReactionItem>,
     onReact: (String) -> Unit,
+    viewModel: ChatViewModel,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -2027,7 +2046,19 @@ private fun ReactionRow(
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(r.emoji, fontSize = 14.sp)
+                    if (r.customEmojiId != 0L) {
+                        Box(Modifier.size(20.dp)) {
+                            CustomEmojiView(
+                                r.customEmojiId,
+                                viewModel,
+                                animated = viewModel.animateEmoji && !lowTier,
+                                allowVideo = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.High,
+                                fallbackSize = 16.sp,
+                            )
+                        }
+                    } else {
+                        Text(r.emoji, fontSize = 14.sp)
+                    }
                     Spacer(Modifier.width(4.dp))
                     Text(
                         r.count.toString(),

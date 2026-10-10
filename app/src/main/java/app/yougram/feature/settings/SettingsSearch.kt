@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Laptop
@@ -83,6 +85,8 @@ private val searchEntries = listOf(
     SearchEntry("Устройства", "Активные сеансы", Icons.Filled.Laptop, SettingsPage.Devices, "сеансы сессии"),
     SearchEntry("Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, SettingsPage.ChatSettings, "размер текста анимации пузыри обои поиск сверху"),
     SearchEntry("Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, SettingsPage.Folders, "папки"),
+    SearchEntry("Создать группу", "Новая группа с участниками", Icons.Filled.Group, SettingsPage.CreateGroup, "создать группа чат участники новая"),
+    SearchEntry("Создать канал", "Публичный или приватный", Icons.Filled.Campaign, SettingsPage.CreateChannel, "создать канал новый паблик подписчики"),
     SearchEntry("Архив", "Архивные чаты", Icons.Filled.Archive, SettingsPage.Archive, "архив архивные чаты"),
     SearchEntry("Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, SettingsPage.Notifications, "звук сигнал бейдж вибрация"),
     SearchEntry("Данные и память", "Кэш, автозагрузка медиа", Icons.Filled.PieChart, SettingsPage.DataStorage, "кэш память автозагрузка медиа трафик"),

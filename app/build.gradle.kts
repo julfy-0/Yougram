@@ -22,8 +22,8 @@ android {
         minSdk = 31
         targetSdk = 36
 
-        versionCode = 24
-        versionName = "1.0.0"
+        versionCode = 25
+        versionName = "1.0.1"
 
         buildConfigField(
             "int",

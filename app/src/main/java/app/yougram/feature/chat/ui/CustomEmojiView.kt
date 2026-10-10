@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,14 +40,20 @@ fun rememberEmojiInlineContent(
         emojis.map { it.id }.distinct().associate { id ->
             customEmojiKey(id) to InlineTextContent(
                 Placeholder(size, size, PlaceholderVerticalAlign.TextCenter),
-            ) { CustomEmojiView(id, viewModel, animated && tier != DeviceTier.Low, tier == DeviceTier.High) }
+            ) { CustomEmojiView(id, viewModel, animated && tier != DeviceTier.Low, tier == DeviceTier.High, size * 0.8f) }
         }
     }
 }
 
 /** Одно премиум-эмодзи: сначала статичное превью, поверх — анимация (если разрешена). */
 @Composable
-fun CustomEmojiView(id: Long, viewModel: ChatViewModel, animated: Boolean, allowVideo: Boolean) {
+fun CustomEmojiView(
+    id: Long,
+    viewModel: ChatViewModel,
+    animated: Boolean,
+    allowVideo: Boolean,
+    fallbackSize: TextUnit = TextUnit.Unspecified,
+) {
     val item by produceState<StickerItem?>(null, id) { value = viewModel.customEmoji(id) }
     val sticker = item ?: return
     LaunchedEffect(sticker.fileId) { viewModel.download(sticker.fileId, 8) }
@@ -57,7 +64,12 @@ fun CustomEmojiView(id: Long, viewModel: ChatViewModel, animated: Boolean, allow
     }.collectAsState(FileState())
     val still = rememberFileBitmap(if (sticker.format == StickerFmt.STATIC) full.path else thumb.path, 128)
     Box(Modifier.fillMaxSize()) {
-        still?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        // Пока превью нет (или оно не загрузилось), показываем обычный эмодзи вместо пустого места.
+        if (still != null) {
+            Image(still, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        } else if (sticker.emoji.isNotEmpty()) {
+            Text(sticker.emoji, fontSize = fallbackSize)
+        }
         val path = full.path
         if (animated && path != null) {
             when (sticker.format) {

@@ -1,6 +1,19 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package app.yougram.feature.settings.general
 
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,6 +62,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -144,81 +158,6 @@ fun ChatSettingsScreen(
     }
 
     SettingsPageColumn(contentPadding) {
-        SectionLabel("Размер текста сообщений")
-        SettingGroup {
-            item { SliderRow(prefs.textSize, 12..30) { v -> update { it.copy(textSize = v) } } }
-            item {
-                Column {
-                    ChatPreview(prefs)
-                    SettingRow(
-                        "Изменить обои",
-                        icon = Icons.Filled.Wallpaper,
-                        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                    )
-                    if (prefs.wallpaper != 0L) {
-                        SettingRow(
-                            "Убрать обои",
-                            icon = Icons.Filled.Delete,
-                            onClick = {
-                                chatWallpaperFile(context).delete()
-                                update { it.copy(wallpaper = 0L) }
-                            },
-                        )
-                    }
-                    val nameColor = NameColors[prefs.nameColor.coerceIn(NameColors.indices)].second
-                    SettingRow(
-                        "Изменить цвет имени",
-                        icon = Icons.Filled.Palette,
-                        onClick = { dialog = ChatDialog.NameColor },
-                        trailing = {
-                            Surface(shape = CircleShape, color = nameColor.copy(alpha = 0.22f)) {
-                                Text(
-                                    "Julfy",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = nameColor,
-                                )
-                            }
-                        },
-                    )
-                }
-            }
-        }
-
-        SectionLabel("Цветовая тема")
-        SettingGroup {
-            item {
-                Column {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        itemsIndexed(Accents) { index, accent ->
-                            ThemeCard(
-                                color = accent.color,
-                                emoji = ThemeEmojis.getOrElse(index) { "🎨" },
-                                selected = !theme.dynamic && theme.accent == index,
-                                onClick = {
-                                    settings.setDynamicColor(false)
-                                    settings.setAccent(index)
-                                },
-                            )
-                        }
-                    }
-                    SettingRow(
-                        if (dark) "Переключить на дневную тему" else "Переключить на ночную тему",
-                        icon = if (dark) Icons.Filled.WbSunny else Icons.Filled.DarkMode,
-                        onClick = { settings.setThemeMode(if (dark) ThemeMode.Light else ThemeMode.Dark) },
-                    )
-                    SettingRow(
-                        "Настройки темы",
-                        icon = Icons.Filled.FormatPaint,
-                        onClick = { onNavigate(SettingsPage.Appearance) },
-                    )
-                }
-            }
-        }
-
         SectionLabel("Цвет блоков с сообщениями")
         SettingGroup {
             item {
@@ -423,6 +362,27 @@ fun ChatSettingsScreen(
             }
             item {
                 SwitchRow(
+                    "Тактильный отклик",
+                    prefs.haptics,
+                    { v -> update { it.copy(haptics = v) } },
+                    subtitle = "Вибро на жесты: назад, долгое нажатие, отправка, удаление",
+                    icon = Icons.Filled.Vibration,
+                )
+            }
+            if (prefs.haptics) {
+                item {
+                    val view = androidx.compose.ui.platform.LocalView.current
+                    SliderRow(prefs.hapticsIntensity, 10..100) { v ->
+                        if (v != prefs.hapticsIntensity) {
+                            update { it.copy(hapticsIntensity = v) }
+                            app.yougram.core.ui.Haptics.intensity = v
+                            app.yougram.core.ui.Haptics.perform(view, app.yougram.core.ui.Haptics.Kind.Click)
+                        }
+                    }
+                }
+            }
+            item {
+                SwitchRow(
                     "Отправка по Enter",
                     prefs.enterToSend,
                     { v -> update { it.copy(enterToSend = v) } },
@@ -492,11 +452,11 @@ fun ChatSettingsScreen(
     }
 }
 
-/** Ползунок с числом справа. */
+/** Ползунок Expressive: значение справа в «печенье» (cookie) цвета primaryContainer. */
 @Composable
 private fun SliderRow(value: Int, range: IntRange, onChange: (Int) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DotSlider(
@@ -505,14 +465,17 @@ private fun SliderRow(value: Int, range: IntRange, onChange: (Int) -> Unit) {
             valueRange = range.first.toFloat()..range.last.toFloat(),
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            value.toString(),
-            modifier = Modifier.widthIn(min = 24.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.End,
-        )
+        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier.size(52.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                value.toString(),
+                style = MaterialTheme.typography.labelLargeEmphasized,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
     }
 }
 
@@ -574,25 +537,61 @@ private fun ChatPreview(prefs: ChatPrefs) {
     }
 }
 
-/** Карточка цветовой темы: пузырь акцентного цвета, серые заглушки и эмодзи. */
+/**
+ * Карточка цветовой темы Expressive: выбранная меняет форму (углы растут) и цвет контейнера пружинной анимацией,
+ * при нажатии слегка сжимается, а галочка выбора — в «печенье».
+ */
 @Composable
 private fun ThemeCard(color: Color, emoji: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val scheme = MaterialTheme.colorScheme
+    val corner by animateDpAsState(
+        targetValue = if (selected) 40.dp else 22.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec<Dp>(),
+        label = "themeCorner",
+    )
+    val container by animateColorAsState(
+        targetValue = if (selected) scheme.secondaryContainer else scheme.surfaceContainerHighest,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "themeContainer",
+    )
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "themeScale",
+    )
     Column(
         Modifier
-            .size(width = 84.dp, height = 116.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-            .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
+            .size(width = 92.dp, height = 128.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(corner))
+            .background(container)
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                role = Role.RadioButton,
+                onClick = onClick,
+            )
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.align(Alignment.End).size(width = 48.dp, height = 16.dp).clip(CircleShape).background(color))
-        Box(Modifier.align(Alignment.Start).size(width = 40.dp, height = 16.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)))
+        Box(Modifier.align(Alignment.End).size(width = 50.dp, height = 18.dp).clip(CircleShape).background(color))
+        Box(Modifier.align(Alignment.Start).size(width = 40.dp, height = 18.dp).clip(CircleShape).background(scheme.onSurface.copy(alpha = 0.18f)))
         Spacer(Modifier.weight(1f))
-        Text(emoji, fontSize = 22.sp)
+        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(emoji, fontSize = 22.sp)
+            Spacer(Modifier.weight(1f))
+            if (selected) {
+                Box(
+                    Modifier.size(26.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(scheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = scheme.onPrimary, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
     }
 }
 
