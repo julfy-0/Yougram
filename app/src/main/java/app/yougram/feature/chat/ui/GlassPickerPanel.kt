@@ -3,6 +3,7 @@ package app.yougram.feature.chat.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -32,7 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.ui.glass.BackdropState
 import app.yougram.core.ui.glass.glass
@@ -56,6 +61,13 @@ fun GlassPickerPanel(
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
 
+    // Пружинное движение Expressive; на слабых устройствах — прежние tween.
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
+    val motion = MaterialTheme.motionScheme
+    val slideSpec: FiniteAnimationSpec<IntOffset> =
+        if (lowTier) tween(300, easing = FastOutSlowInEasing) else motion.defaultSpatialSpec()
+    val fadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(200) else motion.defaultEffectsSpec()
+
     // Блюр берём общий (слой размытия один на экран), прозрачность — своя.
     val panelGlass = remember(glass.blurRadius, glass.blurType, transparency) {
         glass.copy(opacity = (1f - transparency).coerceIn(0f, 1f))
@@ -77,10 +89,8 @@ fun GlassPickerPanel(
         AnimatedVisibility(
             visible = visible,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it } +
-                fadeIn(tween(220)),
-            exit = slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it } +
-                fadeOut(tween(200)),
+            enter = slideInVertically(slideSpec) { it } + fadeIn(fadeSpec),
+            exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeSpec),
         ) {
             Column(
                 Modifier
@@ -89,7 +99,7 @@ fun GlassPickerPanel(
                     .glass(
                         backdrop,
                         panelGlass,
-                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        MaterialTheme.shapes.extraLarge.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize),
                         tint = MaterialTheme.colorScheme.surfaceContainerLow,
                     )
                     // Поглощаем тапы по самой панели, чтобы они не доходили до закрывающей области.

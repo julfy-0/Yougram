@@ -5,6 +5,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.unit.Dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,42 +93,21 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
         }
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Сгруппированная клавиатура: внешние углы крупные, внутренние мелкие; нажатая кнопка «округляется».
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         message.buttons.forEachIndexed { rowIndex, row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 row.forEachIndexed { colIndex, button ->
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 40.dp)
-                            .alpha(if (pending == rowIndex to colIndex) 0.5f else 1f),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+                    InlineButtonCell(
+                        button = button,
+                        firstRow = rowIndex == 0,
+                        lastRow = rowIndex == message.buttons.lastIndex,
+                        firstCol = colIndex == 0,
+                        lastCol = colIndex == row.lastIndex,
+                        pending = pending == rowIndex to colIndex,
+                        modifier = Modifier.weight(1f),
                         onClick = { press(rowIndex, colIndex, button) },
-                    ) {
-                        Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                button.text,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            val badge = when (button.kind) {
-                                InlineButtonKind.URL -> Icons.Filled.NorthEast
-                                InlineButtonKind.COPY -> Icons.Filled.ContentCopy
-                                else -> null
-                            }
-                            if (badge != null) {
-                                Icon(
-                                    badge,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp).align(Alignment.TopEnd),
-                                )
-                            }
-                        }
-                    }
+                    )
                 }
             }
         }
@@ -132,5 +119,66 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
             text = { Text(text) },
             confirmButton = { TextButton(onClick = { alertText = null }) { Text("OK") } },
         )
+    }
+}
+
+private val KeyOuter = 16.dp
+private val KeyInner = 6.dp
+
+@Composable
+private fun InlineButtonCell(
+    button: InlineButton,
+    firstRow: Boolean,
+    lastRow: Boolean,
+    firstCol: Boolean,
+    lastCol: Boolean,
+    pending: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else MaterialTheme.motionScheme.fastSpatialSpec()
+    // При нажатии внутренние углы вырастают до внешних: форма «перетекает».
+    val inner by animateDpAsState(if (pressed) KeyOuter else KeyInner, cornerSpec, label = "keyInner")
+    val i = inner.coerceAtLeast(0.dp)
+    val shape = RoundedCornerShape(
+        topStart = if (firstRow && firstCol) KeyOuter else i,
+        topEnd = if (firstRow && lastCol) KeyOuter else i,
+        bottomStart = if (lastRow && firstCol) KeyOuter else i,
+        bottomEnd = if (lastRow && lastCol) KeyOuter else i,
+    )
+    Surface(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .alpha(if (pending) 0.5f else 1f),
+        shape = shape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        interactionSource = interaction,
+        onClick = onClick,
+    ) {
+        Box(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+            Text(
+                button.text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            val badge = when (button.kind) {
+                InlineButtonKind.URL -> Icons.Filled.NorthEast
+                InlineButtonKind.COPY -> Icons.Filled.ContentCopy
+                else -> null
+            }
+            if (badge != null) {
+                Icon(
+                    badge,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp).align(Alignment.TopEnd),
+                )
+            }
+        }
     }
 }

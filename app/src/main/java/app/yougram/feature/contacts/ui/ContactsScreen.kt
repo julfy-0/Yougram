@@ -1,5 +1,6 @@
 package app.yougram.feature.contacts.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import java.util.Locale
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,12 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import app.yougram.core.settings.PlateArea
 import app.yougram.core.ui.component.FileAvatar
 import app.yougram.core.ui.glass.plateColor
 import app.yougram.feature.chat.data.ContactItem
 import app.yougram.feature.settings.component.segmentShape
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ContactsScreen(
     viewModel: ContactsViewModel,
@@ -44,6 +50,18 @@ fun ContactsScreen(
         val q = query.trim()
         if (q.isEmpty()) state.contacts else state.contacts.filter { it.name.contains(q, ignoreCase = true) }
     }
+    // Группы по первой букве (A–Я по алфавиту), всё остальное — в «#» в конце.
+    val groups = remember(contacts) {
+        contacts.sortedBy { it.name.lowercase(Locale.getDefault()) }
+            .groupBy { c ->
+                val ch = c.name.trim().firstOrNull()
+                if (ch != null && ch.isLetter()) ch.uppercaseChar().toString() else "#"
+            }
+            .toList()
+            .sortedWith(compareBy({ it.first == "#" }, { it.first }))
+    }
+    val motion = MaterialTheme.motionScheme
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
     Box(Modifier.fillMaxSize()) {
         when {
             state.loading -> LoadingIndicator(Modifier.align(Alignment.Center))
@@ -63,13 +81,38 @@ fun ContactsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                itemsIndexed(contacts, key = { _, c -> c.id }) { index, contact ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = segmentShape(index, contacts.size),
-                        color = plateColor(PlateArea.Contacts),
-                    ) {
-                        ContactRow(contact, viewModel) { viewModel.openChat(contact.id, onOpenChat) }
+                groups.forEach { (letter, group) ->
+                    // Липкий заголовок-«таблетка» с буквой.
+                    stickyHeader(key = "header-$letter") {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+                        ) {
+                            Text(
+                                letter,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelLargeEmphasized,
+                            )
+                        }
+                    }
+                    itemsIndexed(group, key = { _, c -> c.id }) { index, contact ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (lowTier) Modifier else Modifier.animateItem(
+                                        fadeInSpec = motion.defaultEffectsSpec(),
+                                        placementSpec = motion.defaultSpatialSpec(),
+                                        fadeOutSpec = motion.fastEffectsSpec(),
+                                    ),
+                                ),
+                            shape = segmentShape(index, group.size),
+                            color = plateColor(PlateArea.Contacts),
+                        ) {
+                            ContactRow(contact, viewModel) { viewModel.openChat(contact.id, onOpenChat) }
+                        }
                     }
                 }
             }

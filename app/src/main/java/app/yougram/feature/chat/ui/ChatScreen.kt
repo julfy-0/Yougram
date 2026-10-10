@@ -11,8 +11,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +88,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -91,6 +103,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,7 +119,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -119,6 +136,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -164,7 +182,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private val TopBarContentHeight = 64.dp
-private val BubbleInner = 6.dp
+/** Угол со стороны автора у сообщений, склеенных в серию. */
+private val BubbleInner = 8.dp
+/** «Хвостик»: острый угол у последнего сообщения серии. */
+private val BubbleTail = 3.dp
 private const val GroupGapSeconds = 300
 private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -208,6 +229,13 @@ fun ChatScreen(
     val lowRam = remember(appContext) {
         app.yougram.core.ui.DeviceProfile.tier(appContext) == app.yougram.core.ui.DeviceTier.Low
     }
+    // Пружинное движение Expressive; на слабых устройствах — короткие tween.
+    val motion = MaterialTheme.motionScheme
+    val fadeSpec: FiniteAnimationSpec<Float> = if (lowRam) tween(150) else motion.defaultEffectsSpec()
+    val fastScaleSpec: FiniteAnimationSpec<Float> = if (lowRam) tween(150) else motion.fastSpatialSpec()
+    val slideSpec: FiniteAnimationSpec<IntOffset> = if (lowRam) tween(220) else motion.defaultSpatialSpec()
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowRam) snap() else motion.fastSpatialSpec()
+    val colorSpec: FiniteAnimationSpec<Color> = if (lowRam) snap() else motion.defaultEffectsSpec()
     // Размытие под сообщениями дорогое: на слабых устройствах, в энергосбережении и при сплошных пузырях его нет.
     val bubbleBlurOn = chatPrefs.bubbleBlur && chatPrefs.bubbleOpacity < 100 && !powerSaving && !lowRam
     LaunchedEffect(bubbleBlurOn) {
@@ -630,22 +658,20 @@ fun ChatScreen(
                     .align(Alignment.BottomCenter)
                     .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
                     .fillMaxWidth(),
-                enter = androidx.compose.animation.fadeIn(tween(180)) +
-                    androidx.compose.animation.scaleIn(
-                        tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                enter = fadeIn(fadeSpec) +
+                    scaleIn(
+                        fastScaleSpec,
                         initialScale = 0.88f,
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
                     ) +
-                    androidx.compose.animation.slideInVertically(
-                        tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                    ) { it / 4 },
-                exit = androidx.compose.animation.fadeOut(tween(140)) +
-                    androidx.compose.animation.scaleOut(
-                        tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    slideInVertically(slideSpec) { it / 4 },
+                exit = fadeOut(fadeSpec) +
+                    scaleOut(
+                        fastScaleSpec,
                         targetScale = 0.92f,
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
                     ) +
-                    androidx.compose.animation.slideOutVertically(tween(180)) { it / 5 },
+                    slideOutVertically(slideSpec) { it / 5 },
             ) {
                 Box(
                     Modifier
@@ -653,7 +679,7 @@ fun ChatScreen(
                         .glass(
                             backdrop,
                             commandsGlass,
-                            RoundedCornerShape(20.dp),
+                            MaterialTheme.shapes.large,
                             tint = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ),
                 ) {
@@ -693,8 +719,8 @@ fun ChatScreen(
         // Кнопка «вниз» со счётчиком новых сообщений.
         androidx.compose.animation.AnimatedVisibility(
             visible = showScrollDown,
-            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
-            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+            enter = fadeIn(fadeSpec) + scaleIn(fastScaleSpec, initialScale = 0.6f),
+            exit = fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = bottomBarHeight + 16.dp),
@@ -713,6 +739,9 @@ fun ChatScreen(
                             unreadNew = 0
                         }
                     },
+                    shape = MaterialTheme.shapes.medium,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Вниз")
                 }
@@ -903,31 +932,50 @@ fun ChatScreen(
             } else {
                 val bannerMessage = editing ?: replyTo
                 if (bannerMessage != null) {
-                    Row(
+                    Box(
                         Modifier
                             .fillMaxWidth()
                             .glass(backdrop, glass, RectangleShape)
-                            .padding(start = 16.dp, end = 4.dp, top = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .padding(start = 12.dp, end = 12.dp, top = 8.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                if (editing != null) "Редактирование" else "Ответ",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Text(
-                                bannerMessage.summary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ) {
+                            Row(
+                                Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    Modifier
+                                        .width(4.dp)
+                                        .height(36.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        if (editing != null) "Редактирование" else "Ответ",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        bannerMessage.summary,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    if (editing != null) stopEditing()
+                                    replyTo = null
+                                }) { Icon(Icons.Filled.Close, contentDescription = "Отмена") }
+                            }
                         }
-                        IconButton(onClick = {
-                            if (editing != null) stopEditing()
-                            replyTo = null
-                        }) { Icon(Icons.Filled.Close, contentDescription = "Отмена") }
                     }
                 }
                 Row(
@@ -945,7 +993,7 @@ fun ChatScreen(
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     // Поле ввода-«таблетка».
-                    val pillShape = RoundedCornerShape(28.dp)
+                    val pillShape = MaterialTheme.shapes.largeIncreased
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -973,11 +1021,11 @@ fun ChatScreen(
                         border = null,
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (recording) {
-                                Box(Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
+                                Box(Modifier.padding(start = 12.dp).size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
                                 Spacer(Modifier.width(10.dp))
                                 Text(
                                     "%d:%02d".format(recordSeconds / 60, recordSeconds % 60),
@@ -998,27 +1046,14 @@ fun ChatScreen(
                                 )
                             } else {
                                 if (state.botCommands.isNotEmpty()) {
-                                    Icon(
-                                        Icons.Filled.Menu,
-                                        contentDescription = "Команды бота",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .clickable { commandsOpen = !commandsOpen },
-                                    )
-                                    Spacer(Modifier.width(12.dp))
+                                    InputAction(Icons.Filled.Menu, "Команды бота", MaterialTheme.colorScheme.primary) {
+                                        commandsOpen = !commandsOpen
+                                    }
                                 }
                                 Box {
-                                    Icon(
-                                        Icons.Filled.AddCircleOutline,
-                                        contentDescription = "Прикрепить",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .clickable { attachOpen = true },
-                                    )
+                                    InputAction(Icons.Filled.AddCircleOutline, "Прикрепить", MaterialTheme.colorScheme.onSurfaceVariant) {
+                                        attachOpen = true
+                                    }
                                     AttachMenu(
                                         expanded = attachOpen,
                                         onDismiss = { attachOpen = false },
@@ -1047,8 +1082,7 @@ fun ChatScreen(
                                         onRound = { openVideoRecorder() },
                                     )
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
                                     if (input.isEmpty()) {
                                         Text(
                                             "Сообщение",
@@ -1075,28 +1109,13 @@ fun ChatScreen(
                                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                     )
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Icon(
-                                    Icons.Filled.EmojiEmotions,
-                                    contentDescription = "Эмодзи",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .clickable { attachmentTab = 0; emojiSheet = true },
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Icon(
-                                    Icons.Filled.Image,
-                                    contentDescription = "Фото или видео",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                                        },
-                                )
+                                InputAction(Icons.Filled.EmojiEmotions, "Эмодзи", MaterialTheme.colorScheme.onSurfaceVariant) {
+                                    attachmentTab = 0
+                                    emojiSheet = true
+                                }
+                                InputAction(Icons.Filled.Image, "Фото или видео", MaterialTheme.colorScheme.onSurfaceVariant) {
+                                    mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                                }
                             }
                         }
                     }
@@ -1104,6 +1123,19 @@ fun ChatScreen(
                     // Круглая кнопка: отправка (есть текст) / микрофон / камера для кружка.
                     // Тап — действие, долгое нажатие — переключение «голосовое ↔ кружок».
                     val canSend = input.isNotBlank()
+                    val sendActive = canSend || recording
+                    // Морфинг: «квадрат со скруглением» (микрофон/камера) становится кругом (отправка).
+                    val sendCorner by animateDpAsState(if (sendActive) 28.dp else 16.dp, cornerSpec, label = "sendCorner")
+                    val sendContainer by animateColorAsState(
+                        if (sendActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                        colorSpec,
+                        label = "sendContainer",
+                    )
+                    val sendContent by animateColorAsState(
+                        if (sendActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                        colorSpec,
+                        label = "sendContent",
+                    )
                     Surface(
                         modifier = Modifier
                             .size(56.dp)
@@ -1125,24 +1157,37 @@ fun ChatScreen(
                                     },
                                 )
                             },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)),
+                        color = sendContainer,
+                        contentColor = sendContent,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                when {
-                                    canSend || recording -> Icons.AutoMirrored.Filled.Send
-                                    videoMode -> Icons.Filled.Videocam
-                                    else -> Icons.Filled.Mic
+                            AnimatedContent(
+                                targetState = when {
+                                    sendActive -> 0
+                                    videoMode -> 1
+                                    else -> 2
                                 },
-                                contentDescription = when {
-                                    canSend || recording -> "Отправить"
-                                    videoMode -> "Видеосообщение"
-                                    else -> "Голосовое сообщение"
+                                transitionSpec = {
+                                    (fadeIn(fadeSpec) + scaleIn(fastScaleSpec, initialScale = 0.6f)) togetherWith
+                                        (fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f))
                                 },
-                                modifier = Modifier.size(24.dp),
-                            )
+                                label = "sendIcon",
+                            ) { kind ->
+                                Icon(
+                                    when (kind) {
+                                        0 -> Icons.AutoMirrored.Filled.Send
+                                        1 -> Icons.Filled.Videocam
+                                        else -> Icons.Filled.Mic
+                                    },
+                                    contentDescription = when (kind) {
+                                        0 -> "Отправить"
+                                        1 -> "Видеосообщение"
+                                        else -> "Голосовое сообщение"
+                                    },
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -1160,7 +1205,7 @@ fun ChatScreen(
             ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     PickerTabButton(
                         icon = "😀",
@@ -1168,6 +1213,7 @@ fun ChatScreen(
                         selected = attachmentTab == 0,
                         onClick = { attachmentTab = 0 },
                         modifier = Modifier.weight(1f),
+                        first = true,
                     )
                     PickerTabButton(
                         icon = "🎨",
@@ -1182,6 +1228,7 @@ fun ChatScreen(
                         selected = attachmentTab == 2,
                         onClick = { attachmentTab = 2 },
                         modifier = Modifier.weight(1f),
+                        last = true,
                     )
                 }
                 when (attachmentTab) {
@@ -1466,7 +1513,7 @@ private fun MessageBubble(
     val customBg = if (mine) ownBubbleColor else otherBubbleColor
     val readableOnCustom = customBg?.let { if (it.luminance() > 0.5f) Color.Black else Color.White }
     val ownText = readableOnCustom
-        ?: if (app.yougram.core.ui.theme.isDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
+        ?: MaterialTheme.colorScheme.onPrimaryContainer
     val media = message.media
     val senderKey = message.senderKey
     // В группах у чужих сообщений показываем автора: аватарка и имя с тегом у первого сообщения серии.
@@ -1485,21 +1532,29 @@ private fun MessageBubble(
     val replyRef = message.reply
     LaunchedEffect(replyRef) { if (replyRef != null) viewModel.ensureReply(replyRef) }
 
-    // Углы со стороны автора у склеенных сообщений становятся мелкими.
+    // Expressive-группировка: у склеенных сообщений углы со стороны автора мелкие, у последнего в серии — «хвостик».
+    // Когда приходит новое сообщение, углы предыдущего плавно «перетекают».
+    val motion = MaterialTheme.motionScheme
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
+    val colorSpec: FiniteAnimationSpec<Color> = if (lowTier) tween(250) else motion.defaultEffectsSpec()
     val inner = minOf(BubbleInner, cornerRadius)
-    val top = if (joinedWithOlder) inner else cornerRadius
-    val bottom = if (joinedWithNewer) inner else cornerRadius
+    val tail = minOf(BubbleTail, cornerRadius)
+    val authorTop by animateDpAsState(if (joinedWithOlder) inner else cornerRadius, cornerSpec, label = "bubbleTop")
+    val authorBottom by animateDpAsState(if (joinedWithNewer) inner else tail, cornerSpec, label = "bubbleBottom")
+    val top = authorTop.coerceAtLeast(0.dp)
+    val bottom = authorBottom.coerceAtLeast(0.dp)
     val shape = if (mine) {
         RoundedCornerShape(topStart = cornerRadius, topEnd = top, bottomEnd = bottom, bottomStart = cornerRadius)
     } else {
         RoundedCornerShape(topStart = top, topEnd = cornerRadius, bottomEnd = cornerRadius, bottomStart = bottom)
     }
 
-    val otherColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    val baseColor = customBg ?: if (mine) androidx.compose.ui.graphics.lerp(otherColor, Color.White, 0.10f) else otherColor
+    // Свои сообщения — primaryContainer, чужие — surfaceContainerHigh; свой цвет из настроек важнее.
+    val baseColor = customBg ?: if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
     val bubbleColor by animateColorAsState(
         targetValue = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else baseColor,
-        animationSpec = tween(250),
+        animationSpec = colorSpec,
         label = "bubbleHighlight",
     )
     val matchColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
@@ -1665,14 +1720,16 @@ private fun MessageFooter(
     onShowEdits: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    // Цвет считаем от цвета содержимого пузыря, чтобы время и галочки читались на любом фоне.
+    val content = LocalContentColor.current
+    val muted = content.copy(alpha = 0.7f)
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (edits.isNotEmpty()) {
             Text(
                 "изменено · ",
                 modifier = Modifier.clickable(onClick = onShowEdits),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (mine) content else MaterialTheme.colorScheme.primary,
             )
         }
         if (deleted) {
@@ -1690,7 +1747,7 @@ private fun MessageFooter(
                 Icon(
                     Icons.Filled.DoneAll,
                     contentDescription = "Прочитано",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (mine) content else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
             } else {
@@ -1718,12 +1775,19 @@ private fun ReplyQuote(
         modifier
             .widthIn(min = 120.dp)
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(8.dp))
-            .background(accent.copy(alpha = 0.12f))
+            .clip(MaterialTheme.shapes.small)
+            .background(accent.copy(alpha = 0.16f))
             .clickable(onClick = onClick),
     ) {
-        Box(Modifier.width(3.dp).fillMaxHeight().background(accent))
-        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+        Box(
+            Modifier
+                .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
+                .width(3.dp)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(accent),
+        )
+        Column(Modifier.padding(start = 8.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
             Text(
                 preview?.author.orEmpty().ifEmpty { "Ответ" },
                 style = MaterialTheme.typography.labelLarge,
@@ -1755,30 +1819,43 @@ private fun ReactionRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+        val motion = MaterialTheme.motionScheme
+        val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
+        val colorSpec: FiniteAnimationSpec<Color> = if (lowTier) snap() else motion.defaultEffectsSpec()
         reactions.forEach { r ->
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (r.chosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                        else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    )
-                    .clickable { onReact(r.emoji) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(r.emoji, fontSize = 14.sp)
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    r.count.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+            key(r.emoji) {
+                // Выбранная реакция — акцентная «таблетка», остальные — квадрат со скруглением.
+                val container by animateColorAsState(
+                    if (r.chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    colorSpec,
+                    label = "reactionContainer",
                 )
+                val corner by animateDpAsState(if (r.chosen) 16.dp else 10.dp, cornerSpec, label = "reactionCorner")
+                val content = if (r.chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                Row(
+                    Modifier
+                        .heightIn(min = 32.dp)
+                        .clip(RoundedCornerShape(corner.coerceAtLeast(0.dp)))
+                        .background(container)
+                        .clickable { onReact(r.emoji) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(r.emoji, fontSize = 14.sp)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        r.count.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = content,
+                    )
+                }
             }
         }
     }
 }
 
+/** Кнопка вкладки в группе: внутренние углы мелкие, у выбранной — круглые (форма «перетекает»). */
 @Composable
 private fun PickerTabButton(
     icon: String,
@@ -1786,14 +1863,28 @@ private fun PickerTabButton(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    first: Boolean = false,
+    last: Boolean = false,
 ) {
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else MaterialTheme.motionScheme.fastSpatialSpec()
+    val inner by animateDpAsState(if (selected) 24.dp else 8.dp, cornerSpec, label = "tabInner")
+    val outer = 24.dp
+    val i = inner.coerceAtLeast(0.dp)
+    val shape = RoundedCornerShape(
+        topStart = if (first) outer else i,
+        bottomStart = if (first) outer else i,
+        topEnd = if (last) outer else i,
+        bottomEnd = if (last) outer else i,
+    )
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        onClick = onClick,
+        modifier = modifier.semantics { this.selected = selected },
+        shape = shape,
         color = pickerChipColor(selected),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1801,6 +1892,20 @@ private fun PickerTabButton(
             Spacer(Modifier.width(6.dp))
             Text(title, style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+/** Кнопка-иконка внутри поля ввода: круглая область нажатия 40 dp, описание для TalkBack. */
+@Composable
+private fun InputAction(icon: ImageVector, description: String, tint: Color, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(24.dp))
     }
 }
 

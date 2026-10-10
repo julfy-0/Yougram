@@ -97,7 +97,7 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
         MediaKind.DOCUMENT -> DocumentRow(media, full, onClick)
         MediaKind.VOICE -> VoiceNoteRow(media, viewModel, full)
         MediaKind.VIDEO_NOTE -> VideoNoteView(media, viewModel, full)
-        MediaKind.STICKER -> Box(Modifier.clip(RoundedCornerShape(12.dp)).clickable { stickerSetOpen = true }) {
+        MediaKind.STICKER -> Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable { stickerSetOpen = true }) {
             StickerView(media, viewModel, full)
         }
         else -> VisualMedia(media, viewModel, full, onClick)
@@ -121,7 +121,7 @@ private fun LockedPaidMedia(media: MediaItem) {
         Modifier
             .width(260.dp)
             .aspectRatio(ratio)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
@@ -218,7 +218,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         Modifier
             .width(260.dp)
             .aspectRatio(ratio)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -270,7 +270,7 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
     Row(
         Modifier
             .width(260.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,

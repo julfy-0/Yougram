@@ -6,41 +6,55 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.settings.ThemeMode
 import app.yougram.core.ui.theme.Accents
-import app.yougram.feature.settings.component.CheckSwitch
+import app.yougram.feature.settings.component.ConnectedChoiceGroup
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
+import app.yougram.feature.settings.component.SwitchRow
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Тема (нажатие переключает режим по кругу), системные цвета и выбор акцента. */
+private fun ThemeMode.title(): String = when (this) {
+    ThemeMode.System -> "Система"
+    ThemeMode.Light -> "Светлая"
+    ThemeMode.Dark -> "Тёмная"
+}
+
+/** Тема (группа кнопок), системные цвета и выбор акцента крупными формами. */
 @Composable
 fun ThemeSection(settings: SettingsRepository) {
     val theme by settings.theme.collectAsState()
@@ -62,23 +76,31 @@ fun ThemeSection(settings: SettingsRepository) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingGroup {
             item {
-                val (label, next) = when (theme.mode) {
-                    ThemeMode.System -> "Как в системе" to ThemeMode.Light
-                    ThemeMode.Light -> "Светлая" to ThemeMode.Dark
-                    ThemeMode.Dark -> "Тёмная" to ThemeMode.System
-                }
                 SettingRow(
                     title = "Тема",
-                    subtitle = label,
-                    onClick = { settings.setThemeMode(next) },
+                    subtitle = when (theme.mode) {
+                        ThemeMode.System -> "Как в системе"
+                        ThemeMode.Light -> "Светлая"
+                        ThemeMode.Dark -> "Тёмная"
+                    },
+                    icon = Icons.Filled.Palette,
+                    belowFullWidth = true,
+                    below = {
+                        ConnectedChoiceGroup(
+                            options = ThemeMode.entries,
+                            selected = theme.mode,
+                            label = { it.title() },
+                            onSelect = settings::setThemeMode,
+                        )
+                    },
                 )
             }
             item {
-                SettingRow(
+                SwitchRow(
                     title = "Цвета системы",
+                    checked = theme.dynamic,
+                    onChange = settings::setDynamicColor,
                     subtitle = "Акцент берётся из обоев и настроек устройства",
-                    onClick = { settings.setDynamicColor(!theme.dynamic) },
-                    trailing = { CheckSwitch(theme.dynamic, settings::setDynamicColor) },
                 )
             }
         }
@@ -110,26 +132,16 @@ fun ThemeSection(settings: SettingsRepository) {
                 item {
                     SettingRow(
                         title = "Акцентный цвет",
+                        belowFullWidth = true,
                         below = {
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(Accents.size) { index ->
-                                    Box(
-                                        Modifier
-                                            .size(64.dp)
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .background(Accents[index].color)
-                                            .clickable { settings.setAccent(index) },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        if (index == theme.accent) {
-                                            Icon(
-                                                Icons.Filled.Check,
-                                                contentDescription = Accents[index].name,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(28.dp),
-                                            )
-                                        }
-                                    }
+                                items(Accents.size, key = { it }) { index ->
+                                    AccentSwatch(
+                                        color = Accents[index].color,
+                                        name = Accents[index].name,
+                                        selected = index == theme.accent,
+                                        onClick = { settings.setAccent(index) },
+                                    )
                                 }
                             }
                         },
@@ -137,7 +149,31 @@ fun ThemeSection(settings: SettingsRepository) {
                 }
             }
         }
+    }
+}
 
+/** Образец акцента: выбранный плавно становится кругом, остальные — скруглённые квадраты. */
+@Composable
+private fun AccentSwatch(color: Color, name: String, selected: Boolean, onClick: () -> Unit) {
+    val corner: Dp by animateDpAsState(
+        targetValue = if (selected) 32.dp else 20.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "accentCorner",
+    )
+    // Цвет значка — по яркости самого образца (сам образец берётся из списка акцентов, а не из темы).
+    val checkColor = if (color.luminance() > 0.5f) Color.Black else Color.White
+    Box(
+        Modifier
+            .size(64.dp)
+            .clip(RoundedCornerShape(corner.coerceAtLeast(0.dp)))
+            .background(color)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = name },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Icon(Icons.Filled.Check, contentDescription = null, tint = checkColor, modifier = Modifier.size(28.dp))
+        }
     }
 }
 

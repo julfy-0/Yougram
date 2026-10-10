@@ -4,6 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,7 +36,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
@@ -235,16 +239,27 @@ fun YougramNavHost(container: AppContainer) {
 
     CompositionLocalProvider(LocalOpenLink provides openLink, LocalOpenUsername provides openUsername) {
         val callBackdrop = rememberBackdropState()
+        // Пружинное движение Expressive (spatial для сдвигов, effects для прозрачности); на слабых устройствах — прежние tween.
+        val motion = MaterialTheme.motionScheme
+        val lowTier = rememberDeviceTier() == DeviceTier.Low
+        val slideSpec: FiniteAnimationSpec<IntOffset> =
+            if (lowTier) tween(NavMillis, easing = FastOutSlowInEasing) else motion.defaultSpatialSpec()
+        val fadeSpec: FiniteAnimationSpec<Float> =
+            if (lowTier) tween(NavMillis / 2) else motion.defaultEffectsSpec()
+        val slowFadeSpec: FiniteAnimationSpec<Float> =
+            if (lowTier) tween(NavMillis) else motion.slowEffectsSpec()
+        val baseFadeSpec: FiniteAnimationSpec<Float> =
+            if (lowTier) tween(FadeMillis) else motion.defaultEffectsSpec()
         Box(Modifier.fillMaxSize()) {
             NavHost(
                 modifier = Modifier.backdropSource(callBackdrop),
                 navController = navController,
                 startDestination = ROUTE_SPLASH,
                 // По умолчанию (заставка, вход) — плавное затухание.
-                enterTransition = { fadeIn(tween(FadeMillis)) },
-                exitTransition = { fadeOut(tween(FadeMillis)) },
-                popEnterTransition = { fadeIn(tween(FadeMillis)) },
-                popExitTransition = { fadeOut(tween(FadeMillis)) },
+                enterTransition = { fadeIn(baseFadeSpec) },
+                exitTransition = { fadeOut(baseFadeSpec) },
+                popEnterTransition = { fadeIn(baseFadeSpec) },
+                popExitTransition = { fadeOut(baseFadeSpec) },
             ) {
                 composable(ROUTE_SPLASH) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -263,12 +278,10 @@ fun YougramNavHost(container: AppContainer) {
                     route = ROUTE_CHATS,
                     // Когда сверху открывается чат, главный экран слегка сдвигается влево и гаснет.
                     exitTransition = {
-                        slideOutHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { -it / 4 } +
-                                fadeOut(tween(NavMillis))
+                        slideOutHorizontally(slideSpec) { -it / 4 } + fadeOut(slowFadeSpec)
                     },
                     popEnterTransition = {
-                        slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { -it / 4 } +
-                                fadeIn(tween(NavMillis))
+                        slideInHorizontally(slideSpec) { -it / 4 } + fadeIn(slowFadeSpec)
                     },
                 ) {
                     // movableContentOf: вкладка, прокрутка и поиск не сбрасываются при складывании/раскладывании.
@@ -322,12 +335,10 @@ fun YougramNavHost(container: AppContainer) {
                     ),
                     // Чат выезжает справа и уезжает обратно вправо.
                     enterTransition = {
-                        slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeIn(tween(NavMillis / 2))
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
                     },
                     popExitTransition = {
-                        slideOutHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeOut(tween(NavMillis / 2))
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
                     },
                 ) { entry ->
                     val chatId = entry.arguments!!.getLong("chatId")
@@ -353,12 +364,10 @@ fun YougramNavHost(container: AppContainer) {
                     route = ROUTE_BROWSER,
                     arguments = listOf(navArgument("url") { type = NavType.StringType }),
                     enterTransition = {
-                        slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeIn(tween(NavMillis / 2))
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
                     },
                     popExitTransition = {
-                        slideOutHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeOut(tween(NavMillis / 2))
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
                     },
                 ) { entry ->
                     BrowserScreen(
@@ -370,12 +379,10 @@ fun YougramNavHost(container: AppContainer) {
                     route = ROUTE_PROFILE,
                     arguments = listOf(navArgument("chatId") { type = NavType.LongType }),
                     enterTransition = {
-                        slideInHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeIn(tween(NavMillis / 2))
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
                     },
                     popExitTransition = {
-                        slideOutHorizontally(tween(NavMillis, easing = FastOutSlowInEasing)) { it } +
-                                fadeOut(tween(NavMillis / 2))
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
                     },
                 ) { entry ->
                     val chatId = entry.arguments!!.getLong("chatId")

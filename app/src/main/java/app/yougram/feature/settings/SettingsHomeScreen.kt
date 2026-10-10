@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package app.yougram.feature.settings
 
 import android.content.Intent
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,12 +63,15 @@ import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import app.yougram.core.ui.component.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -79,6 +85,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -245,7 +252,8 @@ fun SettingsHomeScreen(
             "Yougram ${BuildConfig.VERSION_NAME}",
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onNavigate(SettingsPage.About) }
+                .clickable(role = Role.Button) { onNavigate(SettingsPage.About) }
+                .heightIn(min = 48.dp)
                 .padding(vertical = 12.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelMedium,
@@ -267,6 +275,7 @@ private fun HomeEntryRow(e: HomeEntry, onNavigate: (SettingsPage) -> Unit) {
     SettingRow(e.title, subtitle = e.subtitle, icon = e.icon, value = e.value, onClick = { onNavigate(e.page) })
 }
 
+/** Карточка профиля: аватар в «цветочном» ореоле, имя крупно, кнопка аккаунтов — акцентное пятно. */
 @Composable
 private fun ProfileHeader(
     state: SettingsHomeState,
@@ -279,74 +288,106 @@ private fun ProfileHeader(
     val profile = state.profile
     val accounts by accountManager.accounts.collectAsState()
     val premium by settings.localPremium.collectAsState()
+    val scheme = MaterialTheme.colorScheme
 
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = scheme.primaryContainer,
+        contentColor = scheme.onPrimaryContainer,
     ) {
-        Box(Modifier.clickable(onClick = onChangeAvatar)) {
-            FileAvatar(
-                title = profile?.name.orEmpty(),
-                fileId = profile?.avatarFileId,
-                fileState = viewModel::fileState,
-                size = 96.dp,
-            )
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Box(
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(30.dp)
+                    .size(116.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .clickable(role = Role.Button, onClickLabel = "Изменить аватар", onClick = onChangeAvatar),
                 contentAlignment = Alignment.Center,
             ) {
-                if (state.avatarUpdating) {
-                    LoadingIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
-                } else {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = "Изменить аватар", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clip(MaterialShapes.Cookie9Sided.toShape())
+                        .background(scheme.primary.copy(alpha = 0.22f)),
+                )
+                FileAvatar(
+                    title = profile?.name.orEmpty(),
+                    fileId = profile?.avatarFileId,
+                    fileState = viewModel::fileState,
+                    size = 96.dp,
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(scheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (state.avatarUpdating) {
+                        LoadingIndicator(Modifier.size(18.dp), color = scheme.onPrimary)
+                    } else {
+                        Icon(Icons.Filled.CameraAlt, contentDescription = "Изменить аватар", tint = scheme.onPrimary, modifier = Modifier.size(18.dp))
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                profile?.name.orEmpty(),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (premium) {
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    Icons.Filled.Star,
-                    contentDescription = "Premium",
-                    tint = androidx.compose.ui.graphics.Color(0xFFB36BFF),
-                    modifier = Modifier.size(22.dp),
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    profile?.name.orEmpty(),
+                    style = MaterialTheme.typography.headlineSmallEmphasized,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (premium) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier.size(28.dp).clip(CircleShape).background(scheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Star,
+                            contentDescription = "Premium",
+                            tint = scheme.onTertiaryContainer,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+            val sub = listOfNotNull(
+                profile?.phone?.takeIf { it.isNotEmpty() },
+                profile?.username?.let { "@$it" },
+            ).joinToString(" • ")
+            if (sub.isNotEmpty()) {
+                Text(
+                    sub,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
                 )
             }
-        }
-        val sub = listOfNotNull(
-            profile?.phone?.takeIf { it.isNotEmpty() },
-            profile?.username?.let { "@$it" },
-        ).joinToString(" • ")
-        if (sub.isNotEmpty()) {
-            Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
 
-        Row(
-            modifier = Modifier
-                .padding(top = 10.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                .clickable(onClick = onOpenAccountManager)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(6.dp))
-            Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+            Surface(
+                onClick = onOpenAccountManager,
+                modifier = Modifier.padding(top = 16.dp).heightIn(min = 48.dp),
+                shape = CircleShape,
+                color = scheme.primary,
+                contentColor = scheme.onPrimary,
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.labelLargeEmphasized)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
+                }
+            }
         }
     }
 }
@@ -376,8 +417,7 @@ fun AccountManagerContent(
             ) {
                 Text(
                     text = "Управление аккаунтами",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLargeEmphasized,
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Filled.Close, contentDescription = "Закрыть")
@@ -403,7 +443,7 @@ fun AccountManagerContent(
                                 accountManager.switchAndRestart(acc.id)
                             }
                         },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         // Полупрозрачные плитки: блюр панели виден и под ними.
                         color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
@@ -427,7 +467,6 @@ fun AccountManagerContent(
                                 Text(
                                     text = acc.name.ifEmpty { "Аккаунт" },
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )

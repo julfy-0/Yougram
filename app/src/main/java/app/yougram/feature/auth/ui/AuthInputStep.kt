@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package app.yougram.feature.auth.ui
 
 import androidx.compose.foundation.background
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -22,14 +23,17 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import app.yougram.core.ui.component.Button
 import app.yougram.core.ui.component.LoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,10 +43,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -54,7 +58,7 @@ import kotlinx.coroutines.delay
 
 enum class AuthFieldKind { Phone, Code, Password }
 
-/** Один шаг входа: заголовок с иконкой, поле ввода и кнопка «Далее». */
+/** Один шаг входа: заголовок с иконкой в «печенье», крупное поле ввода и кнопка «Далее». */
 @Composable
 fun AuthInputStep(
     kind: AuthFieldKind,
@@ -105,14 +109,14 @@ fun AuthInputStep(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(48.dp).background(scheme.primaryContainer, CircleShape),
+                Modifier.size(56.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(icon, contentDescription = null, tint = scheme.onPrimaryContainer)
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(title, style = MaterialTheme.typography.titleLargeEmphasized)
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
         }
@@ -128,11 +132,11 @@ fun AuthInputStep(
             singleLine = true,
             enabled = !busy,
             textStyle = if (kind == AuthFieldKind.Code) {
-                MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center, letterSpacing = 6.sp)
+                MaterialTheme.typography.headlineMedium.copy(textAlign = TextAlign.Center, letterSpacing = 8.sp)
             } else {
                 LocalTextStyle.current
             },
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             keyboardOptions = KeyboardOptions(
                 keyboardType = when (kind) {
                     AuthFieldKind.Phone -> KeyboardType.Phone
@@ -151,11 +155,11 @@ fun AuthInputStep(
             ),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         Button(
             onClick = { submit() },
             enabled = canSubmit,
-            shape = RoundedCornerShape(20.dp),
+            shape = CircleShape,
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) {
             if (busy) {

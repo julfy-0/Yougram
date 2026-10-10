@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.yougram.core.ui.component.Avatar
+import app.yougram.core.ui.component.rememberCookieAvatarShape
 import app.yougram.core.ui.component.rememberFileBitmap
 import app.yougram.core.ui.glass.LocalGlass
 import app.yougram.core.ui.glass.backdropSource
@@ -136,6 +137,9 @@ private fun StoryTile(
     onAdd: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Непросмотренные истории: «цветочная» форма аватарки и кольца, остальные — круг.
+    val cookie = rememberCookieAvatarShape()
+    val shape = if (unread) cookie else CircleShape
     val ring = when {
         unread -> Brush.sweepGradient(listOf(scheme.primary, scheme.tertiary, scheme.primary))
         hasStories -> SolidColor(scheme.onSurface.copy(alpha = if (own) 0.55f else 0.25f))
@@ -147,9 +151,9 @@ private fun StoryTile(
     ) {
         Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.fillMaxSize().then(if (hasStories) Modifier.border(2.5.dp, ring, CircleShape) else Modifier).padding(5.dp),
+                Modifier.fillMaxSize().then(if (hasStories) Modifier.border(2.5.dp, ring, shape) else Modifier).padding(5.dp),
                 contentAlignment = Alignment.Center,
-            ) { Avatar(title = title, path = avatarPath, size = 48.dp) }
+            ) { Avatar(title = title, path = avatarPath, size = 48.dp, shape = shape) }
             if (own) {
                 Box(
                     Modifier.align(Alignment.BottomEnd).size(20.dp).clip(CircleShape)

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package app.yougram.feature.browser.ui
 
 import android.annotation.SuppressLint
@@ -21,16 +23,21 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -41,16 +48,20 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.WifiOff
 import app.yougram.core.ui.component.Button
 import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +73,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -172,77 +184,99 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
 
     val host = remember(url) { runCatching { Uri.parse(url).host }.getOrNull().orEmpty() }
     val secure = url.startsWith("https://", ignoreCase = true)
+    val loading = progress in 1..99
+    val scheme = MaterialTheme.colorScheme
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Закрыть") }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        title.ifEmpty { host },
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (secure) {
-                            Icon(
-                                Icons.Filled.Lock,
-                                contentDescription = "Защищённое соединение",
-                                modifier = Modifier.size(12.dp).padding(end = 2.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+    Surface(Modifier.fillMaxSize(), color = scheme.surface) {
+        Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+            // Верхняя панель: контейнер с крупными нижними скруглениями; цвет доходит и под строку состояния.
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = scheme.surfaceContainer,
+                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Закрыть") }
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            host,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            title.ifEmpty { host },
+                            style = MaterialTheme.typography.titleMediumEmphasized,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (secure) {
+                                Icon(
+                                    Icons.Filled.Lock,
+                                    contentDescription = "Защищённое соединение",
+                                    modifier = Modifier.size(12.dp).padding(end = 2.dp),
+                                    tint = scheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                host,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
-                }
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Ещё") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Открыть во внешнем браузере") },
-                            leadingIcon = { Icon(Icons.Filled.OpenInBrowser, null) },
-                            onClick = { menu = false; openExternally(context, url) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Скопировать ссылку") },
-                            leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
-                            onClick = { menu = false; copyLink(context, url) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Поделиться") },
-                            leadingIcon = { Icon(Icons.Filled.Share, null) },
-                            onClick = { menu = false; shareLink(context, url) },
-                        )
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Ещё") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.large) {
+                            DropdownMenuItem(
+                                text = { Text("Открыть во внешнем браузере") },
+                                leadingIcon = { Icon(Icons.Filled.OpenInBrowser, null) },
+                                onClick = { menu = false; openExternally(context, url) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Скопировать ссылку") },
+                                leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                                onClick = { menu = false; copyLink(context, url) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Поделиться") },
+                                leadingIcon = { Icon(Icons.Filled.Share, null) },
+                                onClick = { menu = false; shareLink(context, url) },
+                            )
+                        }
                     }
                 }
             }
-            if (progress in 1..99) {
-                LinearWavyProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
-            } else {
-                HorizontalDivider()
+            Box(Modifier.fillMaxWidth().heightIn(min = 6.dp)) {
+                if (loading) {
+                    LinearWavyProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
+                }
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
                 error?.let { message ->
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                    Surface(Modifier.fillMaxSize(), color = scheme.surface) {
                         Column(
                             Modifier.padding(32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            Text("Страница не открылась", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                            Box(
+                                Modifier
+                                    .size(96.dp)
+                                    .clip(MaterialShapes.Cookie9Sided.toShape())
+                                    .background(scheme.errorContainer),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Filled.WifiOff, contentDescription = null, tint = scheme.onErrorContainer, modifier = Modifier.size(44.dp))
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text("Страница не открылась", style = MaterialTheme.typography.titleLargeEmphasized, textAlign = TextAlign.Center)
                             Text(
                                 message,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = scheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
                             )
@@ -252,21 +286,33 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                 }
             }
 
-            HorizontalDivider()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                IconButton(onClick = { web.goBack() }, enabled = canBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+            // Нижняя панель: плавающая «таблетка» с тональными кнопками.
+            Surface(
+                Modifier.padding(horizontal = 24.dp, vertical = 8.dp).fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = scheme.surfaceContainerHigh,
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalIconButton(onClick = { web.goBack() }, enabled = canBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                    FilledTonalIconButton(onClick = { web.goForward() }, enabled = canForward) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Вперёд")
+                    }
+                    FilledTonalIconButton(onClick = { if (loading) web.stopLoading() else web.reload() }) {
+                        Icon(
+                            if (loading) Icons.Filled.Close else Icons.Filled.Refresh,
+                            contentDescription = if (loading) "Остановить" else "Обновить",
+                        )
+                    }
+                    FilledTonalIconButton(onClick = { shareLink(context, url) }) {
+                        Icon(Icons.Filled.Share, contentDescription = "Поделиться")
+                    }
                 }
-                IconButton(onClick = { web.goForward() }, enabled = canForward) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Вперёд")
-                }
-                IconButton(onClick = { if (progress in 1..99) web.stopLoading() else web.reload() }) {
-                    Icon(
-                        if (progress in 1..99) Icons.Filled.Close else Icons.Filled.Refresh,
-                        contentDescription = if (progress in 1..99) "Остановить" else "Обновить",
-                    )
-                }
-                IconButton(onClick = { shareLink(context, url) }) { Icon(Icons.Filled.Share, contentDescription = "Поделиться") }
             }
         }
     }

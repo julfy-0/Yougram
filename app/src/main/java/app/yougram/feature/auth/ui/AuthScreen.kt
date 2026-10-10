@@ -2,8 +2,6 @@ package app.yougram.feature.auth.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,8 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.yougram.feature.auth.data.AuthStep
 
@@ -51,6 +50,11 @@ fun AuthScreen(viewModel: AuthViewModel) {
     val ui by viewModel.ui.collectAsState()
     val proxy by viewModel.proxy.collectAsState()
     var showProxy by remember { mutableStateOf(false) }
+
+    // Пружины Expressive: пространственные для движения, «эффектные» для прозрачности.
+    val fx = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val moveSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
+    val sizeSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
 
     // Последний текст ошибки остаётся на экране, пока плашка плавно скрывается.
     var lastError by remember { mutableStateOf("") }
@@ -74,8 +78,7 @@ fun AuthScreen(viewModel: AuthViewModel) {
                 Spacer(Modifier.height(20.dp))
                 Text(
                     "Yougram",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.displaySmallEmphasized,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -90,8 +93,8 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     AnimatedContent(
                         targetState = step,
                         transitionSpec = {
-                            (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(250)))
-                                .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it / 3 } + fadeOut(tween(200)))
+                            (slideInHorizontally(moveSpec) { it / 3 } + fadeIn(fx))
+                                .togetherWith(slideOutHorizontally(moveSpec) { -it / 3 } + fadeOut(fx))
                         },
                         label = "authStepTransition",
                     ) { s ->
@@ -153,8 +156,8 @@ fun AuthScreen(viewModel: AuthViewModel) {
 
                     AnimatedVisibility(
                         visible = ui.error != null,
-                        enter = fadeIn(tween(200)) + expandVertically(),
-                        exit = fadeOut(tween(150)) + shrinkVertically(),
+                        enter = fadeIn(fx) + expandVertically(sizeSpec),
+                        exit = fadeOut(fx) + shrinkVertically(sizeSpec),
                     ) {
                         AuthErrorBanner(lastError)
                     }

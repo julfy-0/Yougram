@@ -6,6 +6,18 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.CancellationSignal
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.IntOffset
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,7 +73,19 @@ private const val MaxPollOptions = 10
 private const val MaxQuestion = 255
 private const val MaxOption = 100
 
-/** Меню кнопки «+» в том же стиле, что и меню сообщения: скруглённая панель с рядами «иконка + название». */
+private class AttachAction(
+    val icon: ImageVector,
+    val label: String,
+    val container: Color,
+    val content: Color,
+    val onClick: () -> Unit,
+)
+
+/**
+ * Меню кнопки «+» в стиле Expressive: цветные «таблетки» действий, которые по очереди выезжают
+ * пружинным движением (как пункты FAB Menu).
+ * TODO: заменить на FloatingActionButtonMenu / FloatingActionButtonMenuItem, когда подтвердим их наличие в material3 1.4.0.
+ */
 @Composable
 fun AttachMenu(
     expanded: Boolean,
@@ -74,29 +98,57 @@ fun AttachMenu(
     onRound: () -> Unit,
 ) {
     if (!expanded) return
+    val c = MaterialTheme.colorScheme
+    val actions = listOf(
+        AttachAction(Icons.Filled.AttachFile, "Файл", c.primaryContainer, c.onPrimaryContainer, onFile),
+        AttachAction(Icons.Filled.Image, "Фото или видео", c.primaryContainer, c.onPrimaryContainer, onMedia),
+        AttachAction(Icons.Filled.Poll, "Опрос", c.secondaryContainer, c.onSecondaryContainer, onPoll),
+        AttachAction(Icons.Filled.LocationOn, "Геопозиция", c.secondaryContainer, c.onSecondaryContainer, onLocation),
+        AttachAction(Icons.Filled.Mic, "Голосовое сообщение", c.tertiaryContainer, c.onTertiaryContainer, onVoice),
+        AttachAction(Icons.Filled.Videocam, "Видеосообщение (кружок)", c.tertiaryContainer, c.onTertiaryContainer, onRound),
+    )
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Column(Modifier.width(260.dp).padding(vertical = 6.dp)) {
-                AttachItem(Icons.Filled.AttachFile, "Файл") { onDismiss(); onFile() }
-                AttachItem(Icons.Filled.Image, "Фото или видео") { onDismiss(); onMedia() }
-                AttachItem(Icons.Filled.Poll, "Опрос") { onDismiss(); onPoll() }
-                AttachItem(Icons.Filled.LocationOn, "Геопозиция") { onDismiss(); onLocation() }
-                AttachItem(Icons.Filled.Mic, "Голосовое сообщение") { onDismiss(); onVoice() }
-                AttachItem(Icons.Filled.Videocam, "Видеосообщение (кружок)") { onDismiss(); onRound() }
+        Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            actions.forEachIndexed { index, action ->
+                AttachItem(index, action) { onDismiss(); action.onClick() }
             }
         }
     }
 }
 
 @Composable
-private fun AttachItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun AttachItem(index: Int, action: AttachAction, onClick: () -> Unit) {
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
+    val motion = MaterialTheme.motionScheme
+    val fadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(120) else motion.defaultEffectsSpec()
+    val slideSpec: FiniteAnimationSpec<IntOffset> = if (lowTier) tween(150) else motion.defaultSpatialSpec()
+    var shown by remember { mutableStateOf(lowTier) }
+    LaunchedEffect(Unit) {
+        if (!shown) {
+            delay(index * 35L)
+            shown = true
+        }
+    }
+    AnimatedVisibility(
+        visible = shown,
+        enter = fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 2 },
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(16.dp))
-        Text(label, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = CircleShape,
+            color = action.container,
+            contentColor = action.content,
+        ) {
+            Row(
+                Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(action.icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(16.dp))
+                Text(action.label, style = MaterialTheme.typography.titleMedium)
+            }
+        }
     }
 }
 

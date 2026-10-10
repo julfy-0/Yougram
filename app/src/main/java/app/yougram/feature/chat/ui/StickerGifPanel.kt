@@ -96,7 +96,7 @@ fun StickerTab(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             singleLine = true,
             placeholder = { Text("Поиск стикеров или эмодзи") },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(28.dp),
             // Полупрозрачное поле, чтобы блюр панели просвечивал и под ним.
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = pickerChipColor(false),
@@ -163,7 +163,7 @@ private fun GifThumb(gif: GifItem, viewModel: ChatViewModel, onClick: () -> Unit
     LaunchedEffect(fileId) { fileId?.let { viewModel.download(it, 8) } }
     val bitmap = rememberFileBitmap(state.path, 384)
     Box(
-        Modifier.size(110.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+        Modifier.size(110.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         when {

@@ -1,5 +1,7 @@
 package app.yougram.feature.chat.comments.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -179,8 +182,8 @@ fun CommentsScreen(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = ComposerHeight)
-                    .glass(backdrop, glass, RoundedCornerShape(26.dp))
-                    .clip(RoundedCornerShape(26.dp)),
+                    .glass(backdrop, glass, MaterialTheme.shapes.largeIncreased)
+                    .clip(MaterialTheme.shapes.largeIncreased),
                 placeholder = { Text("Комментарий") },
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
@@ -191,13 +194,20 @@ fun CommentsScreen(
                 ),
             )
             val canSend = input.isNotBlank()
+            // Форма кнопки «перетекает»: квадрат со скруглением (пусто) → круг (можно отправлять).
+            val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+            val sendCorner by animateDpAsState(
+                targetValue = if (canSend) 28.dp else 16.dp,
+                animationSpec = if (lowTier) snap() else MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "sendCorner",
+            )
             Box(
                 Modifier
                     .size(ComposerHeight)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)))
                     .background(
                         if (canSend) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        else MaterialTheme.colorScheme.surfaceContainerHighest,
                     )
                     .clickable(enabled = canSend) {
                         viewModel.send(input)
@@ -223,8 +233,8 @@ private fun CommentRow(msg: Message, sender: SenderInfo?, prefs: ChatPrefs) {
     val shape = RoundedCornerShape(
         topStart = r,
         topEnd = r,
-        bottomStart = if (mine) r else 6.dp,
-        bottomEnd = if (mine) 6.dp else r,
+        bottomStart = if (mine) r else 4.dp,
+        bottomEnd = if (mine) 4.dp else r,
     )
     val name = sender?.name.orEmpty()
     val text = (msg.content as? MessageText)?.text?.text ?: "[вложение]"
@@ -241,7 +251,8 @@ private fun CommentRow(msg: Message, sender: SenderInfo?, prefs: ChatPrefs) {
         }
         Surface(
             shape = shape,
-            color = if (mine) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f) else plateColor(PlateArea.Chats),
+            color = if (mine) MaterialTheme.colorScheme.primaryContainer else plateColor(PlateArea.Chats),
+            contentColor = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.widthIn(max = 300.dp),
         ) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
@@ -258,7 +269,7 @@ private fun CommentRow(msg: Message, sender: SenderInfo?, prefs: ChatPrefs) {
                 Text(
                     time,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = LocalContentColor.current.copy(alpha = 0.7f),
                     modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
                 )
             }

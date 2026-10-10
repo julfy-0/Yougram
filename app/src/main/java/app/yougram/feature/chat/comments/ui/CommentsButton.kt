@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ChatBubble
@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
 /**
@@ -38,7 +39,8 @@ fun CommentsButton(
     modifier: Modifier = Modifier,
     attached: Boolean = true,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
+    val container = MaterialTheme.colorScheme.secondaryContainer
+    val content = MaterialTheme.colorScheme.onSecondaryContainer
     val label = if (count > 0) commentsLabel(count) else "Оставить комментарий"
 
     // Внутри пузыря кнопка «парит» с небольшим отступом от текста и краёв пузыря.
@@ -46,31 +48,36 @@ fun CommentsButton(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (attached) Modifier.clip(RoundedCornerShape(16.dp)).background(accent.copy(alpha = 0.10f))
-                    else Modifier.clip(CircleShape).background(accent.copy(alpha = 0.16f)),
-                )
-                .clickable(onClick = onClick)
+                .heightIn(min = 44.dp)
+                .clip(if (attached) MaterialTheme.shapes.medium else CircleShape)
+                .background(container)
+                .clickable(role = Role.Button, onClick = onClick)
                 .padding(
-                    start = if (attached) 14.dp else 12.dp,
-                    end = if (attached) 10.dp else 8.dp,
-                    top = if (attached) 10.dp else 8.dp,
-                    bottom = if (attached) 10.dp else 8.dp,
+                    start = if (attached) 14.dp else 14.dp,
+                    end = if (attached) 8.dp else 8.dp,
+                    top = 6.dp,
+                    bottom = 6.dp,
                 ),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ChatBubble, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.ChatBubble, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelLarge,
-                    color = accent,
+                    color = content,
                     modifier = Modifier.padding(start = 8.dp),
                 )
                 Spacer(Modifier.width(12.dp))
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            // Шеврон в круглом «пятне»: акцентное действие на контейнере.
+            Box(
+                Modifier.size(28.dp).clip(CircleShape).background(content.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

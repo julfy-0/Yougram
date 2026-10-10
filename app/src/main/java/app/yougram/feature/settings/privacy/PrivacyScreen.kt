@@ -322,7 +322,7 @@ private fun PrivacyRow(key: PrivacyKey, detail: PrivacyDetail?, onClick: () -> U
         Text(key.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
         if (key.premium) {
             Spacer(Modifier.width(8.dp))
-            Icon(Icons.Filled.Star, contentDescription = "Premium", tint = Color(0xFFB36BFF), modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Star, contentDescription = "Premium", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))

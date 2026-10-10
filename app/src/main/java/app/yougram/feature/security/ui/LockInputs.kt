@@ -3,7 +3,7 @@ package app.yougram.feature.security.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import app.yougram.core.ui.component.Button
@@ -45,19 +47,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import kotlin.math.roundToInt
 
 private const val MaxPinLength = 16
-private val KeySize = 64.dp
+private val KeySize = 76.dp
+private val KeyGap = 16.dp
 
-/** Цифровая клавиатура с пружинящими точками-индикаторами и анимацией встряхивания при ошибке. */
+/** Цифровая клавиатура: клавиши «перетекают» из круга в скруглённый квадрат при нажатии, точки появляются пружиной, при ошибке встряхивание. */
 @Composable
 fun PinEntry(
     value: String,
@@ -90,11 +94,11 @@ fun PinEntry(
         }
     }
 
-    val dotColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val dotColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Column(
         modifier = modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(KeyGap),
     ) {
         Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until MaxPinLength) {
@@ -108,44 +112,53 @@ fun PinEntry(
             }
         }
         listOf("123", "456", "789").forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
                 row.forEach { digit ->
                     PinKey(enabled = enabled, onClick = {
                         if (value.length < MaxPinLength) onValueChange(value + digit)
-                    }) { Text(digit.toString(), style = MaterialTheme.typography.titleLarge) }
+                    }) { Text(digit.toString(), style = MaterialTheme.typography.headlineSmallEmphasized) }
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
             Box(Modifier.size(KeySize), contentAlignment = Alignment.Center) { extraKey?.invoke() }
             PinKey(enabled = enabled, onClick = {
                 if (value.length < MaxPinLength) onValueChange(value + "0")
-            }) { Text("0", style = MaterialTheme.typography.titleLarge) }
-            PinKey(enabled = enabled && value.isNotEmpty(), onClick = { onValueChange(value.dropLast(1)) }) {
+            }) { Text("0", style = MaterialTheme.typography.headlineSmallEmphasized) }
+            PinKey(enabled = enabled && value.isNotEmpty(), tonal = true, onClick = { onValueChange(value.dropLast(1)) }) {
                 Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Стереть")
             }
         }
-        Button(onClick = onSubmit, enabled = enabled && value.length >= minLength) { Text("Подтвердить") }
+        Button(
+            onClick = onSubmit,
+            enabled = enabled && value.length >= minLength,
+            shape = CircleShape,
+            modifier = Modifier.width(KeySize * 3 + KeyGap * 2).height(56.dp),
+        ) { Text("Подтвердить", style = MaterialTheme.typography.titleMedium) }
     }
 }
 
 @Composable
-private fun PinKey(enabled: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun PinKey(enabled: Boolean, onClick: () -> Unit, tonal: Boolean = false, content: @Composable () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        label = "keyScale",
+    val low = rememberDeviceTier() == DeviceTier.Low
+    // Форма перетекает: круг → скруглённый квадрат при нажатии (на слабых устройствах без морфинга).
+    val corner by animateDpAsState(
+        targetValue = if (isPressed && !low) KeySize / 4 else KeySize / 2,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "keyCorner",
     )
+    val scheme = MaterialTheme.colorScheme
 
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(corner.coerceAtLeast(0.dp)),
+        color = if (tonal) scheme.secondaryContainer else scheme.surfaceContainerHigh,
+        contentColor = if (tonal) scheme.onSecondaryContainer else scheme.onSurface,
         interactionSource = interactionSource,
-        modifier = Modifier.size(KeySize).scale(scale),
+        modifier = Modifier.size(KeySize),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
     }

@@ -1,6 +1,7 @@
 package app.yougram.feature.settings.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -9,22 +10,32 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -39,8 +50,10 @@ internal fun SettingsPageColumn(contentPadding: PaddingValues, content: @Composa
             .padding(contentPadding)
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        content = content,
-    )
+    ) {
+        content()
+        Spacer(Modifier.height(16.dp))
+    }
 }
 
 /** Пояснение под группой настроек. */
@@ -48,13 +61,13 @@ internal fun SettingsPageColumn(contentPadding: PaddingValues, content: @Composa
 internal fun SettingsFootnote(text: String) {
     Text(
         text,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
-/** Строка с переключателем; нажатие на строку переключает так же, как нажатие на сам переключатель. */
+/** Строка с переключателем; нажатие на строку переключает так же, как нажатие на сам переключатель (для TalkBack это один элемент). */
 @Composable
 internal fun SwitchRow(
     title: String,
@@ -67,8 +80,8 @@ internal fun SwitchRow(
         title = title,
         subtitle = subtitle,
         icon = icon,
-        onClick = { onChange(!checked) },
-        trailing = { CheckSwitch(checked, onChange) },
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+        trailing = { CheckSwitch(checked, null) },
     )
 }
 
@@ -95,6 +108,7 @@ internal fun EditDialog(
                         onValueChange = { values[i] = it },
                         label = { Text(label) },
                         singleLine = true,
+                        shape = MaterialTheme.shapes.large,
                         visualTransformation = if (i in secretIndices) PasswordVisualTransformation() else VisualTransformation.None,
                     )
                 }
@@ -105,7 +119,7 @@ internal fun EditDialog(
     )
 }
 
-/** Диалог выбора одного варианта. */
+/** Диалог выбора одного варианта: выбранная строка подсвечена контейнером, всё прокручивается при большом шрифте. */
 @Composable
 internal fun <T> ChoiceDialog(
     title: String,
@@ -119,16 +133,12 @@ internal fun <T> ChoiceDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 options.forEach { option ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onSelect(option) }.padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = option == selected, onClick = null)
-                        Spacer(Modifier.width(12.dp))
-                        Text(label(option))
-                    }
+                    ChoiceRow(label(option), option == selected) { onSelect(option) }
                 }
             }
         },
@@ -137,7 +147,30 @@ internal fun <T> ChoiceDialog(
     )
 }
 
-/** Диалог подтверждения опасного действия. */
+@Composable
+private fun ChoiceRow(text: String, selected: Boolean, onClick: () -> Unit) {
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "choiceRow",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(container)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** Диалог подтверждения опасного действия: кнопка подтверждения цвета error. */
 @Composable
 internal fun ConfirmDialog(
     title: String,
@@ -150,7 +183,12 @@ internal fun ConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text(confirmLabel) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }

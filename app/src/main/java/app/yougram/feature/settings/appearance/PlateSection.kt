@@ -23,6 +23,7 @@ fun PlateSection(plates: PlateRepository) {
                 SettingRow(
                     title = area.title,
                     subtitle = "Прозрачность ${(values.of(area) * 100).roundToInt()} %",
+                    belowFullWidth = true,
                     below = { DotSlider(values.of(area), { plates.set(area, it) }, 0f..1f) },
                 )
             }

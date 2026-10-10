@@ -6,8 +6,11 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,7 +52,14 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import app.yougram.core.ui.component.ExpressiveIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import app.yougram.core.ui.component.TextButton
@@ -136,11 +146,8 @@ enum class MainTab(val title: String, val icon: ImageVector) {
 private val TopBarContentHeight = 56.dp
 private val FolderBarHeight = 48.dp
 private val StoriesBarHeight = 88.dp
-private val BottomBarHeight = 60.dp
+private val BottomBarHeight = 64.dp
 private val BottomBarMargin = 8.dp
-
-/** Отступ внутри «таблетки» — одинаковый со всех сторон, чтобы выбранная плашка была концентрична её краям. */
-private val PillPadding = 6.dp
 
 /** Кнопка поиска: квадрат со скруглёнными углами. */
 private val SearchButtonShape = RoundedCornerShape(20.dp)
@@ -228,6 +235,23 @@ fun MainScreen(
     )
 
     val density = LocalDensity.current
+
+    // Пружинное движение Expressive; на слабых устройствах остаются прежние tween.
+    val motion = MaterialTheme.motionScheme
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    val screenSlide: FiniteAnimationSpec<IntOffset> =
+        if (lowTier) tween(ScreenAnimationMillis, easing = FastOutSlowInEasing) else motion.defaultSpatialSpec()
+    val screenFade: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(ScreenAnimationMillis) else motion.defaultEffectsSpec()
+    val fastFade: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(SearchAnimationMillis / 2) else motion.fastEffectsSpec()
+    val searchFade: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(SearchAnimationMillis) else motion.defaultEffectsSpec()
+    // Прогресс панелей идёт по effects-пружине без перелёта: он двигает панель и меняет прозрачность.
+    val barsSpec: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(BarsAnimationMillis, easing = FastOutSlowInEasing) else motion.defaultEffectsSpec()
+    val blurSpec: FiniteAnimationSpec<Dp> =
+        if (lowTier) tween(SearchAnimationMillis, easing = FastOutSlowInEasing) else motion.defaultEffectsSpec()
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -294,7 +318,7 @@ fun MainScreen(
     val barsProgress = animateFloatAsState(
         // В настройках верхняя панель не прячется никогда.
         targetValue = if (barsVisible || searching || selectionActive || tab == MainTab.Settings) 1f else 0f,
-        animationSpec = tween(BarsAnimationMillis, easing = FastOutSlowInEasing),
+        animationSpec = barsSpec,
         label = "barsProgress",
     )
 
@@ -303,7 +327,7 @@ fun MainScreen(
     // Пока открыт поиск, всё, что под ним (список чатов / настройки), плавно размывается.
     val underSearchBlur by animateDpAsState(
         targetValue = if (searching && app.yougram.core.ui.rememberDeviceTier() != app.yougram.core.ui.DeviceTier.Low) SearchBlurRadius else 0.dp,
-        animationSpec = tween(SearchAnimationMillis, easing = FastOutSlowInEasing),
+        animationSpec = blurSpec,
         label = "underSearchBlur",
     )
 
@@ -348,11 +372,9 @@ fun MainScreen(
                     }
                     val dir = if (forward) 1 else -1
                     (
-                            slideInHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { dir * it } +
-                                    fadeIn(tween(ScreenAnimationMillis))
+                            slideInHorizontally(screenSlide) { dir * it } + fadeIn(screenFade)
                             ).togetherWith(
-                            slideOutHorizontally(tween(ScreenAnimationMillis, easing = FastOutSlowInEasing)) { -dir * it / 3 } +
-                                    fadeOut(tween(ScreenAnimationMillis / 2)),
+                            slideOutHorizontally(screenSlide) { -dir * it / 3 } + fadeOut(fastFade),
                         )
                 },
                 label = "mainScreen",
@@ -379,8 +401,8 @@ fun MainScreen(
                         }
                         AnimatedVisibility(
                             visible = searching && query.isNotBlank(),
-                            enter = fadeIn(tween(SearchAnimationMillis)),
-                            exit = fadeOut(tween(SearchAnimationMillis / 2)),
+                            enter = fadeIn(searchFade),
+                            exit = fadeOut(fastFade),
                         ) {
                             GlobalSearchScreen(
                                 viewModel = searchViewModel,
@@ -420,8 +442,8 @@ fun MainScreen(
                         }
                         AnimatedVisibility(
                             visible = searching && query.isNotBlank(),
-                            enter = fadeIn(tween(SearchAnimationMillis)),
-                            exit = fadeOut(tween(SearchAnimationMillis / 2)),
+                            enter = fadeIn(searchFade),
+                            exit = fadeOut(fastFade),
                         ) {
                             SettingsSearchResults(
                                 query = query,
@@ -586,6 +608,16 @@ private fun GlassTopBar(
     progress: () -> Float,
     modifier: Modifier = Modifier,
 ) {
+    val motion = MaterialTheme.motionScheme
+    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
+    val searchSlide: FiniteAnimationSpec<IntOffset> =
+        if (lowTier) tween(SearchAnimationMillis, easing = FastOutSlowInEasing) else motion.defaultSpatialSpec()
+    val searchScale: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(SearchAnimationMillis, easing = FastOutSlowInEasing) else motion.defaultSpatialSpec()
+    val searchFadeIn: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(SearchAnimationMillis, delayMillis = 60) else motion.defaultEffectsSpec()
+    val searchFadeOut: FiniteAnimationSpec<Float> =
+        if (lowTier) tween(SearchAnimationMillis / 2) else motion.fastEffectsSpec()
     Box(
         modifier
             // Уезжает вверх только строка с заголовком: стекло под статус-баром и папки остаются.
@@ -616,12 +648,12 @@ private fun GlassTopBar(
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     (
-                            fadeIn(tween(SearchAnimationMillis, delayMillis = 60)) +
-                                    slideInHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { it / 5 } +
-                                    scaleIn(tween(SearchAnimationMillis, easing = FastOutSlowInEasing), initialScale = 0.94f)
+                            fadeIn(searchFadeIn) +
+                                    slideInHorizontally(searchSlide) { it / 5 } +
+                                    scaleIn(searchScale, initialScale = 0.94f)
                             ).togetherWith(
-                            fadeOut(tween(SearchAnimationMillis / 2)) +
-                                    slideOutHorizontally(tween(SearchAnimationMillis, easing = FastOutSlowInEasing)) { -it / 8 },
+                            fadeOut(searchFadeOut) +
+                                    slideOutHorizontally(searchSlide) { -it / 8 },
                         )
                 },
                 label = "searchField",
@@ -634,39 +666,41 @@ private fun GlassTopBar(
                             value = query,
                             onValueChange = onQueryChange,
                             placeholder = { Text(searchHint) },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             singleLine = true,
+                            shape = CircleShape,
                             colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
                             ),
                             modifier = Modifier.weight(1f).focusRequester(focusRequester),
                         )
-                        IconButton(onClick = onCloseSearch) {
+                        ExpressiveIconButton(onClick = onCloseSearch) {
                             Icon(Icons.Filled.Close, contentDescription = "Закрыть поиск")
                         }
                     } else if (selectionCount > 0) {
-                        IconButton(onClick = onClearSelection) {
+                        ExpressiveIconButton(onClick = onClearSelection) {
                             Icon(Icons.Filled.Close, contentDescription = "Отменить выбор")
                         }
-                        Text(selectionCount.toString(), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+                        Text(selectionCount.toString(), style = MaterialTheme.typography.titleLargeEmphasized, modifier = Modifier.padding(start = 8.dp))
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = onMuteSelected) {
+                        ExpressiveIconButton(onClick = onMuteSelected) {
                             Icon(
                                 if (selectionAllMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
                                 contentDescription = if (selectionAllMuted) "Включить звук" else "Выключить звук",
                             )
                         }
-                        IconButton(onClick = onArchiveSelected) {
+                        ExpressiveIconButton(onClick = onArchiveSelected) {
                             Icon(Icons.Filled.Archive, contentDescription = "В архив")
                         }
-                        IconButton(onClick = onDeleteSelected) {
+                        ExpressiveIconButton(onClick = onDeleteSelected) {
                             Icon(Icons.Filled.Delete, contentDescription = "Удалить")
                         }
                         var moreOpen by remember { mutableStateOf(false) }
                         Box {
-                            IconButton(onClick = { moreOpen = true }) {
+                            ExpressiveIconButton(onClick = { moreOpen = true }) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "Ещё")
                             }
                             DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
@@ -681,27 +715,23 @@ private fun GlassTopBar(
                         }
                     } else {
                         if (onBack != null) {
-                            Box(
-                                Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                    .clickable(onClick = onBack),
-                                contentAlignment = Alignment.Center,
+                            ExpressiveIconButton(
+                                onClick = onBack,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(),
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                             }
                             Spacer(Modifier.width(16.dp))
                         }
-                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        Text(title, style = MaterialTheme.typography.titleLargeEmphasized)
                         if (onBack == null && (searchOnTop || canReadAll)) Spacer(Modifier.weight(1f))
                         if (canReadAll && onBack == null) {
-                            IconButton(onClick = onReadAll) {
+                            ExpressiveIconButton(onClick = onReadAll) {
                                 Icon(Icons.Filled.DoneAll, contentDescription = "Прочитать всё")
                             }
                         }
                         if (searchOnTop && onBack == null) {
-                            IconButton(onClick = onSearch) {
+                            ExpressiveIconButton(onClick = onSearch) {
                                 Icon(Icons.Filled.Search, contentDescription = "Поиск")
                             }
                         }
@@ -760,18 +790,34 @@ private fun FolderTabs(
 
 @Composable
 private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: () -> Unit) {
+    val motion = MaterialTheme.motionScheme
+    // Выбранная папка становится «таблеткой», остальные — более квадратными (connected button group).
+    val corner by animateIntAsState(
+        targetValue = if (selected) 50 else 28,
+        animationSpec = motion.fastSpatialSpec(),
+        label = "folderChipShape",
+    )
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "folderChipColor",
+    )
     Surface(
         onClick = onClick,
-        shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
-        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(corner.coerceIn(0, 50)),
+        color = container,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.semantics {
+            role = Role.Tab
+            this.selected = selected
+        },
     ) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Text(text, style = MaterialTheme.typography.labelLargeEmphasized, maxLines = 1)
             if (unread > 0) {
                 Surface(
                     shape = CircleShape,
@@ -814,56 +860,39 @@ private fun GlassBottomBar(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Основная «таблетка» с вкладками: у выбранной вкладки рядом с иконкой показывается название.
-        Row(
+        // Стеклянная «таблетка» с ShortNavigationBar внутри: стекло даёт Modifier.glass, а сам бар прозрачен.
+        Box(
             Modifier
                 .weight(1f)
                 .height(BottomBarHeight)
                 .glass(backdrop, glass, CircleShape)
-                .padding(PillPadding),
-            // SpaceBetween: крайняя плашка прижата к краю с тем же отступом, что и сверху/снизу.
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+                .clip(CircleShape),
         ) {
-            MainTab.entries.forEach { tab ->
-                TabItem(tab = tab, selected = tab == selected, onClick = { onSelect(tab) })
+            ShortNavigationBar(
+                containerColor = Color.Transparent,
+                windowInsets = WindowInsets(0.dp),
+            ) {
+                MainTab.entries.forEach { tab ->
+                    ShortNavigationBarItem(
+                        selected = tab == selected,
+                        onClick = { onSelect(tab) },
+                        icon = { Icon(tab.icon, contentDescription = null) },
+                        label = { Text(tab.title, maxLines = 1) },
+                    )
+                }
             }
         }
 
-        // Отдельная круглая кнопка поиска справа, той же высоты, что и «таблетка».
+        // Отдельная кнопка поиска справа, той же высоты, что и «таблетка».
         if (showSearch) Box(
             Modifier
                 .size(BottomBarHeight)
                 .glass(backdrop, glass, SearchButtonShape)
                 .clip(SearchButtonShape)
-                .clickable(onClick = onSearch),
+                .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.Filled.Search, contentDescription = "Поиск")
-        }
-    }
-}
-
-@Composable
-private fun TabItem(tab: MainTab, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .animateContentSize()
-            // Высота = внутренняя высота «таблетки», поэтому зазор до её краёв везде одинаковый.
-            .height(BottomBarHeight - PillPadding * 2)
-            .clip(CircleShape)
-            .then(
-                if (selected) Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
-                else Modifier
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = if (selected) 14.dp else 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(tab.icon, contentDescription = tab.title, modifier = Modifier.size(24.dp))
-        if (selected) {
-            Spacer(Modifier.width(6.dp))
-            Text(tab.title, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
 }

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Icon
@@ -27,12 +26,12 @@ fun AuthErrorBanner(text: String) {
         modifier = Modifier
             .padding(top = 16.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.large)
             .background(scheme.errorContainer)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.ErrorOutline, contentDescription = null, tint = scheme.onErrorContainer, modifier = Modifier.size(20.dp))
+        Icon(Icons.Filled.ErrorOutline, contentDescription = null, tint = scheme.onErrorContainer, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = scheme.onErrorContainer)
     }

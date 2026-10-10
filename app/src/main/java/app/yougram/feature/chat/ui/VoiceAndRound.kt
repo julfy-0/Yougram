@@ -5,6 +5,11 @@ import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.view.Surface
 import android.view.TextureView
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -45,7 +50,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import androidx.compose.ui.viewinterop.AndroidView
 import app.yougram.core.ui.component.rememberFileBitmap
 import app.yougram.feature.chat.data.FileState
@@ -100,6 +109,11 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
     }
 
     val bars = remember(media.waveform) { decodeWaveform(media.waveform, WaveBars) }
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
+    val motion = MaterialTheme.motionScheme
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
+    val iconFadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(100) else motion.defaultEffectsSpec()
+    val buttonCorner by animateDpAsState(if (active) 22.dp else 14.dp, cornerSpec, label = "voiceButtonCorner")
     val played = MaterialTheme.colorScheme.primary
     val rest = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
 
@@ -107,12 +121,13 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         Modifier.width(240.dp).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Кнопка воспроизведения: в покое — «квадрат со скруглением», при воспроизведении — круг.
         Box(
             Modifier
                 .size(44.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(buttonCorner.coerceAtLeast(0.dp)))
                 .background(MaterialTheme.colorScheme.primary)
-                .clickable {
+                .clickable(role = Role.Button) {
                     val path = full.path
                     when {
                         path != null -> AudioPlayback.toggle(media.fileId, path)
@@ -122,11 +137,19 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
             contentAlignment = Alignment.Center,
         ) {
             val tint = MaterialTheme.colorScheme.onPrimary
-            when {
-                full.active -> LoadingIndicator(Modifier.size(28.dp), color = tint)
-                full.path == null -> Icon(Icons.Filled.Download, null, tint = tint)
-                active -> Icon(Icons.Filled.Pause, null, tint = tint)
-                else -> Icon(Icons.Filled.PlayArrow, null, tint = tint)
+            val state = when {
+                full.active -> 0
+                full.path == null -> 1
+                active -> 2
+                else -> 3
+            }
+            Crossfade(targetState = state, animationSpec = iconFadeSpec, label = "voiceIcon") { st ->
+                when (st) {
+                    0 -> LoadingIndicator(Modifier.size(28.dp), color = tint)
+                    1 -> Icon(Icons.Filled.Download, "Скачать", tint = tint)
+                    2 -> Icon(Icons.Filled.Pause, "Пауза", tint = tint)
+                    else -> Icon(Icons.Filled.PlayArrow, "Воспроизвести", tint = tint)
+                }
             }
         }
         Spacer(Modifier.width(10.dp))

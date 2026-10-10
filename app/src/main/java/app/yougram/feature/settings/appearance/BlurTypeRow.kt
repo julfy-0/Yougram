@@ -1,20 +1,14 @@
 package app.yougram.feature.settings.appearance
 
 import android.os.Build
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BlurOn
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.BlurType
+import app.yougram.feature.settings.component.ConnectedChoiceGroup
 import app.yougram.feature.settings.component.SettingRow
 
-/** Выбор алгоритма размытия фона под панелями. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Выбор алгоритма размытия фона под панелями: Гаусс / Box / Kawase / Боке в связанной группе кнопок. */
 @Composable
 fun BlurTypeRow(selected: BlurType, onSelect: (BlurType) -> Unit) {
     val shaders = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -23,19 +17,14 @@ fun BlurTypeRow(selected: BlurType, onSelect: (BlurType) -> Unit) {
         title = "Тип размытия",
         subtitle = selected.hint + note,
         icon = Icons.Filled.BlurOn,
+        belowFullWidth = true,
         below = {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                BlurType.entries.forEach { type ->
-                    FilterChip(
-                        selected = type == selected,
-                        onClick = { onSelect(type) },
-                        label = { Text(type.title) },
-                    )
-                }
-            }
+            ConnectedChoiceGroup(
+                options = BlurType.entries,
+                selected = selected,
+                label = { it.title },
+                onSelect = onSelect,
+            )
         },
     )
 }

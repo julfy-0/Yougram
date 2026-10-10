@@ -62,9 +62,9 @@ fun bubbleStyle(
     wallpaper: Color = chatBackground(dark),
 ): BubbleStyle {
     var bg = customBg ?: if (dark) {
-        if (outgoing) lerp(Color(0xFF3B3F46), accent, 0.12f) else Color(0xFF2A2C31)
+        if (outgoing) lerp(Color(0xFF3B3F46), accent, 0.22f) else Color(0xFF2A2C31)
     } else {
-        if (outgoing) lerp(Color(0xFFDDE8F7), accent, 0.10f) else Color(0xFFE9EAEE)
+        if (outgoing) lerp(Color(0xFFDDE8F7), accent, 0.18f) else Color(0xFFE9EAEE)
     }
     // полупрозрачный фон считаем поверх обоев
     bg = bg.compositeOver(wallpaper)

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package app.yougram.feature.profile.ui
 
 import android.Manifest
@@ -14,12 +16,10 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -28,7 +28,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,12 +38,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -56,6 +55,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PlayArrow
@@ -64,11 +64,14 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,7 +89,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,6 +108,7 @@ import app.yougram.feature.chat.data.MediaKind
 import app.yougram.feature.chat.data.MessageItem
 import app.yougram.feature.chat.data.ProfileDetails
 import app.yougram.feature.chat.data.ProfileKind
+import app.yougram.feature.settings.component.ConnectedChoiceGroup
 import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
@@ -406,12 +409,19 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
                 }
             }
         } else {
-            Box(Modifier.popIn(entered)) {
+            // Без баннера: аватар в «цветочном» ореоле контейнера primary.
+            Box(Modifier.popIn(entered).size(132.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clip(MaterialShapes.Cookie9Sided.toShape())
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                )
                 FileAvatar(
                     title = details.title,
                     fileId = details.avatarFileId,
                     fileState = viewModel::fileState,
-                    size = 96.dp,
+                    size = 100.dp,
                 )
             }
         }
@@ -419,8 +429,7 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Text(
                 details.title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -442,12 +451,29 @@ private fun ProfileHeader(details: ProfileDetails, viewModel: ProfileViewModel, 
     }
 }
 
-/** Действия — сегментированная группа строк, как в настройках. */
+/** Действия: ряд крупных тональных плиток (иконка + подпись); «Покинуть» подсвечено как опасное. */
 @Composable
 private fun ActionsGroup(actions: List<ProfileAction>) {
-    SettingGroup {
+    val scheme = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         actions.forEach { action ->
-            item { SettingRow(action.label, icon = action.icon, onClick = action.onClick) }
+            val danger = action.label == "Покинуть"
+            Surface(
+                onClick = action.onClick,
+                modifier = Modifier.weight(1f).heightIn(min = 76.dp),
+                shape = MaterialTheme.shapes.large,
+                color = if (danger) scheme.errorContainer else scheme.secondaryContainer,
+                contentColor = if (danger) scheme.onErrorContainer else scheme.onSecondaryContainer,
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                ) {
+                    Icon(action.icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Text(action.label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }
@@ -513,61 +539,38 @@ private fun DeletedGroup(messages: List<MessageItem>) {
     }
 }
 
-/** Переключатель вкладок: «пилюля» плавно переезжает на выбранную вкладку, цвет текста перетекает. */
+/** Вкладки общих материалов: «Медиа / Файлы / Ссылки / Удалённые» в связанной группе кнопок. */
 @Composable
 private fun TabSwitcher(selected: ProfileTab, onSelect: (ProfileTab) -> Unit) {
-    val tabs = ProfileTab.entries
-    val gap = 4.dp
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        BoxWithConstraints(Modifier.padding(4.dp)) {
-            val tabWidth = (maxWidth - gap * (tabs.size - 1)) / tabs.size
-            val pillOffset by animateDpAsState(
-                targetValue = (tabWidth + gap) * selected.ordinal,
-                animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium),
-                label = "tabPill",
-            )
-            Box(
-                Modifier
-                    .offset(x = pillOffset)
-                    .width(tabWidth)
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                tabs.forEach { tab ->
-                    val textColor by animateColorAsState(
-                        targetValue = if (tab == selected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        animationSpec = tween(220),
-                        label = "tabText",
-                    )
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable { onSelect(tab) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(tab.label, style = MaterialTheme.typography.labelLarge, color = textColor)
-                    }
-                }
-            }
-        }
-    }
+    ConnectedChoiceGroup(
+        options = ProfileTab.entries,
+        selected = selected,
+        label = { it.label },
+        onSelect = onSelect,
+    )
 }
 
 @Composable
 private fun EmptyHint(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+    Column(
+        modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(MaterialShapes.Cookie6Sided.toShape())
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Inbox,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(32.dp),
+            )
+        }
         Text("Пока ничего нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
