@@ -11,8 +11,11 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -104,6 +108,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -146,11 +152,11 @@ enum class MainTab(val title: String, val icon: ImageVector) {
 private val TopBarContentHeight = 56.dp
 private val FolderBarHeight = 48.dp
 private val StoriesBarHeight = 88.dp
-private val BottomBarHeight = 64.dp
+private val BottomBarHeight = 56.dp
 private val BottomBarMargin = 8.dp
 
 /** Кнопка поиска: квадрат со скруглёнными углами. */
-private val SearchButtonShape = RoundedCornerShape(20.dp)
+private val SearchButtonShape = RoundedCornerShape(18.dp)
 private val SearchBlurRadius = 24.dp
 private const val SearchAnimationMillis = 260
 private const val SearchResultsAlpha = 0.78f
@@ -836,6 +842,94 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
     }
 }
 
+private val NavSlot = 40.dp
+private val NavGap = 2.dp
+private val NavPadVertical = 8.dp
+private val NavPadHorizontal = 8.dp
+
+/**
+ * Вкладки навбара. У каждой вкладки своя «таблетка»: при нажатии на кнопку плашка раскрывается пружиной,
+ * а подпись плавно появляется (и плавно исчезает при переключении на другую вкладку),
+ * фон плавно переходит между «залитым» и прозрачным. Слот вкладки 40 dp, зазор 2 dp.
+ */
+@Composable
+private fun NavTabs(selected: MainTab, onSelect: (MainTab) -> Unit) {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelLargeEmphasized
+    Row(
+        Modifier.padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
+        horizontalArrangement = Arrangement.spacedBy(NavGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MainTab.entries.forEach { tab ->
+            // Дополнительная ширина под подпись: сама подпись + правый отступ 8 dp.
+            val px = remember(tab, labelStyle) { measurer.measure(tab.title, labelStyle, maxLines = 1).size.width }
+            val extra = with(density) { px.toDp() } + 8.dp
+            NavTab(tab, selected = tab == selected, extra = extra, style = labelStyle, onClick = { onSelect(tab) })
+        }
+    }
+}
+
+@Composable
+private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    // Быстрая пружина с лёгким перелётом, как в образце.
+    val frac by animateFloatAsState(
+        if (selected) 1f else 0f,
+        spring(dampingRatio = 0.72f, stiffness = 650f),
+        label = "navFrac",
+    )
+    val textAlpha by animateFloatAsState(
+        if (selected) 1f else 0f,
+        tween(200, easing = FastOutSlowInEasing),
+        label = "navTextAlpha",
+    )
+    val container by animateColorAsState(
+        if (selected) scheme.primaryContainer else scheme.primaryContainer.copy(alpha = 0f),
+        tween(160),
+        label = "navContainer",
+    )
+    val content by animateColorAsState(
+        if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        tween(160),
+        label = "navContent",
+    )
+    Box(
+        Modifier
+            .width(NavSlot + extra * frac.coerceIn(0f, 1.12f))
+            .height(NavSlot)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics { this.selected = selected },
+    ) {
+        Row(
+            Modifier.align(Alignment.CenterStart).requiredWidth(NavSlot + extra),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(NavSlot), contentAlignment = Alignment.Center) {
+                Icon(
+                    tab.icon,
+                    contentDescription = if (selected) null else tab.title,
+                    tint = content,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            if (selected || frac > 0.001f) {
+                Text(
+                    tab.title,
+                    modifier = Modifier.graphicsLayer { alpha = textAlpha },
+                    color = content,
+                    maxLines = 1,
+                    softWrap = false,
+                    style = style,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun GlassBottomBar(
     selected: MainTab,
@@ -857,30 +951,17 @@ private fun GlassBottomBar(
             }
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Стеклянная «таблетка» с ShortNavigationBar внутри: стекло даёт Modifier.glass, а сам бар прозрачен.
+        // Стеклянная «таблетка» по ширине вкладок: стекло даёт Modifier.glass.
         Box(
             Modifier
-                .weight(1f)
                 .height(BottomBarHeight)
                 .glass(backdrop, glass, CircleShape)
                 .clip(CircleShape),
         ) {
-            ShortNavigationBar(
-                containerColor = Color.Transparent,
-                windowInsets = WindowInsets(0.dp),
-            ) {
-                MainTab.entries.forEach { tab ->
-                    ShortNavigationBarItem(
-                        selected = tab == selected,
-                        onClick = { onSelect(tab) },
-                        icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(tab.title, maxLines = 1) },
-                    )
-                }
-            }
+            Box(Modifier.align(Alignment.Center)) { NavTabs(selected, onSelect) }
         }
 
         // Отдельная кнопка поиска справа, той же высоты, что и «таблетка».

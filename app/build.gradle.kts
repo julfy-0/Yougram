@@ -110,18 +110,16 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
-    // Compose BOM 2025.09.00 в†’ Compose 1.9.1
+    // Compose BOM 2025.09.00 (Compose 1.9.x), версия задаётся в libs.versions.toml
     implementation(platform(libs.androidx.compose.bom))
-    // Material 3 Expressive (LoadingIndicator, MotionScheme, ButtonDefaults.shapes) есть только в material3 1.4+.
-    // Побеждает более новая версия BOM; когда libs.versions.toml обновится до 2025.09.00, эту строку можно убрать.
-    implementation(platform("androidx.compose:compose-bom:2025.09.00"))
-    // Явная версия: в логе сборки видна ранняя alpha material3 (MaterialExpressiveTheme там internal), стабильная 1.4.0 новее.
-    implementation("androidx.compose.material3:material3:1.4.0")
 
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+
+    // Material 3 Expressive (MotionScheme, MaterialShapes, *Emphasized, ToggleButton, ButtonGroup...)
+    // в стабильной 1.4.0 объявлен internal, публичен только в 1.5.0-alpha*. Берём alpha12 (Compose 1.10, compileSdk 36, AGP 8.13); более новые alpha требуют AGP 9.1 и compileSdk 37.
+    implementation("androidx.compose.material3:material3:1.5.0-alpha12")
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
@@ -131,7 +129,6 @@ dependencies {
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.camera.view)
 
-    // TDLib Coroutines 12.0.1
     implementation(libs.tdl.coroutines)
 
     implementation(libs.ntgcalls)
@@ -140,11 +137,4 @@ dependencies {
 
     // Lua-плагины (LuaPluginManager, PluginManager).
     implementation("org.luaj:luaj-jse:3.0.1")
-}
-
-configurations.configureEach {
-    resolutionStrategy.force(
-        "androidx.compose.material3:material3:1.4.0",
-        "androidx.compose.material3:material3-android:1.4.0",
-    )
 }

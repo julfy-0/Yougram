@@ -182,25 +182,25 @@ private fun ColorScheme.withLightText(): ColorScheme = copy(
 private fun ColorScheme.withContainerLevels(dark: Boolean): ColorScheme {
     val base = surface
     return if (dark) {
-        val lift = lerp(Color.White, primary, 0.3f)
+        val lift = lerp(primary, Color.White, 0.2f)
         copy(
             surfaceDim = lerp(base, Color.Black, 0.4f),
             surfaceBright = lerp(base, lift, 0.18f),
             surfaceContainerLowest = lerp(base, Color.Black, 0.4f),
-            surfaceContainerLow = lerp(base, lift, 0.04f),
-            surfaceContainer = lerp(base, lift, 0.07f),
-            surfaceContainerHigh = lerp(base, lift, 0.105f),
-            surfaceContainerHighest = lerp(base, lift, 0.14f),
+            surfaceContainerLow = lerp(base, lift, 0.05f),
+            surfaceContainer = lerp(base, lift, 0.09f),
+            surfaceContainerHigh = lerp(base, lift, 0.13f),
+            surfaceContainerHighest = lerp(base, lift, 0.17f),
         )
     } else {
         copy(
             surfaceDim = lerp(base, primary, 0.14f),
             surfaceBright = base,
             surfaceContainerLowest = Color.White,
-            surfaceContainerLow = lerp(base, primary, 0.03f),
-            surfaceContainer = lerp(base, primary, 0.055f),
-            surfaceContainerHigh = lerp(base, primary, 0.08f),
-            surfaceContainerHighest = lerp(base, primary, 0.11f),
+            surfaceContainerLow = lerp(base, primary, 0.04f),
+            surfaceContainer = lerp(base, primary, 0.07f),
+            surfaceContainerHigh = lerp(base, primary, 0.10f),
+            surfaceContainerHighest = lerp(base, primary, 0.14f),
         )
     }
 }
@@ -221,22 +221,22 @@ private fun Color.hsv(hueShift: Float = 0f, saturation: Float = 1f, value: Float
  */
 private fun accentScheme(seed: Color, dark: Boolean): ColorScheme = if (dark) {
     val base = Color(0xFF121212)
-    val primary = lerp(seed, Color.White, 0.25f)
-    val secondary = lerp(seed.hsv(saturation = 0.55f), Color.White, 0.3f)
-    val tertiary = lerp(seed.hsv(hueShift = 60f, saturation = 0.7f), Color.White, 0.3f)
+    val primary = lerp(seed, Color.White, 0.2f)
+    val secondary = lerp(seed.hsv(saturation = 0.6f), Color.White, 0.25f)
+    val tertiary = lerp(seed.hsv(hueShift = 45f, saturation = 0.65f), Color.White, 0.25f)
     darkColorScheme(
         primary = primary,
         onPrimary = Color.Black,
-        primaryContainer = lerp(seed, Color.Black, 0.45f),
-        onPrimaryContainer = lerp(seed, Color.White, 0.8f),
+        primaryContainer = lerp(seed, Color.Black, 0.35f),
+        onPrimaryContainer = lerp(seed, Color.White, 0.9f),
         secondary = secondary,
         onSecondary = Color.Black,
-        secondaryContainer = lerp(base, seed.hsv(saturation = 0.6f), 0.35f),
-        onSecondaryContainer = lerp(seed, Color.White, 0.8f),
+        secondaryContainer = lerp(base, seed, 0.28f),
+        onSecondaryContainer = lerp(seed, Color.White, 0.9f),
         tertiary = tertiary,
         onTertiary = Color.Black,
-        tertiaryContainer = lerp(tertiary, Color.Black, 0.55f),
-        onTertiaryContainer = lerp(tertiary, Color.White, 0.8f),
+        tertiaryContainer = lerp(tertiary, Color.Black, 0.45f),
+        onTertiaryContainer = lerp(tertiary, Color.White, 0.9f),
         background = base,
         surface = base,
         surfaceVariant = Color(0xFF242424),
@@ -247,23 +247,23 @@ private fun accentScheme(seed: Color, dark: Boolean): ColorScheme = if (dark) {
 } else {
     val base = Color(0xFFFCFCFC)
     val secondary = seed.hsv(saturation = 0.6f, value = 0.85f)
-    val tertiary = seed.hsv(hueShift = 60f, saturation = 0.7f, value = 0.85f)
+    val tertiary = seed.hsv(hueShift = 45f, saturation = 0.7f, value = 0.85f)
     lightColorScheme(
         primary = seed,
         onPrimary = Color.White,
         primaryContainer = lerp(seed, Color.White, 0.75f),
-        onPrimaryContainer = lerp(seed, Color.Black, 0.6f),
+        onPrimaryContainer = lerp(seed, Color.Black, 0.65f),
         secondary = secondary,
         onSecondary = Color.White,
-        secondaryContainer = lerp(base, seed.hsv(saturation = 0.7f), 0.28f),
-        onSecondaryContainer = lerp(seed, Color.Black, 0.6f),
+        secondaryContainer = lerp(base, seed, 0.25f),
+        onSecondaryContainer = lerp(seed, Color.Black, 0.65f),
         tertiary = tertiary,
         onTertiary = Color.White,
-        tertiaryContainer = lerp(base, tertiary, 0.32f),
-        onTertiaryContainer = lerp(tertiary, Color.Black, 0.6f),
+        tertiaryContainer = lerp(base, tertiary, 0.30f),
+        onTertiaryContainer = lerp(tertiary, Color.Black, 0.65f),
         background = base,
         surface = base,
-        surfaceVariant = lerp(Color(0xFFE6E6E6), seed, 0.1f),
+        surfaceVariant = lerp(Color(0xFFE6E6E6), seed, 0.12f),
         onSurfaceVariant = Color(0xFF4A4A4A),
         outline = Color(0xFF7A7A7A),
         outlineVariant = Color(0xFFCACACA),

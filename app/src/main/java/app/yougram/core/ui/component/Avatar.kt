@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
 
 /** «Цветочная» форма Expressive для аватарок с непросмотренными историями. */
 @Composable
-fun rememberCookieAvatarShape(): Shape = remember { MaterialShapes.Cookie9Sided.toShape() }
+fun rememberCookieAvatarShape(): Shape = MaterialShapes.Cookie9Sided.toShape()
 
 /** Круглая аватарка: картинка из файла TDLib, а пока её нет — первая буква названия. */
 @Composable

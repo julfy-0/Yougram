@@ -127,7 +127,7 @@ fun SectionLabel(text: String) {
     )
 }
 
-/** Плитка с иконкой: форма «печенье» (на слабых устройствах — скруглённый квадрат), цвет зависит от места в группе. */
+/** Плитка с иконкой: форма и цвет зависят от места в группе (на слабых устройствах — скруглённый квадрат). */
 @Composable
 private fun SettingIconTile(icon: ImageVector) {
     val scheme = MaterialTheme.colorScheme
@@ -143,7 +143,18 @@ private fun SettingIconTile(icon: ImageVector) {
         else -> scheme.onSecondaryContainer
     }
     val low = rememberDeviceTier() == DeviceTier.Low
-    val shape: Shape = if (low) RoundedCornerShape(16.dp) else MaterialShapes.Cookie6Sided.toShape()
+    // Каждая иконка в группе получает свою форму (по месту в группе), чтобы плитки не повторялись подряд.
+    val polygon = when (LocalSegmentIndex.current % 8) {
+        0 -> MaterialShapes.Cookie6Sided
+        1 -> MaterialShapes.Clover4Leaf
+        2 -> MaterialShapes.Sunny
+        3 -> MaterialShapes.Pentagon
+        4 -> MaterialShapes.Flower
+        5 -> MaterialShapes.Cookie9Sided
+        6 -> MaterialShapes.SoftBurst
+        else -> MaterialShapes.Gem
+    }
+    val shape: Shape = if (low) RoundedCornerShape(16.dp) else polygon.toShape()
     Box(
         Modifier.size(44.dp).clip(shape).background(container),
         contentAlignment = Alignment.Center,

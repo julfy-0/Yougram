@@ -170,7 +170,7 @@ fun ChatListScreen(
 /** Пустое состояние: «цветочная» форма Expressive с иконкой, крупный заголовок и пояснение. */
 @Composable
 private fun EmptyChats(modifier: Modifier = Modifier) {
-    val shape = remember { MaterialShapes.Cookie9Sided.toShape() }
+    val shape = MaterialShapes.Cookie9Sided.toShape()
     Column(modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(112.dp).clip(shape).background(MaterialTheme.colorScheme.secondaryContainer),

@@ -29,6 +29,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,6 +117,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -280,6 +286,10 @@ fun ChatScreen(
     var recordSeconds by remember { mutableStateOf(0) }
     var videoMode by remember { mutableStateOf(false) }
     var videoRecorderOpen by remember { mutableStateOf(false) }
+    // Запись зажатием: recordLocked — голосовая закреплена свайпом вверх; videoHold/videoAuto — то же для кружка.
+    var recordLocked by remember { mutableStateOf(false) }
+    var videoHold by remember { mutableStateOf(HOLD_NONE) }
+    var videoAuto by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val recorder = remember { VoiceRecorder(context) }
@@ -290,11 +300,17 @@ fun ChatScreen(
         else Toast.makeText(context, "Не удалось начать запись", Toast.LENGTH_SHORT).show()
     }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) beginRecording()
-        else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        if (granted) {
+            recordLocked = true // палец уже отпущен: запись идёт, как после закрепления
+            beginRecording()
+        } else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
     }
     val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) videoRecorderOpen = true
+        if (result.values.all { it }) {
+            videoAuto = false
+            videoHold = HOLD_NONE
+            videoRecorderOpen = true
+        }
         else Toast.makeText(context, "Нужен доступ к камере и микрофону", Toast.LENGTH_SHORT).show()
     }
     // Редактирование: фокус и клавиатура на поле, курсор в конце текста.
@@ -358,13 +374,20 @@ fun ChatScreen(
             callPermissions.launch(needed)
         }
     }
-    fun openVideoRecorder() {
+    /** hold = true: запись кружка стартует сразу и идёт, пока палец зажат. Возвращает true, если окно открыто. */
+    fun openVideoRecorder(hold: Boolean = false): Boolean {
         AudioPlayback.stop()
         val needed = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-        if (needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
+        return if (needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
+            videoAuto = hold
+            videoHold = if (hold) HOLD_ACTIVE else HOLD_NONE
             videoRecorderOpen = true
+            true
         } else {
+            videoAuto = false
+            videoHold = HOLD_NONE
             videoPermissions.launch(needed)
+            false
         }
     }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -552,7 +575,13 @@ fun ChatScreen(
         else -> emptyList()
     }
 
-    Box(Modifier.fillMaxSize()) {
+    // Меню «+»: пока оно открыто, весь экран чата плавно размывается (меню — отдельное окно, остаётся чётким).
+    val attachBlur by animateDpAsState(
+        if (attachOpen && !lowRam && !powerSaving) 16.dp else 0.dp,
+        if (lowRam) tween(120) else tween(220),
+        label = "attachBlur",
+    )
+    Box(Modifier.fillMaxSize().blur(attachBlur)) {
         // Сообщения: прокручиваются под панелями, их размытая копия видна в панелях.
         Box(
             Modifier
@@ -660,19 +689,19 @@ fun ChatScreen(
                     .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
                     .fillMaxWidth(),
                 enter = fadeIn(fadeSpec) +
-                    scaleIn(
-                        fastScaleSpec,
-                        initialScale = 0.88f,
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
-                    ) +
-                    slideInVertically(slideSpec) { it / 4 },
+                        scaleIn(
+                            fastScaleSpec,
+                            initialScale = 0.88f,
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
+                        ) +
+                        slideInVertically(slideSpec) { it / 4 },
                 exit = fadeOut(fadeSpec) +
-                    scaleOut(
-                        fastScaleSpec,
-                        targetScale = 0.92f,
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
-                    ) +
-                    slideOutVertically(slideSpec) { it / 5 },
+                        scaleOut(
+                            fastScaleSpec,
+                            targetScale = 0.92f,
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
+                        ) +
+                        slideOutVertically(slideSpec) { it / 5 },
             ) {
                 Box(
                     Modifier
@@ -1033,18 +1062,28 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f),
                                 )
-                                Text(
-                                    "Отмена",
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            recorder.cancel()
-                                            recording = false
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
+                                if (recordLocked) {
+                                    Text(
+                                        "Отмена",
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                recorder.cancel()
+                                                recording = false
+                                                recordLocked = false
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelLarge,
+                                    )
+                                } else {
+                                    Text(
+                                        "← отмена   ↑ закрепить",
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
                             } else {
                                 if (state.botCommands.isNotEmpty()) {
                                     InputAction(Icons.Filled.Menu, "Команды бота", MaterialTheme.colorScheme.primary) {
@@ -1122,7 +1161,8 @@ fun ChatScreen(
                     }
                     Spacer(Modifier.width(8.dp))
                     // Круглая кнопка: отправка (есть текст) / микрофон / камера для кружка.
-                    // Тап — действие, долгое нажатие — переключение «голосовое ↔ кружок».
+                    // Тап — переключение «голосовое ↔ кружок» (если нет текста), зажатие — запись:
+                    // отпустить — отправить, свайп вверх — закрепить (можно отпустить), свайп влево — отмена.
                     val canSend = input.isNotBlank()
                     val sendActive = canSend || recording
                     // Морфинг: «квадрат со скруглением» (микрофон/камера) становится кругом (отправка).
@@ -1137,26 +1177,97 @@ fun ChatScreen(
                         colorSpec,
                         label = "sendContent",
                     )
+                    // Жест не перезапускается при смене состояния (ключ Unit), актуальные значения читаем через State.
+                    val canSendNow by rememberUpdatedState(canSend)
+                    val recordingNow by rememberUpdatedState(recording)
+                    val videoModeNow by rememberUpdatedState(videoMode)
+                    val haptic = LocalHapticFeedback.current
+                    val onSubmit by rememberUpdatedState({ submit() })
+                    val finishVoice by rememberUpdatedState({
+                        recording = false
+                        recordLocked = false
+                        recorder.stop()?.let { (path, seconds) -> viewModel.sendVoice(path, seconds) }
+                        Unit
+                    })
+                    val startHold by rememberUpdatedState<(Boolean) -> Boolean>({ video ->
+                        if (video) {
+                            openVideoRecorder(hold = true)
+                        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            recordLocked = false
+                            beginRecording()
+                            recording
+                        } else {
+                            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            false
+                        }
+                    })
+                    val lockHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
+                        if (video) videoHold = HOLD_LOCKED else recordLocked = true
+                    })
+                    val cancelHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
+                        if (video) {
+                            videoHold = HOLD_CANCELLED
+                        } else {
+                            recorder.cancel()
+                            recording = false
+                            recordLocked = false
+                        }
+                    })
+                    val releaseHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
+                        if (video) videoHold = HOLD_RELEASED else finishVoice()
+                    })
                     Surface(
                         modifier = Modifier
                             .size(56.dp)
-                            .pointerInput(canSend, recording, videoMode) {
-                                detectTapGestures(
-                                    onLongPress = { if (!canSend && !recording) videoMode = !videoMode },
-                                    onTap = {
-                                        when {
-                                            canSend -> submit()
-                                            recording -> {
-                                                recording = false
-                                                recorder.stop()?.let { (path, seconds) -> viewModel.sendVoice(path, seconds) }
-                                            }
-                                            videoMode -> openVideoRecorder()
-                                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                                                    PackageManager.PERMISSION_GRANTED -> beginRecording()
-                                            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            .pointerInput(Unit) {
+                                val lockDistance = 64.dp.toPx()
+                                val cancelDistance = 96.dp.toPx()
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    if (canSendNow) {
+                                        if (waitForUpOrCancellation() != null) onSubmit()
+                                        return@awaitEachGesture
+                                    }
+                                    if (recordingNow) { // закреплённая запись: тап — отправить
+                                        if (waitForUpOrCancellation() != null) finishVoice()
+                                        return@awaitEachGesture
+                                    }
+                                    var tapped = false
+                                    val completed = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                        tapped = waitForUpOrCancellation() != null
+                                    }
+                                    if (completed != null) { // короткий тап: микрофон ↔ кружок
+                                        if (tapped) videoMode = !videoMode
+                                        return@awaitEachGesture
+                                    }
+                                    val video = videoModeNow
+                                    if (!startHold(video)) return@awaitEachGesture
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    var locked = false
+                                    var cancelled = false
+                                    while (true) {
+                                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) break
+                                        val dx = change.position.x - down.position.x
+                                        val dy = change.position.y - down.position.y
+                                        if (dy < -lockDistance) {
+                                            locked = true
+                                            lockHold(video)
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            change.consume()
+                                            break
+                                        } else if (dx < -cancelDistance) {
+                                            cancelled = true
+                                            cancelHold(video)
+                                            change.consume()
+                                            break
                                         }
-                                    },
-                                )
+                                        change.consume()
+                                    }
+                                    if (!locked && !cancelled) releaseHold(video)
+                                }
                             },
                         shape = RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)),
                         color = sendContainer,
@@ -1171,7 +1282,7 @@ fun ChatScreen(
                                 },
                                 transitionSpec = {
                                     (fadeIn(fadeSpec) + scaleIn(fastScaleSpec, initialScale = 0.6f)) togetherWith
-                                        (fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f))
+                                            (fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f))
                                 },
                                 label = "sendIcon",
                             ) { kind ->
@@ -1301,7 +1412,13 @@ fun ChatScreen(
     if (videoRecorderOpen) {
         VideoNoteRecorderDialog(
             onSend = { path, seconds, length -> viewModel.sendVideoNote(path, seconds, length) },
-            onDismiss = { videoRecorderOpen = false },
+            onDismiss = {
+                videoRecorderOpen = false
+                videoHold = HOLD_NONE
+                videoAuto = false
+            },
+            autoStart = videoAuto,
+            hold = videoHold,
         )
     }
 

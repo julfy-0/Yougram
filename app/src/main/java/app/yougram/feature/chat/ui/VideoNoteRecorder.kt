@@ -60,6 +60,13 @@ import kotlinx.coroutines.delay
 
 private const val MAX_SECONDS = 60
 
+/** Состояние зажатой кнопки записи (управляется снаружи, из ChatScreen). */
+const val HOLD_NONE = 0 // обычный режим: запись стартует кнопкой в окне
+const val HOLD_ACTIVE = 1 // палец зажат: идёт запись
+const val HOLD_LOCKED = 2 // закреплено свайпом вверх: палец можно убрать
+const val HOLD_RELEASED = 3 // палец отпущен: остановить и отправить
+const val HOLD_CANCELLED = 4 // свайп влево: отменить
+
 /**
  * Полноэкранная запись кружка: круглое превью, переключение камеры, таймер.
  * Видео обрезается до квадрата (ViewPort 1:1), так что Telegram принимает его как видеосообщение.
@@ -69,6 +76,8 @@ private const val MAX_SECONDS = 60
 fun VideoNoteRecorderDialog(
     onSend: (path: String, seconds: Int, length: Int) -> Unit,
     onDismiss: () -> Unit,
+    autoStart: Boolean = false,
+    hold: Int = HOLD_NONE,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -144,11 +153,26 @@ fun VideoNoteRecorderDialog(
                         onDismiss()
                     } else {
                         file.delete()
+                        if (handle.sendOnFinalize) onDismiss() // слишком короткая запись при отпускании
                     }
                 }
             }
         handle.recording = recording
         recordingState = true
+    }
+
+    // Запись зажатием: стартуем, как только камера готова; дальше управляет состояние hold.
+    LaunchedEffect(videoCapture) {
+        if (autoStart && videoCapture != null && !recordingState && hold != HOLD_RELEASED && hold != HOLD_CANCELLED) start()
+    }
+    LaunchedEffect(hold) {
+        when (hold) {
+            HOLD_RELEASED -> if (handle.recording != null) handle.finish(send = true) else onDismiss()
+            HOLD_CANCELLED -> {
+                handle.finish(send = false)
+                onDismiss()
+            }
+        }
     }
 
     Dialog(
@@ -184,7 +208,13 @@ fun VideoNoteRecorderDialog(
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Spacer(Modifier.height(24.dp))
-                Row(
+                if (hold == HOLD_ACTIVE) {
+                    Text(
+                        "Вверх — закрепить, влево — отмена",
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else Row(
                     horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
