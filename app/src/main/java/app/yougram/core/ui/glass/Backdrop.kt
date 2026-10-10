@@ -14,10 +14,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -27,6 +25,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.rememberDeviceTier
@@ -44,8 +43,8 @@ class BackdropState(val layer: GraphicsLayer) {
     /** Позиция источника в координатах окна. */
     var sourceOffset by mutableStateOf(Offset.Zero)
 
-    /** Радиус размытия (px), уже применённый к слою: не пересоздаём RenderEffect без причины. */
-    internal var appliedBlurPx: Float = -1f
+    /** Параметры размытия (тип, радиус, размер экрана), уже применённые к слою: не пересоздаём RenderEffect без причины. */
+    internal var appliedKey: Any? = null
 }
 
 @Composable
@@ -83,12 +82,15 @@ fun Modifier.glass(
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     var myOffset by remember { mutableStateOf(Offset.Zero) }
 
+    val metrics = LocalContext.current.resources.displayMetrics
     SideEffect {
         val radiusPx = with(density) { settings.blurRadius.dp.toPx() }
-        if (radiusPx != state.appliedBlurPx) {
-            state.appliedBlurPx = radiusPx
+        val enabled = !lowTier && radiusPx > 0.5f
+        val key = if (enabled) BlurKey(settings.blurType, radiusPx, metrics.widthPixels, metrics.heightPixels) else null
+        if (key != state.appliedKey) {
+            state.appliedKey = key
             state.layer.renderEffect =
-                if (!lowTier && radiusPx > 0.5f) BlurEffect(radiusPx, radiusPx, TileMode.Clamp) else null
+                if (key != null) blurRenderEffect(key.type, radiusPx, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat()) else null
         }
     }
 
@@ -109,6 +111,8 @@ fun Modifier.glass(
             drawRect(tint.copy(alpha = if (lowTier) maxOf(settings.opacity, LOW_TIER_MIN_ALPHA) else settings.opacity))
         }
 }
+
+private data class BlurKey(val type: app.yougram.core.settings.BlurType, val radiusPx: Float, val w: Int, val h: Int)
 
 private const val OPAQUE_THRESHOLD = 0.98f
 private const val LOW_TIER_MIN_ALPHA = 0.85f

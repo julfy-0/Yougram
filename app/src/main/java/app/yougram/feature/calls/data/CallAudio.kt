@@ -82,16 +82,21 @@ class CallAudio(context: Context) {
             val max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
             runCatching { am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max / 2, 0) }
         }
-        setRoute(_route.value)
+        // Лишний setCommunicationDevice на то же устройство заставляет систему перестроить маршрут и
+        // рвёт уже открытые аудиопотоки движка (звук собеседника пропадает), поэтому трогаем только при реальной смене.
+        val wanted = deviceFor(_route.value)
+        if (wanted == null || am.communicationDevice?.id != wanted.id) setRoute(_route.value)
+    }
+
+    private fun deviceFor(target: AudioRoute): AudioDeviceInfo? = when (target) {
+        AudioRoute.SPEAKER -> byType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+        AudioRoute.EARPIECE -> byType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
+        AudioRoute.BLUETOOTH -> bluetoothDevice()
     }
 
     @Synchronized
     fun setRoute(target: AudioRoute) {
-        val device = when (target) {
-            AudioRoute.SPEAKER -> byType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
-            AudioRoute.EARPIECE -> byType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
-            AudioRoute.BLUETOOTH -> bluetoothDevice()
-        } ?: return
+        val device = deviceFor(target) ?: return
         // SecurityException без BLUETOOTH_CONNECT не должен валить приложение во время звонка.
         val ok = runCatching { am.setCommunicationDevice(device) }.getOrDefault(false)
         if (ok) _route.value = target

@@ -9,12 +9,32 @@ import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Алгоритм размытия фона под панелями. Всё, кроме [Gaussian], считается AGSL-шейдерами
+ * и требует Android 13+; на Android 12 любой тип работает как [Gaussian].
+ */
+enum class BlurType(val key: String, val title: String, val hint: String) {
+    Gaussian("gaussian", "Гаусс", "Мягкое естественное размытие, системная реализация"),
+    Box("box", "Box", "Блочное: усреднение по квадрату, самое простое и лёгкое"),
+    Kawase("kawase", "Kawase", "Несколько быстрых проходов с растущим шагом, хорош для мобильных GPU"),
+    Bokeh("bokeh", "Боке", "Круглые блики, как у объектива; самое тяжёлое");
+
+    companion object {
+        /** Тип по умолчанию. */
+        val DEFAULT = Kawase
+
+        fun fromKey(key: String?): BlurType = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 /** Настройки «стеклянных» панелей. */
 data class GlassSettings(
     /** Радиус размытия фона под панелями, dp. 0 — без размытия. */
     val blurRadius: Float = DEFAULT_BLUR,
     /** Плотность затемнения/подкраски панели: 0 — полностью прозрачная, 1 — сплошная. */
     val opacity: Float = DEFAULT_OPACITY,
+    /** Алгоритм размытия. */
+    val blurType: BlurType = BlurType.DEFAULT,
 ) {
     companion object {
         const val DEFAULT_BLUR = 24f
@@ -218,6 +238,7 @@ class SettingsRepository(private val context: Context) {
         GlassSettings(
             blurRadius = prefs.getFloat(KEY_BLUR, GlassSettings.DEFAULT_BLUR),
             opacity = prefs.getFloat(KEY_OPACITY, GlassSettings.DEFAULT_OPACITY),
+            blurType = BlurType.fromKey(prefs.getString(KEY_BLUR_TYPE, null)),
         )
     )
     val glass: StateFlow<GlassSettings> = _glass.asStateFlow()
@@ -225,6 +246,11 @@ class SettingsRepository(private val context: Context) {
     fun setBlur(value: Float) {
         _glass.update { it.copy(blurRadius = value) }
         prefs.edit().putFloat(KEY_BLUR, value).apply()
+    }
+
+    fun setBlurType(type: BlurType) {
+        _glass.update { it.copy(blurType = type) }
+        prefs.edit().putString(KEY_BLUR_TYPE, type.key).apply()
     }
 
     fun setOpacity(value: Float) {
@@ -267,6 +293,7 @@ class SettingsRepository(private val context: Context) {
     fun resetGlass() {
         setBlur(GlassSettings.DEFAULT_BLUR)
         setOpacity(GlassSettings.DEFAULT_OPACITY)
+        setBlurType(BlurType.DEFAULT)
     }
 
     // Уведомления.
@@ -638,6 +665,7 @@ class SettingsRepository(private val context: Context) {
         const val KEY_LOCAL_PREMIUM = "local_premium"
         const val KEY_BLUR = "glass_blur"
         const val KEY_OPACITY = "glass_opacity"
+        const val KEY_BLUR_TYPE = "glass_blur_type"
         const val KEY_MODE = "theme_mode"
         const val KEY_DYNAMIC = "theme_dynamic"
         const val KEY_ACCENT = "theme_accent"

@@ -57,7 +57,7 @@ fun GlassPickerPanel(
     BackHandler(enabled = visible, onBack = onDismiss)
 
     // Блюр берём общий (слой размытия один на экран), прозрачность — своя.
-    val panelGlass = remember(glass.blurRadius, transparency) {
+    val panelGlass = remember(glass.blurRadius, glass.blurType, transparency) {
         glass.copy(opacity = (1f - transparency).coerceIn(0f, 1f))
     }
 

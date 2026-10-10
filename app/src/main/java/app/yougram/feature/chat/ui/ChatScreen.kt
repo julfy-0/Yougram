@@ -621,7 +621,7 @@ fun ChatScreen(
             if (shownCommands.isNotEmpty()) lastShown = shownCommands
             val plates = LocalPlates.current
             // Радиус размытия — общий, из настроек внешнего вида (как у остальных панелей); прозрачность своя.
-            val commandsGlass = remember(glass.blurRadius, plates.commands) {
+            val commandsGlass = remember(glass.blurRadius, glass.blurType, plates.commands) {
                 glass.copy(opacity = (1f - plates.commands).coerceIn(0f, 1f))
             }
             androidx.compose.animation.AnimatedVisibility(
