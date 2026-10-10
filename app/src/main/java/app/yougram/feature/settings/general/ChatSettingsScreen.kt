@@ -8,6 +8,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -695,11 +699,16 @@ private fun NameColorDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: (
                         chunk.forEachIndexed { col, (name, color) ->
                             val index = row * 4 + col
                             Box(
-                                Modifier.size(44.dp).clip(CircleShape).background(color).clickable { onSelect(index) },
+                                Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .selectable(selected = index == selected, role = Role.RadioButton) { onSelect(index) }
+                                    .semantics { contentDescription = name },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (index == selected) {
-                                    Icon(Icons.Filled.Check, contentDescription = name, tint = Color.White)
+                                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
                                 }
                             }
                         }

@@ -25,18 +25,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.yougram.core.ui.rememberReduceMotion
 
 /** Знак приложения: скруглённый треугольник на градиентной плитке с мягкой пульсацией. */
 @Composable
 fun AuthLogo(modifier: Modifier = Modifier, logoSize: Dp = 92.dp) {
     val scheme = MaterialTheme.colorScheme
-    val transition = rememberInfiniteTransition(label = "authLogo")
-    val pulse by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "logoPulse",
-    )
+    // Пульсация отключена на слабых устройствах и при системной настройке «Удалить анимации».
+    val pulse = if (rememberReduceMotion()) 1f else {
+        val transition = rememberInfiniteTransition(label = "authLogo")
+        val value by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "logoPulse",
+        )
+        value
+    }
     val tile = RoundedCornerShape(logoSize * 0.3f)
 
     Box(

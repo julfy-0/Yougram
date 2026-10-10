@@ -141,3 +141,10 @@ dependencies {
     // Lua-плагины (LuaPluginManager, PluginManager).
     implementation("org.luaj:luaj-jse:3.0.1")
 }
+
+configurations.configureEach {
+    resolutionStrategy.force(
+        "androidx.compose.material3:material3:1.4.0",
+        "androidx.compose.material3:material3-android:1.4.0",
+    )
+}

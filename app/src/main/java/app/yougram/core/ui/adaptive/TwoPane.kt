@@ -1,7 +1,6 @@
 package app.yougram.core.ui.adaptive
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -79,6 +78,9 @@ fun TwoPaneShell(
     listPane: @Composable () -> Unit,
     detailPane: @Composable (DetailRoute) -> Unit,
 ) {
+    val motion = MaterialTheme.motionScheme
+    val fadeInSpec = motion.defaultEffectsSpec<Float>()
+    val fadeOutSpec = motion.fastEffectsSpec<Float>()
     Row(Modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -102,7 +104,7 @@ fun TwoPaneShell(
             AnimatedContent(
                 targetState = detail,
                 modifier = Modifier.fillMaxSize(),
-                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) },
+                transitionSpec = { fadeIn(fadeInSpec) togetherWith fadeOut(fadeOutSpec) },
                 label = "detailPane",
             ) { route ->
                 if (route == null) DetailPlaceholder() else detailPane(route)

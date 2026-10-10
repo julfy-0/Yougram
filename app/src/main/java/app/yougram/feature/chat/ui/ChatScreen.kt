@@ -122,6 +122,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
@@ -1567,7 +1568,18 @@ private fun MessageBubble(
         verticalAlignment = Alignment.Top,
     ) {
         if (showSenderUi) {
-            Box(Modifier.size(36.dp).clickable(enabled = showAvatar, onClick = onOpenSender)) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .then(
+                        if (showAvatar) {
+                            Modifier.semantics { contentDescription = "Профиль: ${sender?.name.orEmpty().ifEmpty { "отправитель" }}" }
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable(enabled = showAvatar, role = Role.Button, onClick = onOpenSender),
+            ) {
                 if (showAvatar) {
                     FileAvatar(
                         title = sender?.name.orEmpty().ifEmpty { "?" },
