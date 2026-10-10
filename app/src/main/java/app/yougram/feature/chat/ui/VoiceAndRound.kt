@@ -8,6 +8,7 @@ import android.view.TextureView
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -49,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -195,6 +197,14 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
     val previewBitmap = rememberFileBitmap(preview.path, 512)
     var playing by remember { mutableStateOf(false) }
 
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
+    val motion = MaterialTheme.motionScheme
+    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
+    val fadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(100) else motion.defaultEffectsSpec()
+    // Как у голосового: в покое «квадрат со скруглением», при воспроизведении — круг.
+    val buttonCorner by animateDpAsState(if (playing) 24.dp else 12.dp, cornerSpec, label = "roundButtonCorner")
+    val overlayAlpha by animateFloatAsState(if (playing) 0f else 1f, fadeSpec, label = "roundOverlayAlpha")
+
     Box(
         Modifier
             .size(200.dp)
@@ -218,29 +228,45 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         val path = full.path
         if (playing && path != null) {
             RoundVideoPlayer(path = path, onEnded = { playing = false })
-        } else {
-            Box(
-                Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (full.active) {
-                    LoadingIndicator(Modifier.size(36.dp), color = Color.White)
-                } else {
-                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
+        }
+        Box(
+            Modifier
+                .size(48.dp)
+                .graphicsLayer {
+                    alpha = overlayAlpha
+                    val s = 0.7f + 0.3f * overlayAlpha
+                    scaleX = s
+                    scaleY = s
+                }
+                .clip(RoundedCornerShape(buttonCorner.coerceAtLeast(0.dp)))
+                .background(Color.Black.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val st = when {
+                full.active -> 0
+                playing -> 1
+                else -> 2
+            }
+            Crossfade(targetState = st, animationSpec = fadeSpec, label = "roundIcon") { s ->
+                when (s) {
+                    0 -> LoadingIndicator(Modifier.size(36.dp), color = Color.White)
+                    1 -> Icon(Icons.Filled.Pause, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    else -> Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
-            Text(
-                formatDuration(media.duration),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 14.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-            )
         }
+        Text(
+            formatDuration(media.duration),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .graphicsLayer { alpha = overlayAlpha }
+                .padding(bottom = 14.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+        )
     }
 }
 

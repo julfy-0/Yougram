@@ -42,6 +42,15 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.SystemUpdate
+import app.yougram.core.ui.component.LinearWavyProgressIndicator
+import app.yougram.feature.update.data.AppUpdater
+import app.yougram.feature.update.data.UpdateState
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Lightbulb
@@ -158,7 +167,7 @@ enum class SettingsPage(val title: String) {
             Ghost, Spy, MessageFilters, Banner -> Extras
             SharedFilters, ShadowBan -> MessageFilters
             Premium, Stars, Business -> TelegramHub
-            Update -> About
+            Update -> Home
             else -> Home
         }
 }
@@ -171,10 +180,13 @@ fun SettingsHomeScreen(
     viewModel: SettingsHomeViewModel,
     accountManager: AccountManager,
     settings: SettingsRepository,
+    updater: AppUpdater,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val update by updater.state.collectAsState()
+    LaunchedEffect(Unit) { updater.check() }
     val context = LocalContext.current
     val openAccountManager = LocalOpenAccountManager.current
 
@@ -212,39 +224,159 @@ fun SettingsHomeScreen(
             onOpenAccountManager = openAccountManager,
         )
 
-        val sections = listOf(
-            "Yougram" to listOf(
-                HomeEntry("Настройки Yougram", "Тема, цвета, панели", Icons.Filled.Tune, null, SettingsPage.Appearance),
-                HomeEntry("Призрак, шпион, фильтры", "Скрытность и локальный архив", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
-                HomeEntry("Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
-                HomeEntry("Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, null, SettingsPage.PowerSaving),
-            ),
-            "Аккаунт и защита" to listOf(
-                HomeEntry("Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
-                HomeEntry("Конфиденциальность", "Кто видит ваши данные", Icons.Filled.VpnKey, null, SettingsPage.Privacy),
-                HomeEntry("Безопасность", "Пин-код, графический ключ, отпечаток", Icons.Filled.Lock, null, SettingsPage.Security),
-                HomeEntry("Устройства", "Активные сеансы", Icons.Filled.Laptop, state.devices?.toString(), SettingsPage.Devices),
-            ),
-            "Чаты" to listOf(
-                HomeEntry("Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, null, SettingsPage.ChatSettings),
-                HomeEntry("Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, null, SettingsPage.Folders),
-                HomeEntry("Архив", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
-                HomeEntry("Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
-            ),
-            "Данные и язык" to listOf(
-                HomeEntry("Данные и память", "Кэш, автозагрузка медиа", Icons.Filled.PieChart, null, SettingsPage.DataStorage),
-                HomeEntry("Язык", null, Icons.Filled.Language, language, SettingsPage.Language),
-            ),
-        )
-
-        sections.forEach { (title, entries) ->
-            SectionLabel(title)
-            SettingGroup { entries.forEach { e -> item { HomeEntryRow(e, onNavigate) } } }
+        // «О приложении» и обновление — сразу под профилем, в одной группе.
+        SectionLabel("Обновления и ПО")
+        val openUpdate = { onNavigate(SettingsPage.Update) }
+        SettingGroup {
+            item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
+            item {
+                when (val u = update) {
+                    UpdateState.Idle, UpdateState.Checking -> SettingRow(
+                        title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
+                        onClick = openUpdate,
+                    )
+                    UpdateState.UpToDate -> SettingRow(
+                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
+                        value = "Открыть", onClick = openUpdate,
+                    )
+                    is UpdateState.Available -> SettingRow(
+                        title = "Доступна версия ${u.info.versionName}",
+                        subtitle = "Нажмите, чтобы посмотреть изменения",
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Открыть", onClick = openUpdate,
+                    )
+                    is UpdateState.Downloading -> SettingRow(
+                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
+                        onClick = openUpdate,
+                        below = {
+                            LinearWavyProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
+                        },
+                    )
+                    is UpdateState.Ready -> SettingRow(
+                        title = "Версия ${u.info.versionName} скачана",
+                        subtitle = "Нажмите, чтобы установить",
+                        icon = Icons.Filled.SystemUpdate,
+                        value = "Установить", onClick = openUpdate,
+                    )
+                    is UpdateState.Error -> SettingRow(
+                        title = u.message, icon = Icons.Filled.SystemUpdate,
+                        value = "Открыть", onClick = openUpdate,
+                    )
+                }
+            }
         }
 
-        SettingGroup {
-            item { SettingRow("Telegram", subtitle = "Premium, Звёзды, Бизнес, подарки, помощь", icon = Icons.Filled.Star, onClick = { onNavigate(SettingsPage.TelegramHub) }) }
-            item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
+        val all = listOf(
+            HomeEntry("appearance", "Настройки Yougram", "Тема, цвета, панели", Icons.Filled.Tune, null, SettingsPage.Appearance),
+            HomeEntry("extras", "Призрак, шпион, фильтры", "Скрытность и локальный архив", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
+            HomeEntry("plugins", "Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
+            HomeEntry("power", "Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, null, SettingsPage.PowerSaving),
+            HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
+            HomeEntry("privacy", "Конфиденциальность", "Кто видит ваши данные", Icons.Filled.VpnKey, null, SettingsPage.Privacy),
+            HomeEntry("security", "Безопасность", "Пин-код, графический ключ, отпечаток", Icons.Filled.Lock, null, SettingsPage.Security),
+            HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, state.devices?.toString(), SettingsPage.Devices),
+            HomeEntry("chatSettings", "Настройки чатов", "Размер текста, анимации", Icons.Filled.ChatBubble, null, SettingsPage.ChatSettings),
+            HomeEntry("folders", "Папки с чатами", "Сортировка чатов по папкам", Icons.Filled.Folder, null, SettingsPage.Folders),
+            HomeEntry("archive", "Архив", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
+            HomeEntry("notifications", "Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
+            HomeEntry("data", "Данные и память", "Кэш, автозагрузка медиа", Icons.Filled.PieChart, null, SettingsPage.DataStorage),
+            HomeEntry("language", "Язык", null, Icons.Filled.Language, language, SettingsPage.Language),
+            HomeEntry("telegram", "Telegram", "Premium, Звёзды, Бизнес, подарки, помощь", Icons.Filled.Star, null, SettingsPage.TelegramHub),
+        )
+        val byId = all.associateBy { it.id }
+        val savedLayout by settings.homeLayout.collectAsState()
+        val layout = remember(savedLayout) { HomeLayout.normalize(HomeLayout.parse(savedLayout), all.map { it.id }) }
+        val save = { l: List<HomeSection> -> settings.setHomeLayout(HomeLayout.toJson(l)) }
+        var editing by remember { mutableStateOf(false) }
+        var renaming by remember { mutableStateOf<Int?>(null) }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { editing = !editing }) { Text(if (editing) "Готово" else "Изменить порядок") }
+        }
+
+        layout.forEachIndexed { si, section ->
+            if (editing) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        section.title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    IconButton(onClick = { renaming = si }) { Icon(Icons.Filled.Edit, "Переименовать") }
+                    IconButton(onClick = { save(HomeLayout.moveSection(layout, si, -1)) }, enabled = si > 0) {
+                        Icon(Icons.Filled.KeyboardArrowUp, "Категория выше")
+                    }
+                    IconButton(onClick = { save(HomeLayout.moveSection(layout, si, 1)) }, enabled = si < layout.lastIndex) {
+                        Icon(Icons.Filled.KeyboardArrowDown, "Категория ниже")
+                    }
+                    IconButton(onClick = { save(HomeLayout.deleteSection(layout, si)) }, enabled = layout.size > 1) {
+                        Icon(Icons.Filled.Delete, "Удалить категорию")
+                    }
+                }
+            } else if (section.entries.isNotEmpty()) {
+                SectionLabel(section.title)
+            }
+            if (section.entries.isEmpty()) {
+                if (editing) {
+                    Text(
+                        "Пусто: переместите сюда вкладки стрелками",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                SettingGroup {
+                    section.entries.forEachIndexed { ei, id ->
+                        val e = byId[id] ?: return@forEachIndexed
+                        item {
+                            if (editing) {
+                                SettingRow(
+                                    e.title, subtitle = e.subtitle, icon = e.icon,
+                                    trailing = {
+                                        Row {
+                                            IconButton(
+                                                onClick = { save(HomeLayout.moveEntry(layout, si, ei, -1)) },
+                                                enabled = si > 0 || ei > 0,
+                                            ) { Icon(Icons.Filled.KeyboardArrowUp, "Выше") }
+                                            IconButton(
+                                                onClick = { save(HomeLayout.moveEntry(layout, si, ei, 1)) },
+                                                enabled = si < layout.lastIndex || ei < section.entries.lastIndex,
+                                            ) { Icon(Icons.Filled.KeyboardArrowDown, "Ниже") }
+                                        }
+                                    },
+                                )
+                            } else {
+                                HomeEntryRow(e, onNavigate)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (editing) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = { save(HomeLayout.addSection(layout)) }) { Text("Добавить категорию") }
+                TextButton(onClick = { settings.setHomeLayout(null) }) { Text("Сбросить") }
+            }
+        }
+
+        renaming?.let { idx ->
+            var text by remember(idx) { mutableStateOf(layout.getOrNull(idx)?.title.orEmpty()) }
+            AlertDialog(
+                onDismissRequest = { renaming = null },
+                title = { Text("Название категории") },
+                text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (text.isNotBlank()) save(HomeLayout.rename(layout, idx, text.trim()))
+                        renaming = null
+                    }) { Text("Готово") }
+                },
+                dismissButton = { TextButton(onClick = { renaming = null }) { Text("Отмена") } },
+            )
         }
 
         Text(
@@ -262,6 +394,7 @@ fun SettingsHomeScreen(
 }
 
 private class HomeEntry(
+    val id: String,
     val title: String,
     val subtitle: String?,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,

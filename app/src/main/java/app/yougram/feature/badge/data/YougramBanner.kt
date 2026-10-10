@@ -26,7 +26,7 @@ data class YougramBanner(
         const val SHAPES = 4
 
         /** Невидимые символы из того же блока, что и метка Yougram. */
-        private const val ALPHABET = "\u2061\u2062\u2063\u2064"
+        internal const val ALPHABET = "\u2061\u2062\u2063\u2064"
 
         fun hasPayloadAt(text: String, start: Int): Boolean {
             if (start < 0 || start + PAYLOAD_LENGTH > text.length) return false
@@ -38,6 +38,8 @@ data class YougramBanner(
             if (!hasPayloadAt(text, start)) return null
             var bits = 0
             for (i in 0 until PAYLOAD_LENGTH) bits = bits or (ALPHABET.indexOf(text[start + i]) shl (2 * i))
+            // Поле узора = 15 означает «баннера нет» (в хвосте только версия клиента).
+            if (((bits shr 4) and 15) == 15) return null
             return YougramBanner(
                 palette = (bits and 15) % PALETTES,
                 pattern = ((bits shr 4) and 15) % PATTERNS,

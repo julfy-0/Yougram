@@ -86,6 +86,7 @@ fun SettingsPageContent(
             viewModel = viewModel<SettingsHomeViewModel>(factory = SettingsHomeViewModel.factory(container.chatRepository)),
             accountManager = container.accountManager,
             settings = container.settings,
+            updater = container.updater,
             contentPadding = contentPadding,
             onNavigate = onNavigate,
         )

@@ -140,46 +140,6 @@ fun AboutScreen(
         // Баннер (долгое нажатие — отладка)
         YougramAboutBanner(Modifier.combinedClickable(onClick = {}, onLongClick = openDebug))
 
-        // Обновление — сразу под баннером. Если есть новая версия, строка ведёт на отдельный экран.
-        SettingGroup {
-            item {
-                val openUpdate = { onNavigate(SettingsPage.Update) }
-                when (val u = update) {
-                    UpdateState.Idle, UpdateState.Checking -> SettingRow(
-                        title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
-                        onClick = openUpdate,
-                    )
-                    UpdateState.UpToDate -> SettingRow(
-                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
-                        value = "Открыть", onClick = openUpdate,
-                    )
-                    is UpdateState.Available -> SettingRow(
-                        title = "Доступна версия ${u.info.versionName}",
-                        subtitle = "Нажмите, чтобы посмотреть изменения",
-                        icon = Icons.Filled.SystemUpdate,
-                        value = "Открыть", onClick = openUpdate,
-                    )
-                    is UpdateState.Downloading -> SettingRow(
-                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
-                        onClick = openUpdate,
-                        below = {
-                            LinearWavyProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
-                        },
-                    )
-                    is UpdateState.Ready -> SettingRow(
-                        title = "Версия ${u.info.versionName} скачана",
-                        subtitle = "Нажмите, чтобы установить",
-                        icon = Icons.Filled.SystemUpdate,
-                        value = "Установить", onClick = openUpdate,
-                    )
-                    is UpdateState.Error -> SettingRow(
-                        title = u.message, icon = Icons.Filled.SystemUpdate,
-                        value = "Открыть", onClick = openUpdate,
-                    )
-                }
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()

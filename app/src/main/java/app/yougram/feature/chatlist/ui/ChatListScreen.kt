@@ -2,6 +2,14 @@ package app.yougram.feature.chatlist.ui
 
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
+import app.yougram.core.settings.SwipeAction
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.unit.lerp
@@ -44,6 +52,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.PlateArea
 import app.yougram.core.ui.component.Avatar
@@ -60,7 +72,6 @@ import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.glass.LocalPlates
 import app.yougram.core.ui.glass.plateColor
 import app.yougram.core.ui.rememberDeviceTier
-import app.yougram.core.ui.shape.rememberAvatarShape
 import app.yougram.feature.chat.data.ChatItem
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -81,6 +92,8 @@ fun ChatListScreen(
     lines: Int = 2,
     selectedChatId: Long? = null,
     folderId: Int? = null,
+    swipeAction: SwipeAction = SwipeAction.Off,
+    onSwipeAction: (SwipeAction) -> Unit = {},
 ) {
     val context = LocalContext.current
     val all by viewModel.chats.collectAsState()
@@ -139,17 +152,29 @@ fun ChatListScreen(
                     pinned -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 1f - plates.of(PlateArea.Chats))
                     else -> plateColor(PlateArea.Chats)
                 }
-                // Пока чат зажат (или выбран), углы строки плавно скругляются до максимума.
+                // Пока чат зажат, выбран или открыт в правой панели (планшет), углы строки плавно скругляются до максимума.
                 val interaction = remember { MutableInteractionSource() }
                 val pressed by interaction.collectIsPressedAsState()
                 val round by animateFloatAsState(
-                    targetValue = if (pressed || selected) 1f else 0f,
+                    targetValue = if (pressed || highlighted) 1f else 0f,
                     animationSpec = motion.fastSpatialSpec(),
                     label = "rowRound",
                 )
+                // Зажать чат и быстро смахнуть влево — действие из настроек (после долгого нажатия строка «выбрана»).
+                var dragX by remember { mutableFloatStateOf(0f) }
+                val shownX by animateFloatAsState(dragX, if (dragX == 0f) spring() else snap(), label = "rowSwipe")
+                val armed by rememberUpdatedState(selected && swipeAction != SwipeAction.Off)
+                val swipeNow by rememberUpdatedState(swipeAction)
+                val swipeHandler by rememberUpdatedState(onSwipeAction)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .graphicsLayer { translationX = shownX }
+                        .swipeAfterLongPress(
+                            armed = { armed },
+                            onDrag = { dragX = it },
+                            onSwipe = { swipeHandler(swipeNow) },
+                        )
                         .then(
                             if (lowTier) Modifier else Modifier.animateItem(
                                 fadeInSpec = motion.defaultEffectsSpec(),
@@ -166,6 +191,8 @@ fun ChatListScreen(
                         selected = selected,
                         highlighted = highlighted,
                         pinned = pinned,
+                        // У скруглённой строки края — полукруги, поэтому аватар и дату отодвигаем от края.
+                        horizontalPadding = lerp(16.dp, 26.dp, round),
                         modifier = Modifier.combinedClickable(
                             interactionSource = interaction,
                             onClick = {
@@ -177,6 +204,40 @@ fun ChatListScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Жест «зажал и смахнул влево»: работает, только пока строка «выбрана» долгим нажатием ([armed]),
+ * поэтому обычная прокрутка и листание вкладок не затрагиваются. События после долгого нажатия
+ * поглощаются, чтобы пейджер не листал вкладки.
+ */
+private fun Modifier.swipeAfterLongPress(
+    armed: () -> Boolean,
+    onDrag: (Float) -> Unit,
+    onSwipe: () -> Unit,
+): Modifier = pointerInput(Unit) {
+    val threshold = 72.dp.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var dx = 0f
+        var moved = false
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            if (armed()) {
+                val delta = change.positionChange().x
+                if (delta != 0f) {
+                    dx = (dx + delta).coerceAtMost(0f)
+                    moved = true
+                    change.consume()
+                    onDrag(dx)
+                }
+            }
+        }
+        onDrag(0f)
+        if (moved && armed() && dx <= -threshold) onSwipe()
     }
 }
 
@@ -220,16 +281,16 @@ private fun ChatRow(
     selected: Boolean,
     highlighted: Boolean,
     pinned: Boolean,
+    horizontalPadding: Dp,
     modifier: Modifier,
 ) {
     // На подсвеченной строке (primaryContainer) вторичный текст берём из onPrimaryContainer, чтобы контраст не терялся.
     val secondary = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
     else MaterialTheme.colorScheme.onSurfaceVariant
     // У каждого чата своя случайная форма аватарки; выбранный чат становится скруглённым квадратом с галочкой.
-    val randomShape = rememberAvatarShape(chat.id)
-    val avatarShape = if (selected) RoundedCornerShape(14.dp) else randomShape
+    val avatarShape = if (selected) RoundedCornerShape(14.dp) else CircleShape
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {

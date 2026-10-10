@@ -620,6 +620,10 @@ fun ChatScreen(
                 ) {
                     // Список в обратном порядке: index - 1 — более новое сообщение, index + 1 — более старое.
                     itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
+                        if (message.isService) {
+                            ServiceMessage(message.text.trim('[', ']'))
+                            return@itemsIndexed
+                        }
                         val newer = visibleMessages.getOrNull(index - 1)
                         val older = visibleMessages.getOrNull(index + 1)
                         val joinedWithOlder = older != null && sameGroup(older, message)
@@ -1591,7 +1595,8 @@ fun ChatScreen(
 
 /** Два соседних сообщения — одна группа: тот же автор и интервал меньше пяти минут. */
 private fun sameGroup(older: MessageItem, newer: MessageItem): Boolean =
-    older.isOutgoing == newer.isOutgoing &&
+    !older.isService && !newer.isService &&
+            older.isOutgoing == newer.isOutgoing &&
             older.senderKey == newer.senderKey &&
             abs(newer.date - older.date) < GroupGapSeconds
 
@@ -1624,6 +1629,24 @@ private fun SenderName(key: Long, sender: SenderInfo?, onClick: () -> Unit, modi
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceMessage(text: String) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+        ) {
+            Text(
+                text,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
         }
     }

@@ -21,7 +21,7 @@ enum class BlurType(val key: String, val title: String, val hint: String) {
 
     companion object {
         /** Тип по умолчанию. */
-        val DEFAULT = Kawase
+        val DEFAULT = Gaussian
 
         fun fromKey(key: String?): BlurType = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
@@ -83,8 +83,12 @@ data class NotificationPrefs(
 
 enum class SwipeAction(val label: String) {
     Delete("Удалить"),
+    /** Устаревший вариант: в выборе не показывается, работает как [Delete]. Порядок значений не менять — по нему хранится выбор. */
     ChangeFolder("Сменить папку"),
     Pin("Закрепить"),
+    Archive("В архив"),
+    Mute("Без звука"),
+    Off("Отключено"),
 }
 
 enum class MicrophoneSource(val label: String) {
@@ -116,7 +120,7 @@ data class ChatPrefs(
     val hideStories: Boolean = false,
     /** true — новое входящее сообщение прокручивает чат вниз, если вы у самого низа. */
     val autoScrollNew: Boolean = false,
-    val swipeAction: SwipeAction = SwipeAction.ChangeFolder,
+    val swipeAction: SwipeAction = SwipeAction.Delete,
     val nightAuto: Boolean = false,
     val inAppBrowser: Boolean = true,
     val mediaTapFlip: Boolean = true,
@@ -290,6 +294,15 @@ class SettingsRepository(private val context: Context) {
         prefs.edit().putString(KEY_FONT_PATH, path).putString(KEY_FONT_NAME, if (path == null) null else name).apply()
     }
 
+    /** Раскладка вкладок главного экрана настроек (JSON, см. HomeLayout); null — по умолчанию. */
+    private val _homeLayout = MutableStateFlow(prefs.getString(KEY_HOME_LAYOUT, null))
+    val homeLayout: StateFlow<String?> = _homeLayout.asStateFlow()
+
+    fun setHomeLayout(json: String?) {
+        _homeLayout.value = json
+        prefs.edit().putString(KEY_HOME_LAYOUT, json).apply()
+    }
+
     fun resetGlass() {
         setBlur(GlassSettings.DEFAULT_BLUR)
         setOpacity(GlassSettings.DEFAULT_OPACITY)
@@ -381,7 +394,8 @@ class SettingsRepository(private val context: Context) {
             searchOnTop = prefs.getBoolean("c_search_top", false),
             hideStories = prefs.getBoolean("c_hide_stories", false),
             autoScrollNew = prefs.getBoolean("c_auto_scroll_new", false),
-            swipeAction = SwipeAction.entries.getOrElse(prefs.getInt("c_swipe", 1)) { SwipeAction.ChangeFolder },
+            swipeAction = SwipeAction.entries.getOrElse(prefs.getInt("c_swipe", 0)) { SwipeAction.Delete }
+                .let { if (it == SwipeAction.ChangeFolder) SwipeAction.Delete else it },
             nightAuto = prefs.getBoolean("c_night_auto", false),
             inAppBrowser = prefs.getBoolean("c_in_app_browser", true),
             mediaTapFlip = prefs.getBoolean("c_media_tap_flip", true),
@@ -666,6 +680,7 @@ class SettingsRepository(private val context: Context) {
         const val KEY_BLUR = "glass_blur"
         const val KEY_OPACITY = "glass_opacity"
         const val KEY_BLUR_TYPE = "glass_blur_type"
+        const val KEY_HOME_LAYOUT = "home_layout"
         const val KEY_MODE = "theme_mode"
         const val KEY_DYNAMIC = "theme_dynamic"
         const val KEY_ACCENT = "theme_accent"

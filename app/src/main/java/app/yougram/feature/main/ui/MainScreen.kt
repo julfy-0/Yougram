@@ -408,6 +408,17 @@ fun MainScreen(
                                             contentPadding = chatsPadding,
                                             onOpenChat = onOpenChat,
                                             lines = chatPrefs.listLines,
+                                            swipeAction = chatPrefs.swipeAction,
+                                            onSwipeAction = { action ->
+                                                when (action) {
+                                                    app.yougram.core.settings.SwipeAction.Delete,
+                                                    app.yougram.core.settings.SwipeAction.ChangeFolder -> confirmDelete = true
+                                                    app.yougram.core.settings.SwipeAction.Pin -> chatListViewModel.pinSelected()
+                                                    app.yougram.core.settings.SwipeAction.Archive -> chatListViewModel.archiveSelected()
+                                                    app.yougram.core.settings.SwipeAction.Mute -> chatListViewModel.muteSelected()
+                                                    app.yougram.core.settings.SwipeAction.Off -> Unit
+                                                }
+                                            },
                                             selectedChatId = selectedChatId,
                                             folderId = foldersNow.value.getOrNull(page - 1)?.id,
                                         )

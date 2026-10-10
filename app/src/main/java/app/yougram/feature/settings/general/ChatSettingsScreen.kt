@@ -35,6 +35,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Folder
@@ -307,11 +310,11 @@ fun ChatSettingsScreen(
         }
         SettingsFootnote("Выключено — чат остаётся на месте, о новых сообщениях сообщает кнопка «вниз». Свои сообщения прокручивают чат всегда.")
 
-        SectionLabel("Смахивание влево в списке чатов")
+        SectionLabel("Зажать и смахнуть влево в списке чатов")
         SettingGroup {
             item { SwipeActionPicker(prefs.swipeAction) { a -> update { it.copy(swipeAction = a) } } }
         }
-        SettingsFootnote("Выбор действия, которое будет выполняться при смахивании влево в списке чатов.")
+        SettingsFootnote("Зажмите чат и быстро смахните его влево: выполнится выбранное действие. Удаление всегда спрашивает подтверждение.")
 
         SettingGroup {
             item {
@@ -634,6 +637,9 @@ private fun SwipeAction.icon() = when (this) {
     SwipeAction.Delete -> Icons.Filled.Delete
     SwipeAction.ChangeFolder -> Icons.Filled.Folder
     SwipeAction.Pin -> Icons.Filled.PushPin
+    SwipeAction.Archive -> Icons.Filled.Archive
+    SwipeAction.Mute -> Icons.Filled.NotificationsOff
+    SwipeAction.Off -> Icons.Filled.Block
 }
 
 /** Слева макет строки чата с кнопкой действия, справа список вариантов. */
@@ -667,7 +673,7 @@ private fun SwipeActionPicker(selected: SwipeAction, onSelect: (SwipeAction) -> 
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            SwipeAction.entries.forEach { action ->
+            SwipeAction.entries.filter { it != SwipeAction.ChangeFolder }.forEach { action ->
                 val isSelected = action == selected
                 Text(
                     action.label,

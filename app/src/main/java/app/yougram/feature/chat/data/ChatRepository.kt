@@ -333,6 +333,8 @@ data class MessageItem(
     val emojis: List<CustomEmojiSpan> = emptyList(),
     /** Inline-клавиатура бота под сообщением: ряды кнопок. */
     val buttons: List<List<InlineButton>> = emptyList(),
+    /** Служебное сообщение («участник вошёл», «чат создан»…): рисуется по центру без автора. */
+    val isService: Boolean = false,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -388,6 +390,7 @@ data class UserDossier(
     val isPremium: Boolean,
     val isBot: Boolean,
     val isYougram: Boolean,
+    val clientVersion: String?,
     val commonGroupsCount: Int,
     val commonGroups: List<String>,
     val deletedMessages: Int,
@@ -553,7 +556,8 @@ class ChatRepository(
         val me = client.getMe().getOrThrow()
         _ownUserId.value = me.id
         val bio = client.getUserFullInfo(userId = me.id).getOrThrow().bio?.text.orEmpty()
-        val desired = if (enabled) YougramBadge.MARKER + banner?.encode().orEmpty() else ""
+        val payload = banner?.encode() ?: YougramBadge.NO_BANNER
+        val desired = if (enabled) YougramBadge.MARKER + payload + YougramBadge.versionPayload() else ""
         if (YougramBadge.tail(bio) != desired) {
             val newBio = YougramBadge.strip(bio) + desired
             if (newBio.length > YougramBadge.BIO_LIMIT) return false
@@ -1478,6 +1482,7 @@ class ChatRepository(
             isPremium = user.isPremium,
             isBot = user.type is UserTypeBot,
             isYougram = YougramBadge.hasMarker(bio),
+            clientVersion = YougramBadge.versionOf(bio),
             commonGroupsCount = maxOf(full?.groupInCommonCount ?: 0, groups.size),
             commonGroups = groups,
             deletedMessages = runCatching { deletedMessages(chatId).size }.getOrDefault(0),
@@ -2309,6 +2314,7 @@ class ChatRepository(
             paidMessageStars = paidMessageStarCount,
             emojis = emojisOf(c),
             buttons = buttonsOf(this),
+            isService = c::class.simpleName?.removePrefix("Message") in ServiceContentNames,
         )
     }
 
@@ -2554,3 +2560,9 @@ class ChatRepository(
         else -> null
     }
 }
+
+private val ServiceContentNames = setOf(
+    "ChatJoinByLink", "ChatJoinByRequest", "ChatAddMembers", "ChatDeleteMember",
+    "ChatChangeTitle", "ChatChangePhoto", "ChatDeletePhoto",
+    "BasicGroupChatCreate", "SupergroupChatCreate", "PinMessage", "ContactRegistered",
+)

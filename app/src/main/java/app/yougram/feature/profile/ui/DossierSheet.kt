@@ -82,9 +82,10 @@ private fun rowsOf(d: UserDossier): List<Pair<String, String>> = buildList {
     add("Взаимный контакт" to if (d.isMutualContact) "да" else "нет")
     add("Telegram Premium" to if (d.isPremium) "да" else "нет")
     add("Клиент Yougram" to if (d.isYougram) "да" else "не определён")
+    if (d.isYougram) add("Версия клиента" to (d.clientVersion?.let { "v$it" } ?: "старая (до 0.9.3)"))
     if (d.isBot) add("Тип" to "бот")
     add("Общие группы" to if (d.commonGroupsCount == 0) "нет" else "${d.commonGroupsCount}" +
-        if (d.commonGroups.isNotEmpty()) ": " + d.commonGroups.joinToString(", ") else "")
+            if (d.commonGroups.isNotEmpty()) ": " + d.commonGroups.joinToString(", ") else "")
     add("Удалённых сообщений в архиве" to d.deletedMessages.toString())
 }
 

@@ -1,6 +1,5 @@
 package app.yougram.feature.contacts.ui
 
-import app.yougram.core.ui.shape.rememberAvatarShape
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -134,7 +133,6 @@ private fun ContactRow(contact: ContactItem, viewModel: ContactsViewModel, onCli
             title = contact.name,
             fileId = contact.avatarFileId,
             fileState = viewModel::fileState,
-            shape = rememberAvatarShape(contact.id),
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
