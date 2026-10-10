@@ -1,7 +1,10 @@
 package app.yougram.feature.chatlist.ui
 
 import android.widget.Toast
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.unit.lerp
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,8 +60,8 @@ import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.glass.LocalPlates
 import app.yougram.core.ui.glass.plateColor
 import app.yougram.core.ui.rememberDeviceTier
+import app.yougram.core.ui.shape.rememberAvatarShape
 import app.yougram.feature.chat.data.ChatItem
-import app.yougram.feature.settings.component.segmentShape
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -135,6 +139,14 @@ fun ChatListScreen(
                     pinned -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 1f - plates.of(PlateArea.Chats))
                     else -> plateColor(PlateArea.Chats)
                 }
+                // Пока чат зажат (или выбран), углы строки плавно скругляются до максимума.
+                val interaction = remember { MutableInteractionSource() }
+                val pressed by interaction.collectIsPressedAsState()
+                val round by animateFloatAsState(
+                    targetValue = if (pressed || selected) 1f else 0f,
+                    animationSpec = motion.fastSpatialSpec(),
+                    label = "rowRound",
+                )
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -145,7 +157,7 @@ fun ChatListScreen(
                                 fadeOutSpec = motion.fastEffectsSpec(),
                             ),
                         ),
-                    shape = segmentShape(index, chats.size),
+                    shape = roundedRowShape(index, chats.size, round),
                     color = container,
                 ) {
                     ChatRow(
@@ -155,6 +167,7 @@ fun ChatListScreen(
                         highlighted = highlighted,
                         pinned = pinned,
                         modifier = Modifier.combinedClickable(
+                            interactionSource = interaction,
                             onClick = {
                                 if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
                             },
@@ -165,6 +178,18 @@ fun ChatListScreen(
             }
         }
     }
+}
+
+private val RowOuterCorner = 28.dp
+private val RowInnerCorner = 8.dp
+private val RowMaxCorner = 100.dp
+
+/** Форма сегмента списка; [round] от 0 до 1 доводит углы до максимального скругления. */
+private fun roundedRowShape(index: Int, count: Int, round: Float): RoundedCornerShape {
+    val t = round.coerceIn(0f, 1f)
+    val top = lerp(if (index == 0) RowOuterCorner else RowInnerCorner, RowMaxCorner, t)
+    val bottom = lerp(if (index == count - 1) RowOuterCorner else RowInnerCorner, RowMaxCorner, t)
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
 }
 
 /** Пустое состояние: «цветочная» форма Expressive с иконкой, крупный заголовок и пояснение. */
@@ -200,18 +225,15 @@ private fun ChatRow(
     // На подсвеченной строке (primaryContainer) вторичный текст берём из onPrimaryContainer, чтобы контраст не терялся.
     val secondary = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
     else MaterialTheme.colorScheme.onSurfaceVariant
-    // Выбранный чат: аватарка из круга «перетекает» в скруглённый квадрат с галочкой.
-    val avatarCorner by animateDpAsState(
-        targetValue = if (selected) 14.dp else 24.dp,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "avatarCorner",
-    )
+    // У каждого чата своя случайная форма аватарки; выбранный чат становится скруглённым квадратом с галочкой.
+    val randomShape = rememberAvatarShape(chat.id)
+    val avatarShape = if (selected) RoundedCornerShape(14.dp) else randomShape
     Row(
         modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            Avatar(title = chat.title, path = chat.avatarPath, shape = RoundedCornerShape(avatarCorner.coerceAtLeast(0.dp)))
+            Avatar(title = chat.title, path = chat.avatarPath, shape = avatarShape)
             if (selected) {
                 Surface(
                     shape = CircleShape,
@@ -226,37 +248,54 @@ private fun ChatRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    chat.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (chat.muted) {
-                    Icon(
-                        Icons.Filled.NotificationsOff,
-                        contentDescription = "Без звука",
-                        tint = secondary,
-                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                // Название с иконкой «без звука» занимает всё свободное место, поэтому дата всегда прижата к правому краю.
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        chat.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (chat.muted) {
+                        Icon(
+                            Icons.Filled.NotificationsOff,
+                            contentDescription = "Без звука",
+                            tint = secondary,
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                        )
+                    }
                 }
-                Spacer(Modifier.weight(1f))
                 if (chat.lastOutgoing) {
                     Icon(
                         if (chat.lastRead) Icons.Filled.DoneAll else Icons.Filled.Done,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = 2.dp).size(16.dp),
+                        modifier = Modifier.padding(end = 6.dp).size(16.dp),
                     )
                 }
-                Text(
-                    formatChatTime(chat.lastMessageDate),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = secondary,
-                )
+                val time = remember(chat.lastMessageDate) { formatChatTime(chat.lastMessageDate) }
+                if (time.isNotEmpty()) {
+                    // Дата в такой же «пилюле», как бейдж непрочитанных: тот же минимум высоты и скругление.
+                    Surface(
+                        shape = CircleShape,
+                        // Чуть светлее подложки строки, какой бы она ни была (обычная, закреплённая, выбранная).
+                        color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White.copy(alpha = 0.09f)
+                        else Color.White.copy(alpha = 0.65f),
+                        contentColor = secondary,
+                        modifier = Modifier.defaultMinSize(minWidth = 22.dp, minHeight = 22.dp),
+                    ) {
+                        Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                time,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
             }
             Row(verticalAlignment = Alignment.Top) {
                 Text(

@@ -134,6 +134,11 @@ class SettingsDetailsViewModel(
         _state.update { it.copy(sessions = list) }
     }
 
+    fun linkDevice(link: String) = launchCatching {
+        account.confirmQrLogin(link)
+        _state.update { it.copy(sessions = account.loadSessions()) }
+    }
+
     fun terminateSession(id: Long) = launchCatching {
         account.terminateSession(id)
         _state.update { it.copy(sessions = account.loadSessions()) }

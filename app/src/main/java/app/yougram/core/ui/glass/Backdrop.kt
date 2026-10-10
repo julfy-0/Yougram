@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.rememberDeviceTier
+import kotlin.math.ceil
 
 /**
  * Состояние «фона для размытия».
@@ -39,7 +41,7 @@ import app.yougram.core.ui.rememberDeviceTier
  * Работает на Android 12+ (RenderEffect), то есть на всём, что поддерживает приложение.
  */
 @Stable
-class BackdropState(val layer: GraphicsLayer) {
+class BackdropState(val layer: GraphicsLayer, val small: GraphicsLayer) {
     /** Позиция источника в координатах окна. */
     var sourceOffset by mutableStateOf(Offset.Zero)
 
@@ -50,7 +52,9 @@ class BackdropState(val layer: GraphicsLayer) {
 @Composable
 fun rememberBackdropState(): BackdropState {
     val layer = rememberGraphicsLayer()
-    return remember(layer) { BackdropState(layer) }
+    // Уменьшенная копия [layer]: размытие считается по ней, это в BLUR_DOWNSCALE² раз дешевле, чем по полному экрану.
+    val small = rememberGraphicsLayer()
+    return remember(layer, small) { BackdropState(layer, small) }
 }
 
 /** Помечает содержимое, которое должно просвечивать (размытым) под панелями. Сами панели в него класть нельзя. */
@@ -63,6 +67,11 @@ fun Modifier.backdropSource(state: BackdropState): Modifier = composed {
             .drawWithContent {
                 state.layer.record {
                     this@drawWithContent.drawContent()
+                }
+                val w = ceil(size.width / BLUR_DOWNSCALE).toInt().coerceAtLeast(1)
+                val h = ceil(size.height / BLUR_DOWNSCALE).toInt().coerceAtLeast(1)
+                state.small.record(this, layoutDirection, IntSize(w, h)) {
+                    scale(1f / BLUR_DOWNSCALE, Offset.Zero) { drawLayer(state.layer) }
                 }
                 drawContent()
             }
@@ -86,11 +95,13 @@ fun Modifier.glass(
     SideEffect {
         val radiusPx = with(density) { settings.blurRadius.dp.toPx() }
         val enabled = !lowTier && radiusPx > 0.5f
-        val key = if (enabled) BlurKey(settings.blurType, radiusPx, metrics.widthPixels, metrics.heightPixels) else null
+        val smallW = ceil(metrics.widthPixels / BLUR_DOWNSCALE).toInt()
+        val smallH = ceil(metrics.heightPixels / BLUR_DOWNSCALE).toInt()
+        val key = if (enabled) BlurKey(settings.blurType, radiusPx, smallW, smallH) else null
         if (key != state.appliedKey) {
             state.appliedKey = key
-            state.layer.renderEffect =
-                if (key != null) blurRenderEffect(key.type, radiusPx, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat()) else null
+            state.small.renderEffect =
+                if (key != null) blurRenderEffect(key.type, radiusPx / BLUR_DOWNSCALE, smallW.toFloat(), smallH.toFloat()) else null
         }
     }
 
@@ -100,12 +111,16 @@ fun Modifier.glass(
         .drawBehind {
             // При почти сплошной подкраске размытая копия всё равно не видна — не тратим на неё GPU.
             if (!lowTier && settings.opacity < OPAQUE_THRESHOLD) {
-                val layer = state.layer
+                val layer = state.small
                 // Слой могли ещё не записать (первый кадр после входа на экран) или уже освободить:
                 // рисование такого слоя может уронить приложение, поэтому пропускаем.
                 if (!layer.isReleased && layer.size != IntSize.Zero) {
                     val delta = state.sourceOffset - myOffset
-                    runCatching { translate(delta.x, delta.y) { drawLayer(layer) } }
+                    runCatching {
+                        translate(delta.x, delta.y) {
+                            scale(BLUR_DOWNSCALE, Offset.Zero) { drawLayer(layer) }
+                        }
+                    }
                 }
             }
             drawRect(tint.copy(alpha = if (lowTier) maxOf(settings.opacity, LOW_TIER_MIN_ALPHA) else settings.opacity))
@@ -114,5 +129,7 @@ fun Modifier.glass(
 
 private data class BlurKey(val type: app.yougram.core.settings.BlurType, val radiusPx: Float, val w: Int, val h: Int)
 
+/** Во сколько раз уменьшаем копию экрана перед размытием. */
+private const val BLUR_DOWNSCALE = 4f
 private const val OPAQUE_THRESHOLD = 0.98f
 private const val LOW_TIER_MIN_ALPHA = 0.85f

@@ -32,6 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import app.yougram.core.ui.component.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -100,14 +104,14 @@ fun PinEntry(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KeyGap),
     ) {
-        Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until MaxPinLength) {
                 AnimatedVisibility(
                     visible = i < value.length,
                     enter = scaleIn(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) + fadeIn(),
                     exit = scaleOut() + fadeOut(),
                 ) {
-                    Box(Modifier.size(14.dp).clip(CircleShape).background(dotColor))
+                    PinDot(index = i, color = dotColor)
                 }
             }
         }
@@ -136,6 +140,39 @@ fun PinEntry(
             modifier = Modifier.width(KeySize * 3 + KeyGap * 2).height(56.dp),
         ) { Text("Подтвердить", style = MaterialTheme.typography.titleMedium) }
     }
+}
+
+/** Фигуры для введённых символов: каждая следующая цифра появляется новой формой, как на Pixel. */
+private val PinDotPolygons by lazy {
+    listOf(
+        MaterialShapes.Cookie9Sided,
+        MaterialShapes.Clover4Leaf,
+        MaterialShapes.Flower,
+        MaterialShapes.Sunny,
+        MaterialShapes.SoftBurst,
+        MaterialShapes.Pentagon,
+        MaterialShapes.Gem,
+        MaterialShapes.Puffy,
+        MaterialShapes.Cookie6Sided,
+        MaterialShapes.Clover8Leaf,
+    )
+}
+
+/** Точка ввода: своя фигура по номеру символа, появляется пружиной с поворотом. */
+@Composable
+private fun PinDot(index: Int, color: Color) {
+    val shape = PinDotPolygons[index % PinDotPolygons.size].toShape()
+    val rotation = remember { Animatable(-120f) }
+    LaunchedEffect(Unit) {
+        rotation.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))
+    }
+    Box(
+        Modifier
+            .size(18.dp)
+            .graphicsLayer { rotationZ = rotation.value }
+            .clip(shape)
+            .background(color),
+    )
 }
 
 @Composable

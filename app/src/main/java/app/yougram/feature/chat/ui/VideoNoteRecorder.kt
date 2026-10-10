@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import app.yougram.core.ui.rememberDeviceTier
+import app.yougram.core.ui.DeviceTier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
@@ -177,9 +179,12 @@ fun VideoNoteRecorderDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f))) {
+        // Всё за окном записи размывается (как под меню сообщения); на слабых устройствах — плотное затемнение вместо блюра.
+        val lowTier = rememberDeviceTier() == DeviceTier.Low
+        DialogWindowBlur(radius = if (lowTier) 0.dp else 28.dp, dim = if (lowTier) 0.45f else 0.30f)
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (lowTier) 0.85f else 0.15f))) {
             Column(
                 Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,

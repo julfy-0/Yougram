@@ -24,7 +24,7 @@ fun CommentsButton(info: CommentsInfo, style: BubbleStyle, onClick: () -> Unit, 
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(style.chipBg)
+            .background(style.chipBg.copy(alpha = style.chipBg.alpha * 0.5f))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

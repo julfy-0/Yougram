@@ -28,6 +28,10 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
+import app.yougram.core.ui.shape.LocalShapeBag
+import app.yougram.core.ui.shape.RandomShapeCount
+import app.yougram.core.ui.shape.randomPolygonShape
+import kotlin.random.Random
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -144,17 +148,10 @@ private fun SettingIconTile(icon: ImageVector) {
     }
     val low = rememberDeviceTier() == DeviceTier.Low
     // Каждая иконка в группе получает свою форму (по месту в группе), чтобы плитки не повторялись подряд.
-    val polygon = when (LocalSegmentIndex.current % 8) {
-        0 -> MaterialShapes.Cookie6Sided
-        1 -> MaterialShapes.Clover4Leaf
-        2 -> MaterialShapes.Sunny
-        3 -> MaterialShapes.Pentagon
-        4 -> MaterialShapes.Flower
-        5 -> MaterialShapes.Cookie9Sided
-        6 -> MaterialShapes.SoftBurst
-        else -> MaterialShapes.Gem
-    }
-    val shape: Shape = if (low) RoundedCornerShape(16.dp) else polygon.toShape()
+    val bag = LocalShapeBag.current
+    val shapeIndex = remember { bag?.next() ?: Random.nextInt(RandomShapeCount) }
+    val polygon = randomPolygonShape(shapeIndex)
+    val shape: Shape = if (low) RoundedCornerShape(16.dp) else polygon
     Box(
         Modifier.size(44.dp).clip(shape).background(container),
         contentAlignment = Alignment.Center,

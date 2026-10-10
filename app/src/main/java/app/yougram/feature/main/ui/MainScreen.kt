@@ -33,13 +33,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -96,6 +97,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import app.yougram.core.ui.shape.LocalShapeBag
+import app.yougram.core.ui.shape.ShapeBag
+import app.yougram.core.ui.skipWhenOffscreen
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -152,11 +156,13 @@ enum class MainTab(val title: String, val icon: ImageVector) {
 private val TopBarContentHeight = 56.dp
 private val FolderBarHeight = 48.dp
 private val StoriesBarHeight = 88.dp
-private val BottomBarHeight = 56.dp
+private val BottomBarHeight = 64.dp
 private val BottomBarMargin = 8.dp
 
 /** Кнопка поиска: квадрат со скруглёнными углами. */
-private val SearchButtonShape = RoundedCornerShape(18.dp)
+private val SearchButtonShape = RoundedCornerShape(13.dp)
+/** Кнопка поиска внизу меньше «таблетки» на 30%. */
+private const val SearchButtonScale = 0.7f
 private val SearchBlurRadius = 24.dp
 private const val SearchAnimationMillis = 260
 private const val SearchResultsAlpha = 0.78f
@@ -385,82 +391,91 @@ fun MainScreen(
                 },
                 label = "mainScreen",
             ) { (currentTab, currentPage) ->
-                when (currentTab) {
-                    MainTab.Chats -> Box(Modifier.fillMaxSize()) {
-                        // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
-                        Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
-                            HorizontalPager(
-                                state = folderPager,
-                                modifier = Modifier.fillMaxSize(),
-                                key = { page -> if (page == 0) -1 else foldersNow.value.getOrNull(page - 1)?.id ?: (-2 - page) },
-                            ) { page ->
-                                ChatListScreen(
-                                    viewModel = chatListViewModel,
-                                    query = "",
+                Box(Modifier.fillMaxSize().skipWhenOffscreen()) {
+                    when (currentTab) {
+                        MainTab.Chats -> Box(Modifier.fillMaxSize()) {
+                            // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.
+                            Box(Modifier.fillMaxSize().then(if (underSearchBlur > 0.dp) Modifier.blur(underSearchBlur) else Modifier)) {
+                                HorizontalPager(
+                                    state = folderPager,
+                                    modifier = Modifier.fillMaxSize(),
+                                    key = { page -> if (page == 0) -1 else foldersNow.value.getOrNull(page - 1)?.id ?: (-2 - page) },
+                                ) { page ->
+                                    Box(Modifier.fillMaxSize().skipWhenOffscreen()) {
+                                        ChatListScreen(
+                                            viewModel = chatListViewModel,
+                                            query = "",
+                                            contentPadding = chatsPadding,
+                                            onOpenChat = onOpenChat,
+                                            lines = chatPrefs.listLines,
+                                            selectedChatId = selectedChatId,
+                                            folderId = foldersNow.value.getOrNull(page - 1)?.id,
+                                        )
+                                    }
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = searching && query.isNotBlank(),
+                                enter = fadeIn(searchFade),
+                                exit = fadeOut(fastFade),
+                            ) {
+                                GlobalSearchScreen(
+                                    viewModel = searchViewModel,
+                                    query = query,
                                     contentPadding = chatsPadding,
+                                    fileState = container.chatRepository::fileState,
                                     onOpenChat = onOpenChat,
-                                    lines = chatPrefs.listLines,
-                                    selectedChatId = selectedChatId,
-                                    folderId = foldersNow.value.getOrNull(page - 1)?.id,
+                                    onOpenMessage = onOpenMessage,
+                                    // Полупрозрачная подложка: сквозь неё видно размытый список.
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
                                 )
                             }
                         }
-                        AnimatedVisibility(
-                            visible = searching && query.isNotBlank(),
-                            enter = fadeIn(searchFade),
-                            exit = fadeOut(fastFade),
-                        ) {
-                            GlobalSearchScreen(
-                                viewModel = searchViewModel,
-                                query = query,
-                                contentPadding = chatsPadding,
-                                fileState = container.chatRepository::fileState,
-                                onOpenChat = onOpenChat,
-                                onOpenMessage = onOpenMessage,
-                                // Полупрозрачная подложка: сквозь неё видно размытый список.
-                                modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
-                            )
-                        }
-                    }
-                    MainTab.Contacts -> ContactsScreen(
-                        viewModel = viewModel<ContactsViewModel>(factory = ContactsViewModel.factory(container.chatRepository)),
-                        contentPadding = contentPadding,
-                        onOpenChat = onOpenChat,
-                        query = if (searching) query else "",
-                    )
-                    MainTab.Calls -> CallsScreen(
-                        viewModel = viewModel<CallsViewModel>(factory = CallsViewModel.factory(container.chatRepository)),
-                        contentPadding = contentPadding,
-                        onOpenChat = onOpenChat,
-                        query = if (searching) query else "",
-                    )
-                    MainTab.Settings -> Box(Modifier.fillMaxSize()) {
-                        Box(Modifier.fillMaxSize().blur(underSearchBlur)) {
-                            CompositionLocalProvider(LocalOpenAccountManager provides { accountSheetOpen = true }) {
-                                SettingsPageContent(
-                                    page = currentPage,
-                                    container = container,
+                        MainTab.Contacts -> ContactsScreen(
+                            viewModel = viewModel<ContactsViewModel>(factory = ContactsViewModel.factory(container.chatRepository)),
+                            contentPadding = contentPadding,
+                            onOpenChat = onOpenChat,
+                            query = if (searching) query else "",
+                        )
+                        MainTab.Calls -> CallsScreen(
+                            viewModel = viewModel<CallsViewModel>(factory = CallsViewModel.factory(container.chatRepository)),
+                            contentPadding = contentPadding,
+                            onOpenChat = onOpenChat,
+                            query = if (searching) query else "",
+                        )
+                        MainTab.Settings -> Box(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxSize().then(if (underSearchBlur > 0.dp) Modifier.blur(underSearchBlur) else Modifier)) {
+                                // На каждой странице настроек формы значков случайные, и каждая встречается не больше двух раз.
+                                val shapeBag = remember(currentPage) { ShapeBag() }
+                                CompositionLocalProvider(
+                                    LocalOpenAccountManager provides { accountSheetOpen = true },
+                                    LocalShapeBag provides shapeBag,
+                                ) {
+                                    SettingsPageContent(
+                                        page = currentPage,
+                                        container = container,
+                                        contentPadding = contentPadding,
+                                        onNavigate = { navigateTo(MainTab.Settings, it) },
+                                        onOpenChat = onOpenChat,
+                                    )
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = searching && query.isNotBlank(),
+                                enter = fadeIn(searchFade),
+                                exit = fadeOut(fastFade),
+                            ) {
+                                SettingsSearchResults(
+                                    query = query,
                                     contentPadding = contentPadding,
-                                    onNavigate = { navigateTo(MainTab.Settings, it) },
-                                    onOpenChat = onOpenChat,
+                                    onOpen = {
+                                        navigateTo(MainTab.Settings, it)
+                                        searching = false
+                                        query = ""
+                                    },
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
                                 )
                             }
-                        }
-                        AnimatedVisibility(
-                            visible = searching && query.isNotBlank(),
-                            enter = fadeIn(searchFade),
-                            exit = fadeOut(fastFade),
-                        ) {
-                            SettingsSearchResults(
-                                query = query,
-                                contentPadding = contentPadding,
-                                onOpen = {
-                                    navigateTo(MainTab.Settings, it)
-                                    searching = false
-                                    query = ""
-                                },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = SearchResultsAlpha)),
-                            )
                         }
                     }
                 }
@@ -546,6 +561,7 @@ fun MainScreen(
                 },
                 onSearch = { searching = true },
                 showSearch = !chatPrefs.searchOnTop,
+                chatsUnread = folderUnread[null] ?: 0,
                 backdrop = backdrop,
                 glass = glass,
                 bottomInset = bottomInset,
@@ -842,7 +858,7 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
     }
 }
 
-private val NavSlot = 40.dp
+private val NavSlot = 48.dp
 private val NavGap = 2.dp
 private val NavPadVertical = 8.dp
 private val NavPadHorizontal = 8.dp
@@ -850,10 +866,10 @@ private val NavPadHorizontal = 8.dp
 /**
  * Вкладки навбара. У каждой вкладки своя «таблетка»: при нажатии на кнопку плашка раскрывается пружиной,
  * а подпись плавно появляется (и плавно исчезает при переключении на другую вкладку),
- * фон плавно переходит между «залитым» и прозрачным. Слот вкладки 40 dp, зазор 2 dp.
+ * фон плавно переходит между «залитым» и прозрачным. Слот вкладки 48 dp, зазор 2 dp.
  */
 @Composable
-private fun NavTabs(selected: MainTab, onSelect: (MainTab) -> Unit) {
+private fun NavTabs(selected: MainTab, onSelect: (MainTab) -> Unit, chatsUnread: Int) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelLargeEmphasized
@@ -866,13 +882,20 @@ private fun NavTabs(selected: MainTab, onSelect: (MainTab) -> Unit) {
             // Дополнительная ширина под подпись: сама подпись + правый отступ 8 dp.
             val px = remember(tab, labelStyle) { measurer.measure(tab.title, labelStyle, maxLines = 1).size.width }
             val extra = with(density) { px.toDp() } + 8.dp
-            NavTab(tab, selected = tab == selected, extra = extra, style = labelStyle, onClick = { onSelect(tab) })
+            NavTab(
+                tab,
+                selected = tab == selected,
+                extra = extra,
+                style = labelStyle,
+                badge = if (tab == MainTab.Chats) chatsUnread else 0,
+                onClick = { onSelect(tab) },
+            )
         }
     }
 }
 
 @Composable
-private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle, onClick: () -> Unit) {
+private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle, badge: Int, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     // Быстрая пружина с лёгким перелётом, как в образце.
     val frac by animateFloatAsState(
@@ -905,7 +928,9 @@ private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle,
             .semantics { this.selected = selected },
     ) {
         Row(
-            Modifier.align(Alignment.CenterStart).requiredWidth(NavSlot + extra),
+            // requiredWidth центрировал строку в слоте и сдвигал иконку влево на extra/2 (за пределы clip),
+            // поэтому у неактивных вкладок иконки пропадали. Здесь содержимое всегда прижато к левому краю.
+            Modifier.align(Alignment.CenterStart).wrapContentWidth(Alignment.Start, unbounded = true),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(NavSlot), contentAlignment = Alignment.Center) {
@@ -915,6 +940,26 @@ private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle,
                     tint = content,
                     modifier = Modifier.size(24.dp),
                 )
+                if (badge > 0) {
+                    // Плашка числа чатов с непрочитанными, как на вкладках папок.
+                    Surface(
+                        shape = CircleShape,
+                        color = scheme.primary,
+                        contentColor = scheme.onPrimary,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp, end = 2.dp)
+                            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp),
+                    ) {
+                        Box(Modifier.padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                if (badge > 99) "99+" else badge.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
             }
             if (selected || frac > 0.001f) {
                 Text(
@@ -936,6 +981,7 @@ private fun GlassBottomBar(
     onSelect: (MainTab) -> Unit,
     onSearch: () -> Unit,
     showSearch: Boolean,
+    chatsUnread: Int,
     backdrop: BackdropState,
     glass: GlassSettings,
     bottomInset: Dp,
@@ -961,19 +1007,19 @@ private fun GlassBottomBar(
                 .glass(backdrop, glass, CircleShape)
                 .clip(CircleShape),
         ) {
-            Box(Modifier.align(Alignment.Center)) { NavTabs(selected, onSelect) }
+            Box(Modifier.align(Alignment.Center)) { NavTabs(selected, onSelect, chatsUnread) }
         }
 
         // Отдельная кнопка поиска справа, той же высоты, что и «таблетка».
         if (showSearch) Box(
             Modifier
-                .size(BottomBarHeight)
+                .size(BottomBarHeight * SearchButtonScale)
                 .glass(backdrop, glass, SearchButtonShape)
                 .clip(SearchButtonShape)
                 .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Search, contentDescription = "Поиск")
+            Icon(Icons.Filled.Search, contentDescription = "Поиск", modifier = Modifier.size(20.dp))
         }
     }
 }

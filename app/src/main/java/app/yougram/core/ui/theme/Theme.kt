@@ -18,6 +18,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,6 +61,28 @@ private val ExpressiveShapes = Shapes(
     extraExtraLarge = RoundedCornerShape(48.dp),
 )
 
+/** Цвет фона экрана чата: не затемняется вместе с остальным фоном приложения. */
+val LocalChatBackground = compositionLocalOf { Color.Unspecified }
+
+/** На сколько затемняются фон приложения и подложки (кроме фона в чате). */
+private const val AppDarkenAmount = 0.3f
+
+private fun ColorScheme.darkenedBackgrounds(amount: Float): ColorScheme {
+    fun Color.d() = lerp(this, Color.Black, amount)
+    return copy(
+        background = background.d(),
+        surface = surface.d(),
+        surfaceVariant = surfaceVariant.d(),
+        surfaceDim = surfaceDim.d(),
+        surfaceBright = surfaceBright.d(),
+        surfaceContainerLowest = surfaceContainerLowest.d(),
+        surfaceContainerLow = surfaceContainerLow.d(),
+        surfaceContainer = surfaceContainer.d(),
+        surfaceContainerHigh = surfaceContainerHigh.d(),
+        surfaceContainerHighest = surfaceContainerHighest.d(),
+    )
+}
+
 private val DarkText = Color(0xFFF2F2F2)
 private val DarkTextVariant = Color(0xFFD0D0D0)
 
@@ -81,13 +104,21 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
         accentScheme(Accents[settings.accent.coerceIn(Accents.indices)].color, dark)
     }
     // Порядок важен: сначала фон/текст тёмной темы, затем уровни surfaceContainer*, затем контраст on*-цветов.
-    val colorScheme = remember(base, dark, settings.dynamic) {
-        val withBackground = if (dark) base.withLightText() else base
+    val schemes = remember(base, dark, settings.dynamic) {
+        val withBackground = when {
+            dark -> base.withLightText()
+            !settings.dynamic -> base.withLightAccentBackground()
+            else -> base
+        }
         // В тёмной теме поверхности принудительно #121212, поэтому уровни контейнеров считаем сами.
         // В светлой с динамическими цветами оставляем системные уровни.
         val withLevels = if (dark || !settings.dynamic) withBackground.withContainerLevels(dark) else withBackground
-        withLevels.withReadableContent(dark)
+        // Фон чата остаётся прежним, остальной фон и подложки затемняются.
+        val chat = withLevels.withReadableContent(dark)
+        chat.darkenedBackgrounds(AppDarkenAmount).withReadableContent(dark) to chat.background
     }
+    val colorScheme = schemes.first
+    val chatBackground = schemes.second
     val typography = rememberTypography(settings.fontPath)
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
@@ -100,7 +131,11 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
             color = colorScheme.background,
             contentColor = colorScheme.onBackground,
         ) {
-            CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
+            CompositionLocalProvider(
+                LocalContentColor provides colorScheme.onBackground,
+                LocalChatBackground provides chatBackground,
+                content = content,
+            )
         }
     }
 }
@@ -165,15 +200,28 @@ private fun expressiveTypography(family: FontFamily?): Typography {
     )
 }
 
-/** В тёмной теме весь текст светлый, а фон гарантированно тёмный. */
-private fun ColorScheme.withLightText(): ColorScheme = copy(
-    background = Color(0xFF121212),
-    surface = Color(0xFF121212),
-    surfaceVariant = Color(0xFF242424),
-    onBackground = DarkText,
-    onSurface = DarkText,
-    onSurfaceVariant = DarkTextVariant,
-)
+/** Доля акцента в фоне приложения: фон и подложки слегка окрашиваются в цвет акцента. */
+private const val DarkBackgroundTint = 0.12f
+private const val LightBackgroundTint = 0.07f
+
+/** В тёмной теме весь текст светлый, а фон тёмный с лёгким оттенком акцента (от него считаются и подложки). */
+private fun ColorScheme.withLightText(): ColorScheme {
+    val bg = lerp(Color(0xFF121212), primary, DarkBackgroundTint)
+    return copy(
+        background = bg,
+        surface = bg,
+        surfaceVariant = lerp(Color(0xFF242424), primary, DarkBackgroundTint + 0.04f),
+        onBackground = DarkText,
+        onSurface = DarkText,
+        onSurfaceVariant = DarkTextVariant,
+    )
+}
+
+/** Светлая тема со своим акцентом: фон и surface с оттенком primary (системные динамические цвета не трогаем). */
+private fun ColorScheme.withLightAccentBackground(): ColorScheme {
+    val bg = lerp(Color(0xFFFCFCFC), primary, LightBackgroundTint)
+    return copy(background = bg, surface = bg)
+}
 
 /**
  * Уровни surfaceContainer* для разделения областей без теней и линий.

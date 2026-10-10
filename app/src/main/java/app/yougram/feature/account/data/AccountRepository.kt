@@ -208,6 +208,11 @@ class AccountRepository(
             )
         }
 
+    /** Подтверждает вход нового устройства по ссылке из QR-кода (tg://login?token=...). */
+    suspend fun confirmQrLogin(link: String) {
+        client.confirmQrCodeAuthentication(link = link).getOrThrow()
+    }
+
     suspend fun terminateSession(sessionId: Long) {
         client.terminateSession(sessionId = sessionId).getOrThrow()
     }

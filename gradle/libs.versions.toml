@@ -8,6 +8,7 @@ lifecycle = "2.9.4"
 navigation = "2.9.4"
 coroutines = "1.10.2"
 camera = "1.5.0"
+zxing = "3.5.3"
 tdl = "13.0.0"
 ntgcalls = "3.0.2"
 
@@ -31,6 +32,7 @@ androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.r
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camera" }
 androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camera" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camera" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 tdl-coroutines = { module = "dev.g000sha256:tdl-coroutines", version.ref = "tdl" }
 ntgcalls = { module = "io.github.pytgcalls:ntgcalls", version.ref = "ntgcalls" }

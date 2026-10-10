@@ -154,7 +154,8 @@ private fun InlineButtonCell(
             .heightIn(min = 44.dp)
             .alpha(if (pending) 0.5f else 1f),
         shape = shape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        // Полупрозрачные кнопки: сквозь них виден пузырь сообщения.
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         interactionSource = interaction,
         onClick = onClick,

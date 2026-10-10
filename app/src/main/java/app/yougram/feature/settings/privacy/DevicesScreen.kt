@@ -35,6 +35,7 @@ fun DevicesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
     LaunchedEffect(Unit) { viewModel.loadSessions() }
     var toTerminate by remember { mutableStateOf<SessionItem?>(null) }
     var confirmAll by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
 
     val sessions = state.sessions
     val current = sessions?.firstOrNull { it.current }
@@ -46,6 +47,7 @@ fun DevicesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
                 LoadingIndicator()
             }
         } else {
+            LinkDeviceCard(onScan = { scanning = true })
             if (current != null) {
                 SectionLabel("Это устройство")
                 SettingGroup { item { SessionRow(current, onClick = null) } }
@@ -67,6 +69,16 @@ fun DevicesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
                 SettingsFootnote("Нажмите на сеанс, чтобы завершить его.")
             }
         }
+    }
+
+    if (scanning) {
+        QrScannerDialog(
+            onResult = { link ->
+                scanning = false
+                viewModel.linkDevice(link)
+            },
+            onDismiss = { scanning = false },
+        )
     }
 
     toTerminate?.let { session ->

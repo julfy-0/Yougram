@@ -48,6 +48,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.Animatable
+import android.view.WindowManager
+import android.view.ViewGroup
+import android.os.Build
 import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.rememberDeviceTier
 import app.yougram.feature.chat.data.MessageItem
@@ -135,69 +147,104 @@ fun MessageMenu(
         add(MenuAction(Icons.Filled.Delete, "Удалить", danger = true) { onDelete() })
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        AnimatedVisibility(
-            visibleState = appear,
-            enter = fadeIn(fadeSpec) + scaleIn(scaleSpec, initialScale = 0.85f),
+    // Окно на весь экран: всё, что за ним (чат, панели, шапка), размывается; тап мимо меню закрывает его.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        if (!lowTier) DialogWindowBlur(radius = 28.dp, dim = 0.30f) else DialogWindowBlur(radius = 0.dp, dim = 0.45f)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                // Реакции: выбранная — круг на акцентном контейнере, остальные — прозрачные.
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Row(
-                        Modifier
-                            .widthIn(max = 320.dp)
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        reactions.forEach { emoji ->
-                            val chosen = emoji in mine
-                            Box(
-                                Modifier
-                                    .size(44.dp)
-                                    .clip(if (chosen) CircleShape else RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (chosen) MaterialTheme.colorScheme.primaryContainer
-                                        else androidx.compose.ui.graphics.Color.Transparent,
-                                    )
-                                    .clickable { onReact(emoji); onDismiss() },
-                                contentAlignment = Alignment.Center,
-                            ) { Text(emoji, fontSize = 26.sp) }
+            AnimatedVisibility(
+                visibleState = appear,
+                enter = fadeIn(fadeSpec) + scaleIn(scaleSpec, initialScale = 0.85f),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Реакции: выбранная — круг на акцентном контейнере, остальные — прозрачные.
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Row(
+                            Modifier
+                                .widthIn(max = 320.dp)
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            reactions.forEach { emoji ->
+                                val chosen = emoji in mine
+                                Box(
+                                    Modifier
+                                        .size(44.dp)
+                                        .clip(if (chosen) CircleShape else RoundedCornerShape(14.dp))
+                                        .background(
+                                            if (chosen) MaterialTheme.colorScheme.primaryContainer
+                                            else androidx.compose.ui.graphics.Color.Transparent,
+                                        )
+                                        .clickable { onReact(emoji); onDismiss() },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(emoji, fontSize = 26.sp) }
+                            }
                         }
                     }
-                }
-                // Время отправки — отдельная компактная «таблетка».
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
-                    Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (message.isOutgoing) {
-                            Icon(
-                                if (isRead) Icons.Filled.DoneAll else Icons.Filled.Done,
-                                contentDescription = if (isRead) "Прочитано" else "Отправлено",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Время отправки — отдельная компактная «таблетка».
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (message.isOutgoing) {
+                                Icon(
+                                    if (isRead) Icons.Filled.DoneAll else Icons.Filled.Done,
+                                    contentDescription = if (isRead) "Прочитано" else "Отправлено",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(
+                                stamp(message.date),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Spacer(Modifier.width(6.dp))
                         }
-                        Text(
-                            stamp(message.date),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
-                }
-                // Действия: сгруппированный список со смыкающимися скруглениями.
-                Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    actions.forEachIndexed { index, action ->
-                        val shape = RoundedCornerShape(
-                            topStart = if (index == 0) GroupOuter else GroupInner,
-                            topEnd = if (index == 0) GroupOuter else GroupInner,
-                            bottomStart = if (index == actions.lastIndex) GroupOuter else GroupInner,
-                            bottomEnd = if (index == actions.lastIndex) GroupOuter else GroupInner,
-                        )
-                        MenuItem(action, shape) { action.onClick(); onDismiss() }
+                    // Действия: сгруппированный список со смыкающимися скруглениями.
+                    Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        actions.forEachIndexed { index, action ->
+                            val shape = RoundedCornerShape(
+                                topStart = if (index == 0) GroupOuter else GroupInner,
+                                topEnd = if (index == 0) GroupOuter else GroupInner,
+                                bottomStart = if (index == actions.lastIndex) GroupOuter else GroupInner,
+                                bottomEnd = if (index == actions.lastIndex) GroupOuter else GroupInner,
+                            )
+                            MenuItem(action, shape) { action.onClick(); onDismiss() }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Размытие и затемнение всего, что находится за окном диалога (системный blur-behind, Android 12+).
+ * Появляется плавно; если устройство не поддерживает размытие окон, остаётся только затемнение.
+ */
+@Composable
+internal fun DialogWindowBlur(radius: Dp, dim: Float) {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    LaunchedEffect(view, radius, dim) {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        val blurPx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && radius > 0.dp) with(density) { radius.roundToPx() } else 0
+        if (blurPx > 0) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        Animatable(0f).animateTo(1f, tween(220)) {
+            val attrs = window.attributes
+            attrs.dimAmount = dim * value
+            if (blurPx > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) attrs.blurBehindRadius = (blurPx * value).toInt()
+            window.attributes = attrs
         }
     }
 }

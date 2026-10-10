@@ -2,6 +2,7 @@
 
 package app.yougram.feature.calls.ui
 
+import app.yougram.core.ui.shape.rememberAvatarShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -178,7 +179,12 @@ private fun CallRow(call: CallItem, viewModel: CallsViewModel, onClick: () -> Un
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileAvatar(title = call.title, fileId = call.avatarFileId, fileState = viewModel::fileState)
+        FileAvatar(
+            title = call.title,
+            fileId = call.avatarFileId,
+            fileState = viewModel::fileState,
+            shape = rememberAvatarShape(call.chatId),
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(

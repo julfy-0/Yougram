@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.ui.theme.LocalChatBackground
 import android.Manifest
 import android.location.Location
 import android.content.Context
@@ -12,9 +13,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -575,25 +580,27 @@ fun ChatScreen(
         else -> emptyList()
     }
 
-    // Меню «+»: пока оно открыто, весь экран чата плавно размывается (меню — отдельное окно, остаётся чётким).
+    // Меню «+», меню сообщения и запись кружка: пока они открыты, весь экран чата плавно размывается
+    // (сами они — отдельные окна, остаются чёткими).
+    val overlayOpen = attachOpen || actionMessage != null || videoRecorderOpen
     val attachBlur by animateDpAsState(
-        if (attachOpen && !lowRam && !powerSaving) 16.dp else 0.dp,
+        if (overlayOpen && !lowRam && !powerSaving) 16.dp else 0.dp,
         if (lowRam) tween(120) else tween(220),
         label = "attachBlur",
     )
-    Box(Modifier.fillMaxSize().blur(attachBlur)) {
+    Box(Modifier.fillMaxSize().then(if (attachBlur > 0.dp) Modifier.blur(attachBlur) else Modifier)) {
         // Сообщения: прокручиваются под панелями, их размытая копия видна в панелях.
         Box(
             Modifier
                 .fillMaxSize()
                 .backdropSource(backdrop)
-                .background(MaterialTheme.colorScheme.background),
+                .background(LocalChatBackground.current),
         ) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .then(if (bubbleBlurOn) Modifier.backdropSource(bubbleBackdrop) else Modifier)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(LocalChatBackground.current),
             ) {
                 if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
             }
@@ -1153,9 +1160,6 @@ fun ChatScreen(
                                     attachmentTab = 0
                                     emojiSheet = true
                                 }
-                                InputAction(Icons.Filled.Image, "Фото или видео", MaterialTheme.colorScheme.onSurfaceVariant) {
-                                    mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                                }
                             }
                         }
                     }
@@ -1218,9 +1222,38 @@ fun ChatScreen(
                     val releaseHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
                         if (video) videoHold = HOLD_RELEASED else finishVoice()
                     })
+                    // Смена режима голосовое ↔ кружок: кнопка коротко «дрожит» в стороны и даёт вибрацию (как плитки быстрых настроек).
+                    val wiggle = remember { Animatable(0f) }
+                    var modeSeen by remember { mutableStateOf(false) }
+                    LaunchedEffect(videoMode) {
+                        if (!modeSeen) {
+                            modeSeen = true
+                            return@LaunchedEffect
+                        }
+                        haptic.performHapticFeedback(
+                            if (videoMode) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                        )
+                        if (!lowRam) {
+                            wiggle.snapTo(0f)
+                            wiggle.animateTo(
+                                targetValue = 0f,
+                                animationSpec = keyframes {
+                                    durationMillis = 320
+                                    0f at 0
+                                    -1f at 50
+                                    1f at 110
+                                    -0.7f at 170
+                                    0.5f at 225
+                                    -0.25f at 275
+                                    0f at 320
+                                },
+                            )
+                        }
+                    }
                     Surface(
                         modifier = Modifier
                             .size(56.dp)
+                            .graphicsLayer { translationX = wiggle.value * 3.dp.toPx() }
                             .pointerInput(Unit) {
                                 val lockDistance = 64.dp.toPx()
                                 val cancelDistance = 96.dp.toPx()

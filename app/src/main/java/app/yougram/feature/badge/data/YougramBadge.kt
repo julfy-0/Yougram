@@ -18,7 +18,7 @@ object YougramBadge {
     const val CREATOR_USER_ID = 5558165896L
 
     /** Telegram ID помощников проекта (золотой бейдж). */
-    val GOLD_USER_IDS = setOf(7160478740L, 6502820601L)
+    val GOLD_USER_IDS = setOf(7160478740L, 6502820601L, 1472717379L, 5019526707L)
 
     /** Лимит длины bio в Telegram (без Premium). */
     const val BIO_LIMIT = 70

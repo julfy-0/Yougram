@@ -39,7 +39,8 @@ fun CommentsButton(
     modifier: Modifier = Modifier,
     attached: Boolean = true,
 ) {
-    val container = MaterialTheme.colorScheme.secondaryContainer
+    // Полупрозрачная кнопка: сквозь неё виден пузырь поста.
+    val container = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
     val content = MaterialTheme.colorScheme.onSecondaryContainer
     val label = if (count > 0) commentsLabel(count) else "Оставить комментарий"
 

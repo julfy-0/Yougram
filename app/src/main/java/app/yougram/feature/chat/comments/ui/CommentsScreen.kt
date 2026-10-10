@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.comments.ui
 
+import app.yougram.core.ui.theme.LocalChatBackground
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
@@ -99,8 +100,8 @@ fun CommentsScreen(
         if (state.comments.isNotEmpty()) listState.animateScrollToItem(state.comments.lastIndex)
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(LocalChatBackground.current)) {
+        Box(Modifier.fillMaxSize().backdropSource(backdrop).background(LocalChatBackground.current)) {
             when {
                 state.loading && state.comments.isEmpty() -> LoadingIndicator(Modifier.align(Alignment.Center))
                 state.error -> Text(

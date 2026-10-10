@@ -1,5 +1,6 @@
 package app.yougram.feature.contacts.ui
 
+import app.yougram.core.ui.shape.rememberAvatarShape
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -129,7 +130,12 @@ private fun ContactRow(contact: ContactItem, viewModel: ContactsViewModel, onCli
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileAvatar(title = contact.name, fileId = contact.avatarFileId, fileState = viewModel::fileState)
+        FileAvatar(
+            title = contact.name,
+            fileId = contact.avatarFileId,
+            fileState = viewModel::fileState,
+            shape = rememberAvatarShape(contact.id),
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(contact.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
