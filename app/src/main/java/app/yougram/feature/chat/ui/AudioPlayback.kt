@@ -59,6 +59,16 @@ object AudioPlayback {
         if (total > 0) _progress.value = (p.currentPosition.toFloat() / total).coerceIn(0f, 1f)
     }
 
+    /** Перемотка текущего сообщения; [fraction] в 0..1. */
+    fun seekTo(fraction: Float) {
+        val p = player ?: return
+        val total = runCatching { p.duration }.getOrDefault(0)
+        if (total <= 0) return
+        val f = fraction.coerceIn(0f, 1f)
+        runCatching { p.seekTo((f * total).toInt()) }
+        _progress.value = f
+    }
+
     fun stop() {
         runCatching { player?.release() }
         player = null

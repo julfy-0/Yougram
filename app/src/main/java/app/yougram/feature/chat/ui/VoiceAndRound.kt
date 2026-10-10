@@ -11,7 +11,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +30,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import app.yougram.core.ui.component.LoadingIndicator
+import app.yougram.core.ui.component.WavySeekBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,9 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -66,32 +63,10 @@ import kotlinx.coroutines.flow.flowOf
 
 /** Голосовые и кружки меньше этого размера скачиваются сами, как в официальном клиенте. */
 private const val AutoDownloadLimit = 8L shl 20
-private const val WaveBars = 36
 
 private fun formatDuration(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
-/** Раскладывает 5-битную волну TDLib в [bars] столбиков высотой 0..1. */
-private fun decodeWaveform(data: ByteArray?, bars: Int): FloatArray {
-    val total = if (data == null) 0 else data.size * 8 / 5
-    if (data == null || total == 0) return FloatArray(bars) { 0.25f }
-    val values = IntArray(total) { i ->
-        var v = 0
-        for (b in 0 until 5) {
-            val bit = i * 5 + b
-            if (((data[bit / 8].toInt() shr (bit % 8)) and 1) == 1) v = v or (1 shl b)
-        }
-        v
-    }
-    return FloatArray(bars) { k ->
-        val from = k * total / bars
-        val to = minOf(total, maxOf(from + 1, (k + 1) * total / bars))
-        var max = 0
-        for (j in from until to) max = maxOf(max, values[j])
-        (max / 31f).coerceIn(0.12f, 1f)
-    }
-}
-
-/** Голосовое сообщение: кнопка, волна с прогрессом, длительность. */
+/** Голосовое сообщение: кнопка, волнистая полоска воспроизведения, длительность. */
 @Composable
 fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
     val current by AudioPlayback.current.collectAsState()
@@ -110,14 +85,14 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         }
     }
 
-    val bars = remember(media.waveform) { decodeWaveform(media.waveform, WaveBars) }
+    var drag by remember { mutableStateOf<Float?>(null) }
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     val motion = MaterialTheme.motionScheme
     val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
     val iconFadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(100) else motion.defaultEffectsSpec()
     val buttonCorner by animateDpAsState(if (active) 22.dp else 14.dp, cornerSpec, label = "voiceButtonCorner")
     val played = MaterialTheme.colorScheme.primary
-    val rest = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    val rest = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
     Row(
         Modifier.width(240.dp).padding(horizontal = 8.dp, vertical = 6.dp),
@@ -156,20 +131,18 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Canvas(Modifier.width(150.dp).height(28.dp)) {
-                val step = size.width / WaveBars
-                val barWidth = step * 0.6f
-                val shown = if (isCurrent) progress else 0f
-                bars.forEachIndexed { i, level ->
-                    val h = size.height * level
-                    drawRoundRect(
-                        color = if ((i + 0.5f) / WaveBars <= shown) played else rest,
-                        topLeft = Offset(i * step, (size.height - h) / 2f),
-                        size = Size(barWidth, h),
-                        cornerRadius = CornerRadius(barWidth / 2f),
-                    )
-                }
-            }
+            WavySeekBar(
+                progress = drag ?: if (isCurrent) progress else 0f,
+                modifier = Modifier.width(150.dp),
+                playing = active && drag == null,
+                color = played,
+                trackColor = rest,
+                onSeek = if (isCurrent) ({ drag = it }) else null,
+                onSeekFinished = {
+                    drag?.let(AudioPlayback::seekTo)
+                    drag = null
+                },
+            )
             Text(
                 formatDuration(media.duration),
                 style = MaterialTheme.typography.labelSmall,

@@ -27,8 +27,6 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
@@ -40,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import app.yougram.core.settings.GlassSettings
+import app.yougram.core.ui.component.WavySeekBar
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
 import app.yougram.core.ui.glass.rememberBackdropState
@@ -341,19 +340,17 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                     ) {
                         val fraction = if (dragging) dragFraction
                         else if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-                        Slider(
-                            value = fraction,
-                            onValueChange = { dragging = true; dragFraction = it },
-                            onValueChangeFinished = {
+                        WavySeekBar(
+                            progress = fraction,
+                            playing = playing && !dragging,
+                            color = Color.White,
+                            trackColor = Color.White.copy(alpha = 0.3f),
+                            onSeek = { dragging = true; dragFraction = it },
+                            onSeekFinished = {
                                 seekTo((dragFraction * duration).toInt())
                                 dragging = false
                                 poke++
                             },
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-                            ),
                         )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(formatTime((fraction * duration).toInt()), color = Color.White, fontSize = 13.sp)
