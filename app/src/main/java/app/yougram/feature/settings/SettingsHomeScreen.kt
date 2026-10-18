@@ -157,7 +157,6 @@ enum class SettingsPage(val title: String) {
     MessageFilters("Фильтры сообщений"),
     SharedFilters("Общие фильтры"),
     ShadowBan("Теневой бан"),
-    Banner("Баннер профиля"),
     Premium("Telegram Premium"),
     Stars("Звёзды Telegram"),
     Business("Telegram для бизнеса"),
@@ -172,7 +171,7 @@ enum class SettingsPage(val title: String) {
             Blocked, Websites -> Privacy
             DataStorage, Language, PowerSaving -> SystemHub
             CreateGroup, CreateChannel -> CreateHub
-            Ghost, Spy, MessageFilters, Banner -> Extras
+            Ghost, Spy, MessageFilters -> Extras
             SharedFilters, ShadowBan -> MessageFilters
             Premium, Stars, Business -> TelegramHub
             Update -> Home
@@ -191,6 +190,7 @@ fun SettingsHomeScreen(
     updater: AppUpdater,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
+    onOpenProfile: (Long) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val update by updater.state.collectAsState()
@@ -244,6 +244,7 @@ fun SettingsHomeScreen(
             onOpenAvatar = { if (state.avatars.isNotEmpty()) showAvatars = true else changeAvatar() },
             onChangeAvatar = changeAvatar,
             onOpenAccountManager = openAccountManager,
+            onOpenProfile = { state.profile?.id?.let(onOpenProfile) },
         )
 
         // «О приложении» и обновление — сразу под профилем, в одной группе.
@@ -334,17 +335,17 @@ internal class HomeEntry(
 
 /** Все вкладки главного экрана настроек; [devices] и [language] — значения справа у «Устройства» и «Язык». */
 internal fun homeEntries(devices: String?, language: String?): List<HomeEntry> = listOf(
-            HomeEntry("appearance", "Внешний вид и чаты", "Тема, панели, настройки чатов, папки", Icons.Filled.Tune, null, SettingsPage.Appearance),
-            HomeEntry("client", "Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
-            HomeEntry("plugins", "Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
-            HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
-            HomeEntry("security", "Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
-            HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, devices, SettingsPage.Devices),
-            HomeEntry("create", "Создать / Добавить", "Группа, канал, аккаунт", Icons.Filled.Add, null, SettingsPage.CreateHub),
-            HomeEntry("archive", "Архивы", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
-            HomeEntry("notifications", "Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
-            HomeEntry("system", "Система", "Данные и память, язык, энергосбережение", Icons.Filled.Settings, language, SettingsPage.SystemHub),
-            HomeEntry("telegram", "Telegram", "Premium, Звёзды, Бизнес, подарки, помощь", Icons.Filled.Star, null, SettingsPage.TelegramHub),
+    HomeEntry("appearance", "Внешний вид и чаты", "Тема, панели, настройки чатов, папки", Icons.Filled.Tune, null, SettingsPage.Appearance),
+    HomeEntry("client", "Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
+    HomeEntry("plugins", "Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
+    HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
+    HomeEntry("security", "Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
+    HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, devices, SettingsPage.Devices),
+    HomeEntry("create", "Создать / Добавить", "Группа, канал, аккаунт", Icons.Filled.Add, null, SettingsPage.CreateHub),
+    HomeEntry("archive", "Архивы", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
+    HomeEntry("notifications", "Уведомления", "Звуки, сигналы, бейджи", Icons.Filled.Notifications, null, SettingsPage.Notifications),
+    HomeEntry("system", "Система", "Данные и память, язык, энергосбережение", Icons.Filled.Settings, language, SettingsPage.SystemHub),
+    HomeEntry("telegram", "Telegram", "Premium, Звёзды, Бизнес, подарки, помощь", Icons.Filled.Star, null, SettingsPage.TelegramHub),
 )
 
 @Composable
@@ -362,6 +363,7 @@ private fun ProfileHeader(
     onOpenAvatar: () -> Unit,
     onChangeAvatar: () -> Unit,
     onOpenAccountManager: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val profile = state.profile
     val accounts by accountManager.accounts.collectAsState()
@@ -378,25 +380,23 @@ private fun ProfileHeader(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                Modifier
-                    .size(116.dp)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button, onClickLabel = "Открыть аватар", onClick = onOpenAvatar),
-                contentAlignment = Alignment.Center,
-            ) {
+            // Родитель не обрезаем: иначе бейдж камеры в углу срезается формой аватара.
+            Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                // Аватар целиком заполняет «звезду» (Cookie9Sided), без ореола и круглой вставки.
                 Box(
                     Modifier
                         .matchParentSize()
                         .clip(MaterialShapes.Cookie9Sided.toShape())
-                        .background(scheme.primary.copy(alpha = 0.22f)),
-                )
-                FileAvatar(
-                    title = profile?.name.orEmpty(),
-                    fileId = profile?.avatarFileId,
-                    fileState = viewModel::fileState,
-                    size = 96.dp,
-                )
+                        .clickable(role = Role.Button, onClickLabel = "Открыть аватар", onClick = onOpenAvatar),
+                ) {
+                    FileAvatar(
+                        title = profile?.name.orEmpty(),
+                        fileId = profile?.avatarFileId,
+                        fileState = viewModel::fileState,
+                        size = 116.dp,
+                        shape = MaterialShapes.Cookie9Sided.toShape(),
+                    )
+                }
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
@@ -420,7 +420,9 @@ private fun ProfileHeader(
                     style = MaterialTheme.typography.headlineSmallEmphasized,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
                 )
                 if (premium) {
                     Spacer(Modifier.width(8.dp))
@@ -449,176 +451,23 @@ private fun ProfileHeader(
                 )
             }
 
-            Surface(
+            // Кнопка Expressive (Medium): форма перетекает при нажатии.
+            androidx.compose.material3.Button(
                 onClick = onOpenAccountManager,
-                modifier = Modifier.padding(top = 16.dp).heightIn(min = 48.dp),
-                shape = CircleShape,
-                color = scheme.primary,
-                contentColor = scheme.onPrimary,
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .heightIn(min = androidx.compose.material3.ButtonDefaults.MediumContainerHeight),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                contentPadding = androidx.compose.material3.ButtonDefaults
+                    .contentPaddingFor(androidx.compose.material3.ButtonDefaults.MediumContainerHeight),
             ) {
-                Row(
-                    Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.labelLargeEmphasized)
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-    }
-}
-
-/** Содержимое менеджера аккаунтов; контейнер (стеклянная панель) задаёт MainScreen. */
-@Composable
-fun AccountManagerContent(
-    accountManager: AccountManager,
-    fileState: (Int) -> Flow<FileState>,
-    onDismiss: () -> Unit,
-) {
-    val accounts by accountManager.accounts.collectAsState()
-    val activeId by accountManager.activeAccountId.collectAsState()
-    var removeTarget by remember { mutableStateOf<AccountEntry?>(null) }
-
-    run {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Управление аккаунтами",
-                    style = MaterialTheme.typography.titleLargeEmphasized,
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Закрыть")
-                }
-            }
-
-            Text(
-                text = "Переключайтесь между аккаунтами или добавьте новый:",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.heightIn(max = 340.dp),
-            ) {
-                items(accounts, key = { it.id }) { acc ->
-                    val isActive = acc.id == activeId
-                    Surface(
-                        onClick = {
-                            if (!isActive) {
-                                onDismiss()
-                                accountManager.switchAndRestart(acc.id)
-                            }
-                        },
-                        shape = MaterialTheme.shapes.large,
-                        // Полупрозрачные плитки: блюр панели виден и под ними.
-                        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            FileAvatar(
-                                title = acc.name.ifEmpty { "Аккаунт" },
-                                // id файла принадлежит базе своего аккаунта: у неактивных аватарку показать нельзя.
-                                fileId = if (isActive) acc.avatarFileId else null,
-                                fileState = fileState,
-                                size = 44.dp,
-                            )
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = acc.name.ifEmpty { "Аккаунт" },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (acc.phone.isNotEmpty() || !acc.username.isNullOrEmpty()) {
-                                    Text(
-                                        text = listOfNotNull(acc.phone.takeIf { it.isNotEmpty() }, acc.username?.let { "@$it" }).joinToString(" • "),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                            if (isActive) {
-                                Icon(
-                                    Icons.Filled.Check,
-                                    contentDescription = "Активен",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            } else if (accounts.size > 1) {
-                                IconButton(
-                                    onClick = { removeTarget = acc },
-                                ) {
-                                    Icon(
-                                        Icons.Filled.DeleteOutline,
-                                        contentDescription = "Удалить аккаунт",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            Button(
-                onClick = {
-                    onDismiss()
-                    accountManager.addAndRestart()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = CircleShape,
-            ) {
-                Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Добавить аккаунт", style = MaterialTheme.typography.titleMedium)
+                Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.titleMediumEmphasized)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
             }
-
-            Spacer(Modifier.height(16.dp))
         }
-    }
-
-    removeTarget?.let { acc ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text("Убрать аккаунт?") },
-            text = {
-                Text(
-                    "«${acc.name.ifEmpty { "Аккаунт" }}» будет убран из списка, локальные данные удалятся. " +
-                            "Сеанс в Telegram останется активным, его можно закрыть в разделе «Устройства».",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    accountManager.removeAccount(acc.id)
-                    removeTarget = null
-                }) { Text("Убрать") }
-            },
-            dismissButton = { TextButton(onClick = { removeTarget = null }) { Text("Отмена") } },
-        )
     }
 }
 

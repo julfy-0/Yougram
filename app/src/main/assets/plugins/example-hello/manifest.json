@@ -2,10 +2,25 @@
   "id": "com.yougram.example.hello",
   "name": "Hello World",
   "version": "2.0.0",
-  "api": "1.0",
+  "api": "2.0",
   "author": "Yougram Example",
-  "description": "Встроенный пример C++ плагина (SDK 2): команда /ping отвечает pong.",
+  "description": "Встроенный пример C++ плагина (SDK 2.0): команда /ping отвечает текстом из настроек.",
   "entry": "libyg_example_hello.so",
   "bundled": true,
-  "permissions": ["chat.send", "hooks"]
+  "priority": 0,
+  "permissions": ["chat.send", "hooks"],
+  "settings": [
+    {
+      "key": "pong_text",
+      "type": "text",
+      "title": "Текст ответа на /ping",
+      "default": "pong"
+    },
+    {
+      "key": "reply_to_command",
+      "type": "switch",
+      "title": "Отвечать на сообщение с командой",
+      "default": true
+    }
+  ]
 }

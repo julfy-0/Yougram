@@ -1,5 +1,7 @@
 package app.yougram.feature.chat.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.mutableFloatStateOf
 import android.graphics.BitmapFactory
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
@@ -101,7 +103,7 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
     val active = isCurrent && playing
 
     LaunchedEffect(media.fileId) {
-        if (media.size in 1..AutoDownloadLimit) viewModel.download(media.fileId, 8)
+        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8)
     }
     LaunchedEffect(active) {
         while (active) {
@@ -189,13 +191,17 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         media.previewFileId?.let { viewModel.download(it, 16) }
     }
     LaunchedEffect(media.fileId) {
-        if (media.size in 1..AutoDownloadLimit) viewModel.download(media.fileId, 8)
+        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8)
     }
     val mini = remember(media.miniThumb) {
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
     val previewBitmap = rememberFileBitmap(preview.path, 512)
     var playing by remember { mutableStateOf(false) }
+    // Прогресс воспроизведения 0..1 для кольца вокруг кружка.
+    var playProgress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(playing) { if (!playing) playProgress = 0f }
+    val shownPlayProgress by animateFloatAsState(playProgress, tween(120, easing = LinearEasing), label = "roundPlayProgress")
 
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     val motion = MaterialTheme.motionScheme
@@ -207,13 +213,18 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
 
     Box(contentAlignment = Alignment.Center) {
         if (playing || full.active) {
-            app.yougram.core.ui.component.WavyCircleRing(
+            // Кольцо = прогресс: при воспроизведении — сколько проиграно, при загрузке — сколько скачано.
+            // Пройденная часть волнистая, оставшаяся — ровная дорожка.
+            app.yougram.core.ui.component.CircularWavyProgressIndicator(
+                progress = {
+                    if (playing) shownPlayProgress
+                    else if (full.total > 0) full.downloaded.toFloat() / full.total else 0f
+                },
                 modifier = Modifier.size(214.dp),
-                mainArcColor = MaterialTheme.colorScheme.primary,
-                wavySegmentColor = MaterialTheme.colorScheme.tertiary,
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 4.dp,
-                waveAmplitude = 5.dp,
-                animating = true,
+                amplitude = 2.dp,
+                waves = 16,
             )
         }
         Box(
@@ -238,7 +249,7 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
             previewBitmap?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
             val path = full.path
             if (playing && path != null) {
-                RoundVideoPlayer(path = path, onEnded = { playing = false })
+                RoundVideoPlayer(path = path, onProgress = { playProgress = it }, onEnded = { playing = false })
             }
             Box(
                 Modifier
@@ -283,10 +294,26 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
 }
 
 @Composable
-private fun RoundVideoPlayer(path: String, onEnded: () -> Unit) {
+private fun RoundVideoPlayer(path: String, onProgress: (Float) -> Unit, onEnded: () -> Unit) {
     val player = remember(path) { MediaPlayer() }
+    var released by remember(player) { mutableStateOf(false) }
     DisposableEffect(player) {
-        onDispose { runCatching { player.release() } }
+        onDispose {
+            released = true
+            runCatching { player.release() }
+        }
+    }
+    // Опрашиваем позицию воспроизведения для кольца вокруг кружка.
+    LaunchedEffect(player) {
+        while (true) {
+            kotlinx.coroutines.delay(50)
+            if (released) break
+            runCatching {
+                if (player.isPlaying && player.duration > 0) {
+                    onProgress((player.currentPosition.toFloat() / player.duration).coerceIn(0f, 1f))
+                }
+            }
+        }
     }
     AndroidView(
         modifier = Modifier.fillMaxSize(),

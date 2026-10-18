@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import app.yougram.core.ui.component.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,10 @@ import app.yougram.core.ui.component.deleteCustomBanner
 import app.yougram.core.ui.component.saveCustomBanner
 import app.yougram.feature.badge.data.YougramBanner
 import app.yougram.feature.settings.component.SectionLabel
+import app.yougram.feature.settings.component.SettingGroup
+import app.yougram.feature.settings.component.SwitchRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VerifiedUser
 import app.yougram.feature.settings.component.SettingsPageColumn
 import kotlinx.coroutines.launch
 
@@ -80,7 +85,50 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
         }
     }
 
+    val badgeStyle by settings.badgeStyle.collectAsState()
+
     SettingsPageColumn(contentPadding) {
+        SettingGroup {
+            item {
+                SwitchRow(
+                    "Значок Yougram",
+                    badge,
+                    { v -> settings.setBadge(v) },
+                    subtitle = "Ставит метку в «О себе»: другие пользователи Yougram увидят значок у вашего имени",
+                    icon = Icons.Filled.VerifiedUser,
+                )
+            }
+        }
+        SectionLabel("Значок рядом с именем")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            repeat(4) { style ->
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .then(
+                            if (badgeStyle == style) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
+                            else Modifier,
+                        )
+                        .clickable { settings.setBadgeStyle(style) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    app.yougram.feature.badge.ui.BadgeStylePreview(style, Modifier.size(40.dp))
+                    Text(
+                        app.yougram.feature.badge.ui.BadgeStyleNames[style],
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+        Text(
+            "Другие пользователи Yougram увидят этот значок рядом с вашим именем. Для остальных приложений он невидим.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+
         if (customVersion > 0L) {
             CustomBannerImage(customVersion, Modifier.fillMaxWidth().height(140.dp))
         } else {

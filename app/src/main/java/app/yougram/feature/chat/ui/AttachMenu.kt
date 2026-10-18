@@ -39,6 +39,12 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Poll
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
+import androidx.compose.material3.FloatingActionButtonMenuScope
+import androidx.compose.material3.ToggleFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +64,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.MutableTransitionState
 import app.yougram.core.ui.component.TextButton
 import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
@@ -76,15 +88,12 @@ private const val MaxOption = 100
 private class AttachAction(
     val icon: ImageVector,
     val label: String,
-    val container: Color,
-    val content: Color,
     val onClick: () -> Unit,
 )
 
 /**
- * Меню кнопки «+» в стиле Expressive: цветные «таблетки» действий, которые по очереди выезжают
- * пружинным движением (как пункты FAB Menu).
- * TODO: заменить на FloatingActionButtonMenu / FloatingActionButtonMenuItem, когда подтвердим их наличие в material3 1.4.0.
+ * Меню кнопки «+» в том же стиле, что и меню сообщения: окно на весь экран с размытием фона,
+ * сгруппированный список с крупными внешними и малыми внутренними скруглениями.
  */
 @Composable
 fun AttachMenu(
@@ -98,55 +107,60 @@ fun AttachMenu(
     onRound: () -> Unit,
 ) {
     if (!expanded) return
-    val c = MaterialTheme.colorScheme
-    val actions = listOf(
-        AttachAction(Icons.Filled.AttachFile, "Файл", c.primaryContainer, c.onPrimaryContainer, onFile),
-        AttachAction(Icons.Filled.Image, "Фото или видео", c.primaryContainer, c.onPrimaryContainer, onMedia),
-        AttachAction(Icons.Filled.Poll, "Опрос", c.secondaryContainer, c.onSecondaryContainer, onPoll),
-        AttachAction(Icons.Filled.LocationOn, "Геопозиция", c.secondaryContainer, c.onSecondaryContainer, onLocation),
-        AttachAction(Icons.Filled.Mic, "Голосовое сообщение", c.tertiaryContainer, c.onTertiaryContainer, onVoice),
-        AttachAction(Icons.Filled.Videocam, "Видеосообщение (кружок)", c.tertiaryContainer, c.onTertiaryContainer, onRound),
-    )
-    Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            actions.forEachIndexed { index, action ->
-                AttachItem(index, action) { onDismiss(); action.onClick() }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AttachItem(index: Int, action: AttachAction, onClick: () -> Unit) {
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     val motion = MaterialTheme.motionScheme
     val fadeSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(120) else motion.defaultEffectsSpec()
-    val slideSpec: FiniteAnimationSpec<IntOffset> = if (lowTier) tween(150) else motion.defaultSpatialSpec()
-    var shown by remember { mutableStateOf(lowTier) }
-    LaunchedEffect(Unit) {
-        if (!shown) {
-            delay(index * 35L)
-            shown = true
-        }
-    }
-    AnimatedVisibility(
-        visible = shown,
-        enter = fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 2 },
+    val scaleSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(150) else motion.defaultSpatialSpec()
+    val appear = remember { MutableTransitionState(false).apply { targetState = true } }
+    val actions = listOf(
+        AttachAction(Icons.Filled.AttachFile, "Файл", onFile),
+        AttachAction(Icons.Filled.Image, "Фото или видео", onMedia),
+        AttachAction(Icons.Filled.Poll, "Опрос", onPoll),
+        AttachAction(Icons.Filled.LocationOn, "Геопозиция", onLocation),
+        AttachAction(Icons.Filled.Mic, "Голосовое сообщение", onVoice),
+        AttachAction(Icons.Filled.Videocam, "Видеосообщение (кружок)", onRound),
+    )
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        Surface(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = CircleShape,
-            color = action.container,
-            contentColor = action.content,
+        if (!lowTier) DialogWindowBlur(radius = 28.dp, dim = 0.30f) else DialogWindowBlur(radius = 0.dp, dim = 0.45f)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            AnimatedVisibility(
+                visibleState = appear,
+                enter = fadeIn(fadeSpec) + scaleIn(scaleSpec, initialScale = 0.85f),
             ) {
-                Icon(action.icon, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(action.label, style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    actions.forEachIndexed { index, action ->
+                        val shape = RoundedCornerShape(
+                            topStart = if (index == 0) 24.dp else 6.dp,
+                            topEnd = if (index == 0) 24.dp else 6.dp,
+                            bottomStart = if (index == actions.lastIndex) 24.dp else 6.dp,
+                            bottomEnd = if (index == actions.lastIndex) 24.dp else 6.dp,
+                        )
+                        Surface(
+                            onClick = { onDismiss(); action.onClick() },
+                            shape = shape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                Modifier.heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(action.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                Spacer(Modifier.width(16.dp))
+                                Text(action.label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

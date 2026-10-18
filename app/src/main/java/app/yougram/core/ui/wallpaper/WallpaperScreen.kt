@@ -70,6 +70,21 @@ fun WallpaperDialog(onDismiss: () -> Unit) {
 
 @Composable
 fun WallpaperScreen(onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+            Text("Обои чата", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+            WallpaperContent()
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** Содержимое выбора обоев без собственной прокрутки и шапки: встраивается в «Настройки → Внешний вид». */
+@Composable
+fun WallpaperContent() {
     val context = LocalContext.current
     val store = remember { WallpaperStore.get(context) }
     val config by store.config.collectAsState()
@@ -83,35 +98,28 @@ fun WallpaperScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
-            Text("Обои чата", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+    Column(Modifier.fillMaxWidth()) {
+        Preview(config)
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Цвета", "Узоры", "Фото").forEachIndexed { i, title ->
+                FilterChip(selected = tab == i, onClick = { tab = i }, label = { Text(title) })
+            }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            Preview(config)
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Цвета", "Узоры", "Фото").forEachIndexed { i, title ->
-                    FilterChip(selected = tab == i, onClick = { tab = i }, label = { Text(title) })
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            when (tab) {
-                0 -> PresetsTab(config, store)
-                1 -> PatternsTab(config, store)
-                else -> PhotoTab(config, store, onPick = {
-                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                })
-            }
-            Spacer(Modifier.height(16.dp))
-            if (config.kind != WallpaperKind.None) {
-                OutlinedButton(
-                    onClick = { store.update { it.copy(kind = WallpaperKind.None) } },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Убрать обои") }
-            }
-            Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(14.dp))
+        when (tab) {
+            0 -> PresetsTab(config, store)
+            1 -> PatternsTab(config, store)
+            else -> PhotoTab(config, store, onPick = {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            })
+        }
+        Spacer(Modifier.height(16.dp))
+        if (config.kind != WallpaperKind.None) {
+            OutlinedButton(
+                onClick = { store.update { it.copy(kind = WallpaperKind.None) } },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Убрать обои") }
         }
     }
 }

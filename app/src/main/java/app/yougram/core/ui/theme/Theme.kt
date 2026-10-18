@@ -43,6 +43,18 @@ val Accents = listOf(
     Accent("Оранжевый", Color(0xFFF57C00)),
     Accent("Красный", Color(0xFFE53935)),
     Accent("Фиолетовый", Color(0xFF8E24AA)),
+    Accent("Розовый", Color(0xFFEC407A)),
+    Accent("Малиновый", Color(0xFFC2185B)),
+    Accent("Индиго", Color(0xFF3949AB)),
+    Accent("Голубой", Color(0xFF039BE5)),
+    Accent("Мятный", Color(0xFF26A69A)),
+    Accent("Лаймовый", Color(0xFF9E9D24)),
+    Accent("Жёлтый", Color(0xFFF9A825)),
+    Accent("Янтарный", Color(0xFFFF8F00)),
+    Accent("Коралловый", Color(0xFFFF7043)),
+    Accent("Коричневый", Color(0xFF8D6E63)),
+    Accent("Сланцевый", Color(0xFF607D8B)),
+    Accent("Лавандовый", Color(0xFF7E57C2)),
 )
 
 /**
@@ -101,7 +113,11 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     val base = if (settings.dynamic) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
-        accentScheme(Accents[settings.accent.coerceIn(Accents.indices)].color, dark)
+        accentScheme(
+            if (settings.customAccent != 0) Color(settings.customAccent)
+            else Accents[settings.accent.coerceIn(Accents.indices)].color,
+            dark,
+        )
     }
     // Порядок важен: сначала фон/текст тёмной темы, затем уровни surfaceContainer*, затем контраст on*-цветов.
     val schemes = remember(base, dark, settings.dynamic) {

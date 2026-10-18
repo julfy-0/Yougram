@@ -19,7 +19,6 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,6 +130,8 @@ fun VideoNoteRecorderDialog(
                 boundCamera = cameraProvider.bindToLifecycle(lifecycleOwner, selector, group)
                 zoom = 0f
                 videoCapture = capture
+            }.onFailure {
+                android.widget.Toast.makeText(context, "Не удалось включить камеру", android.widget.Toast.LENGTH_SHORT).show()
             }
         }, executor)
     }
@@ -158,23 +159,61 @@ fun VideoNoteRecorderDialog(
         }
     }
 
+    /** Склеивает куски (до/после переворота камеры) и отправляет результат. */
+    fun deliver(segments: List<File>, startedAt: Long) {
+        val elapsed = ((System.currentTimeMillis() - startedAt) / 1000).toInt().coerceAtLeast(1)
+        fun fail() {
+            segments.forEach { it.delete() }
+            onDismiss()
+        }
+        val valid = segments.filter { it.exists() && it.length() > 0 }
+        if (valid.isEmpty() || elapsed < 1) return fail()
+        if (valid.size == 1) {
+            onSend(valid[0].absolutePath, elapsed.coerceAtMost(MAX_SECONDS), squareSide(valid[0]))
+            onDismiss()
+            return
+        }
+        val out = File(context.cacheDir, "round_${System.currentTimeMillis()}_m.mp4")
+        mergeSegments(context, valid, out) { ok ->
+            segments.forEach { it.delete() }
+            if (ok && out.length() > 0) {
+                onSend(out.absolutePath, elapsed.coerceAtMost(MAX_SECONDS), squareSide(out))
+                onDismiss()
+            } else {
+                out.delete()
+                android.widget.Toast.makeText(context, "Не удалось склеить запись", android.widget.Toast.LENGTH_SHORT).show()
+                onDismiss()
+            }
+        }
+    }
+
+    handle.pendingDeliver = { segs -> deliver(segs, handle.startedAt) }
+
     fun start() {
         val capture = videoCapture ?: return
         val file = File(context.cacheDir, "round_${System.currentTimeMillis()}.mp4")
-        val startedAt = System.currentTimeMillis()
+        if (handle.segments.isEmpty()) handle.startedAt = System.currentTimeMillis()
         val recording = capture.output
             .prepareRecording(context, FileOutputOptions.Builder(file).build())
             .withAudioEnabled()
             .start(executor) { event ->
                 if (event is VideoRecordEvent.Finalize) {
-                    val elapsed = ((System.currentTimeMillis() - startedAt) / 1000).toInt().coerceAtLeast(1)
-                    val ok = !event.hasError() && elapsed >= 1 && file.length() > 0
-                    if (handle.sendOnFinalize && ok) {
-                        onSend(file.absolutePath, elapsed.coerceAtMost(MAX_SECONDS), squareSide(file))
-                        onDismiss()
+                    if (!event.hasError() && file.length() > 0) handle.segments.add(file) else file.delete()
+                    if (handle.switching && !handle.finishRequested) {
+                        // Переворот камеры посреди записи: кусок закрыт, переключаем объектив и продолжим.
+                        handle.recording = null
+                        handle.resumeAfterBind = true
+                        front = !front
+                        onCameraUsed(front)
                     } else {
-                        file.delete()
-                        if (handle.sendOnFinalize) onDismiss() // слишком короткая запись при отпускании
+                        handle.switching = false
+                        val segs = handle.segments.toList()
+                        handle.segments.clear()
+                        if (handle.sendOnFinalize) deliver(segs, handle.startedAt)
+                        else {
+                            segs.forEach { it.delete() }
+                            // слишком короткая запись при отпускании: окно всё равно закрываем
+                        }
                     }
                 }
             }
@@ -182,13 +221,22 @@ fun VideoNoteRecorderDialog(
         recordingState = true
     }
 
+    // После переворота камеры в записи — продолжаем новым куском, как только новая камера готова.
+    LaunchedEffect(videoCapture) {
+        if (handle.resumeAfterBind && videoCapture != null) {
+            handle.resumeAfterBind = false
+            handle.switching = false
+            start()
+        }
+    }
+
     // Запись зажатием: стартуем, как только камера готова; дальше управляет состояние hold.
     LaunchedEffect(videoCapture) {
-        if (autoStart && videoCapture != null && !recordingState && hold != HOLD_RELEASED && hold != HOLD_CANCELLED) start()
+        if (autoStart && videoCapture != null && !recordingState && !handle.resumeAfterBind && hold != HOLD_RELEASED && hold != HOLD_CANCELLED) start()
     }
     LaunchedEffect(hold) {
         when (hold) {
-            HOLD_RELEASED -> if (handle.recording != null) handle.finish(send = true) else onDismiss()
+            HOLD_RELEASED -> if (handle.recording != null || handle.switching) handle.finish(send = true) else onDismiss()
             HOLD_CANCELLED -> {
                 handle.finish(send = false)
                 onDismiss()
@@ -209,19 +257,10 @@ fun VideoNoteRecorderDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    app.yougram.core.ui.component.WavyCircleRing(
-                        modifier = Modifier.size(298.dp),
-                        mainArcColor = if (recordingState) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.8f),
-                        wavySegmentColor = if (recordingState) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                        strokeWidth = 4.dp,
-                        waveAmplitude = 5.dp,
-                        animating = true,
-                    )
                     Box(
                         Modifier
                             .size(280.dp)
-                            .clip(CircleShape)
-                            .border(2.dp, if (recordingState) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.4f), CircleShape),
+                            .clip(CircleShape),
                     ) {
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
@@ -281,9 +320,14 @@ fun VideoNoteRecorderDialog(
                     }
                     RoundButton(
                         Icons.Filled.FlipCameraAndroid, "Сменить камеру",
-                        Color.White.copy(alpha = if (recordingState) 0.06f else 0.18f),
+                        Color.White.copy(alpha = 0.18f),
                     ) {
-                        if (!recordingState) {
+                        if (recordingState) {
+                            if (!handle.switching && handle.recording != null) {
+                                handle.switching = true
+                                runCatching { handle.recording?.stop() }
+                            }
+                        } else {
                             front = !front
                             onCameraUsed(front)
                         }
@@ -312,13 +356,65 @@ private fun RoundButton(
 private class RecordingHandle {
     var recording: Recording? = null
     var sendOnFinalize: Boolean = false
+    val segments = mutableListOf<File>()
+    var startedAt: Long = 0L
+    var switching: Boolean = false
+    var finishRequested: Boolean = false
+    var resumeAfterBind: Boolean = false
 
     fun finish(send: Boolean) {
-        val r = recording ?: return
-        recording = null
         sendOnFinalize = send
+        val r = recording
+        if (r == null) {
+            // Идёт переворот камеры: запись между кусками — завершаем сразу.
+            if (switching || resumeAfterBind) {
+                finishRequested = true
+                switching = false
+                resumeAfterBind = false
+                val segs = segments.toList()
+                segments.clear()
+                if (!send) segs.forEach { it.delete() } else pendingDeliver?.invoke(segs)
+            }
+            return
+        }
+        recording = null
+        if (switching) finishRequested = true
         runCatching { r.stop() }
     }
+
+    var pendingDeliver: ((List<File>) -> Unit)? = null
+}
+
+/** Склейка кусков записи в один mp4 (Media3 Transformer сам выравнивает поворот и размер). */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun mergeSegments(context: Context, files: List<File>, out: File, onDone: (Boolean) -> Unit) {
+    runCatching {
+        val sequence = androidx.media3.transformer.EditedMediaItemSequence.Builder().apply {
+            files.forEach {
+                addItem(
+                    androidx.media3.transformer.EditedMediaItem.Builder(
+                        androidx.media3.common.MediaItem.fromUri(android.net.Uri.fromFile(it)),
+                    ).build(),
+                )
+            }
+        }.build()
+        val composition = androidx.media3.transformer.Composition.Builder(sequence).build()
+        androidx.media3.transformer.Transformer.Builder(context)
+            .addListener(object : androidx.media3.transformer.Transformer.Listener {
+                override fun onCompleted(
+                    composition: androidx.media3.transformer.Composition,
+                    exportResult: androidx.media3.transformer.ExportResult,
+                ) = onDone(true)
+
+                override fun onError(
+                    composition: androidx.media3.transformer.Composition,
+                    exportResult: androidx.media3.transformer.ExportResult,
+                    exportException: androidx.media3.transformer.ExportException,
+                ) = onDone(false)
+            })
+            .build()
+            .start(composition, out.absolutePath)
+    }.onFailure { onDone(false) }
 }
 
 /** Реальная сторона квадрата готового ролика (после обрезки). */

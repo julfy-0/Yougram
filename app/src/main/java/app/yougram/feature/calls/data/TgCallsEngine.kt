@@ -7,15 +7,13 @@ import dev.g000sha256.tdl.dto.CallProtocol
 import dev.g000sha256.tdl.dto.CallServerTypeTelegramReflector
 import dev.g000sha256.tdl.dto.CallServerTypeWebrtc
 import dev.g000sha256.tdl.dto.CallStateReady
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.telegram.messenger.voip.Instance
 import org.telegram.messenger.voip.NativeInstance
+import org.telegram.messenger.voip.ProxyVideoSink
 import org.telegram.messenger.voip.VideoCapturerDevice
-import org.webrtc.Camera2Capturer
-import org.webrtc.Camera2Enumerator
-import org.webrtc.CameraVideoCapturer
-import org.webrtc.CapturerObserver
-import org.webrtc.SurfaceTextureHelper
-import org.webrtc.VideoFrame
 import org.webrtc.VideoSink
 import java.io.File
 import java.util.concurrent.Executors
@@ -32,14 +30,22 @@ class TgCallsEngine(context: Context) : CallEngine {
         val lock = Any()
         val pending = ArrayDeque<ByteArray>()
 
-        @Volatile var instance: NativeInstance? = null
-        @Volatile var active = false
+        /** Любой вызов в нативный экземпляр делается под [lock]: после [release] он уже недоступен. */
+        var instance: NativeInstance? = null
+        var active = false
 
         /** Только с рабочего потока. */
         fun release() {
-            val i = instance ?: return
-            instance = null
-            synchronized(lock) { active = false; pending.clear() }
+            val i: NativeInstance?
+            synchronized(lock) {
+                i = instance
+                instance = null
+                active = false
+                pending.clear()
+            }
+            if (i == null) return
+            // Камеру гасим до остановки экземпляра: иначе поздний кадр уйдёт в уже освобождённый источник.
+            runCatching { VideoCapturerDevice.releaseAllCameras() }
             runCatching { i.stop() }
         }
     }
@@ -50,15 +56,46 @@ class TgCallsEngine(context: Context) : CallEngine {
 
     @Volatile private var session: Session? = null
     @Volatile private var muted = false
-    @Volatile private var cameraCapturer: CameraVideoCapturer? = null
-    @Volatile private var surfaceTextureHelper: SurfaceTextureHelper? = null
+
+    /** Камера включена пользователем: применяется и после старта движка, если нажали раньше. */
+    @Volatile private var cameraWanted = false
+    @Volatile private var cameraFront = true
+
+    private val _frontCamera = MutableStateFlow(true)
+
+    /** Работает фронтальная камера: для неё превью зеркалится. */
+    val frontCamera: StateFlow<Boolean> = _frontCamera.asStateFlow()
+
+    private val _remoteVideoActive = MutableStateFlow(false)
+
+    /** Собеседник реально передаёт видео: пока false, на экране остаётся аватар, а не чёрная поверхность. */
+    val remoteVideoActive: StateFlow<Boolean> = _remoteVideoActive.asStateFlow()
+
+    /** Постоянные приёмники кадров: нативный код держит их весь звонок, экран подключается к ним по необходимости. */
+    private val remoteProxy = ProxyVideoSink()
+    private val localProxy = ProxyVideoSink()
 
     @Volatile var remoteVideoSink: VideoSink? = null
+        set(value) {
+            field = value
+            remoteProxy.setTarget(value)
+        }
+
     @Volatile var localVideoSink: VideoSink? = null
+        set(value) {
+            field = value
+            localProxy.setTarget(value)
+        }
 
     /** Пакеты, пришедшие раньше, чем стартовал движок. */
     private val earlyLock = Any()
     private val early = ArrayDeque<ByteArray>()
+
+    init {
+        // Контекст нужен WebRTC (камера, кодеки) до первого звонка.
+        runCatching { org.webrtc.ContextUtils.initialize(app) }
+        org.telegram.messenger.ApplicationLoader.applicationContext = app
+    }
 
     override val isAvailable: Boolean = true
     override val supportsVideo: Boolean = true
@@ -83,6 +120,9 @@ class TgCallsEngine(context: Context) : CallEngine {
         onLink: (EngineLink) -> Unit,
     ) {
         val s = Session()
+        cameraWanted = isVideo
+        cameraFront = true
+        _frontCamera.value = true
         synchronized(earlyLock) {
             synchronized(s.lock) { while (early.isNotEmpty()) s.pending.addLast(early.removeFirst()) }
         }
@@ -105,10 +145,6 @@ class TgCallsEngine(context: Context) : CallEngine {
     ) {
         try {
             initWebrtcContext()
-
-            if (isVideo) {
-                setupCamera(isFront = true)
-            }
 
             val reflectorIds = state.servers
                 .filter { it.type is CallServerTypeTelegramReflector }
@@ -144,13 +180,13 @@ class TgCallsEngine(context: Context) : CallEngine {
             val persistent = File(app.cacheDir, "voip_persistent_state.json").absolutePath
             val metrics = app.resources.displayMetrics
             val aspect = minOf(metrics.widthPixels, metrics.heightPixels).toFloat() /
-                maxOf(metrics.widthPixels, metrics.heightPixels)
+                    maxOf(metrics.widthPixels, metrics.heightPixels)
 
             val instance = NativeInstance.make(
                 version, config, persistent, endpoints, null, networkType(),
-                Instance.EncryptionKey(state.encryptionKey, isOutgoing), aspect,
+                Instance.EncryptionKey(state.encryptionKey, isOutgoing), remoteProxy, aspect,
             )
-            s.instance = instance
+            synchronized(s.lock) { s.instance = instance }
 
             instance.setOnStateUpdatedListener { code ->
                 val link = when (code) {
@@ -161,8 +197,17 @@ class TgCallsEngine(context: Context) : CallEngine {
                 CallLog.d(TAG, "state=$code -> $link")
                 if (session === s) onLink(link)
             }
+            instance.setOnRemoteMediaStateUpdatedListener { _, video ->
+                if (session === s) _remoteVideoActive.value = video == VIDEO_STATE_ACTIVE
+            }
             instance.setOnSignalDataListener { data -> if (session === s) sendSignaling(data) }
             instance.setMuteMicrophone(muted)
+
+            // Камера создаётся самим tgcalls и сразу подключается к звонку: кадры идут и собеседнику, и в превью.
+            if (cameraWanted) {
+                runCatching { instance.setupOutgoingVideo(localProxy, if (cameraFront) 1 else 0) }
+                    .onFailure { CallLog.e(TAG, "setupOutgoingVideo failed", it) }
+            }
 
             synchronized(s.lock) {
                 if (session !== s) return@synchronized
@@ -181,43 +226,39 @@ class TgCallsEngine(context: Context) : CallEngine {
         }
     }
 
-    fun setupCamera(isFront: Boolean) {
-        runCatching {
-            val enumerator = Camera2Enumerator(app)
-            val deviceNames = enumerator.deviceNames
-            val selectedDevice = deviceNames.firstOrNull { enumerator.isFrontFacing(it) == isFront }
-                ?: deviceNames.firstOrNull() ?: return
-
-            cameraCapturer?.stopCapture()
-            cameraCapturer?.dispose()
-
-            val eglContext = VideoCapturerDevice.getSharedEGLContext()
-            surfaceTextureHelper = SurfaceTextureHelper.create("TgCameraThread", eglContext)
-            val capturer = Camera2Capturer(app, selectedDevice, null)
-            cameraCapturer = capturer
-
-            capturer.initialize(surfaceTextureHelper, app, object : CapturerObserver {
-                override fun onCapturerStarted(success: Boolean) {}
-                override fun onCapturerStopped() {}
-                override fun onFrameCaptured(frame: VideoFrame) {
-                    localVideoSink?.onFrame(frame)
-                }
-            })
-            capturer.startCapture(1280, 720, 30)
-        }.onFailure { CallLog.e(TAG, "setupCamera failed", it) }
+    /** Включает или выключает свою камеру во время звонка. */
+    fun setCameraEnabled(enable: Boolean) {
+        cameraWanted = enable
+        worker.execute {
+            val s = session ?: return@execute
+            synchronized(s.lock) {
+                val i = s.instance ?: return@synchronized
+                runCatching {
+                    if (enable) {
+                        if (i.hasVideoCapturer()) {
+                            i.setVideoState(Instance.VIDEO_STATE_ACTIVE)
+                        } else {
+                            i.setupOutgoingVideo(localProxy, if (cameraFront) 1 else 0)
+                        }
+                    } else if (i.hasVideoCapturer()) {
+                        i.setVideoState(Instance.VIDEO_STATE_INACTIVE)
+                    }
+                }.onFailure { CallLog.e(TAG, "setCameraEnabled($enable) failed", it) }
+            }
+        }
     }
 
     fun switchCamera() {
-        cameraCapturer?.switchCamera(null)
-    }
-
-    fun stopCamera() {
-        runCatching {
-            cameraCapturer?.stopCapture()
-            cameraCapturer?.dispose()
-            cameraCapturer = null
-            surfaceTextureHelper?.dispose()
-            surfaceTextureHelper = null
+        val front = !cameraFront
+        cameraFront = front
+        _frontCamera.value = front
+        worker.execute {
+            val s = session ?: return@execute
+            synchronized(s.lock) {
+                val i = s.instance ?: return@synchronized
+                runCatching { if (i.hasVideoCapturer()) i.switchCamera(front) }
+                    .onFailure { CallLog.e(TAG, "switchCamera failed", it) }
+            }
         }
     }
 
@@ -227,28 +268,30 @@ class TgCallsEngine(context: Context) : CallEngine {
             synchronized(earlyLock) { if (early.size < MAX_PENDING) early.addLast(data) }
             return
         }
-        val instance = synchronized(s.lock) {
-            if (s.active) {
-                s.instance
-            } else {
-                if (s.pending.size < MAX_PENDING) s.pending.addLast(data)
-                null
+        synchronized(s.lock) {
+            val i = s.instance
+            if (s.active && i != null) {
+                runCatching { i.onSignalingDataReceive(data) }.onFailure { CallLog.e(TAG, "signaling", it) }
+            } else if (s.pending.size < MAX_PENDING) {
+                s.pending.addLast(data)
             }
-        } ?: return
-        runCatching { instance.onSignalingDataReceive(data) }.onFailure { CallLog.e(TAG, "signaling", it) }
+        }
     }
 
     override fun setMuted(muted: Boolean) {
         this.muted = muted
         val s = session ?: return
-        val instance = s.instance ?: return
-        if (!s.active) return
-        runCatching { instance.setMuteMicrophone(muted) }
+        synchronized(s.lock) {
+            val i = s.instance ?: return
+            if (!s.active) return
+            runCatching { i.setMuteMicrophone(muted) }
+        }
     }
 
     override fun stop() {
         CallLog.d(TAG, "stop")
-        stopCamera()
+        cameraWanted = false
+        _remoteVideoActive.value = false
         val s = session
         session = null
         muted = false
@@ -278,5 +321,6 @@ class TgCallsEngine(context: Context) : CallEngine {
     private companion object {
         const val TAG = "TgCallsEngine"
         const val MAX_PENDING = 256
+        const val VIDEO_STATE_ACTIVE = 2
     }
 }

@@ -32,6 +32,7 @@ val LocalYougramUsers = compositionLocalOf { emptySet<Long>() }
 val LocalGoldUsers = compositionLocalOf { emptySet<Long>() }
 val LocalCreatorUsers = compositionLocalOf { emptySet<Long>() }
 val LocalYougramBanners = compositionLocalOf { emptyMap<Long, YougramBanner>() }
+val LocalBadgeStyles = compositionLocalOf { emptyMap<Long, Int>() }
 val LocalBadgeChecker = compositionLocalOf<(Long) -> Unit> { { } }
 
 enum class BadgeKind { NORMAL, GOLD, CREATOR, CHANNEL }
@@ -42,6 +43,7 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
     val users = LocalYougramUsers.current
     val goldUsers = LocalGoldUsers.current
     val creatorUsers = LocalCreatorUsers.current
+    val styles = LocalBadgeStyles.current
     val check = LocalBadgeChecker.current
     var showInfo by remember { mutableStateOf(false) }
     var badgeKind by remember { mutableStateOf(BadgeKind.NORMAL) }
@@ -60,6 +62,8 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
             else -> BadgeKind.NORMAL
         }
 
+        val style = if (currentKind == BadgeKind.NORMAL) styles[userId] ?: 0 else 0
+
         // Значок рисуется своей PNG-картинкой для каждого вида метки, без подложки и обрезки.
         val badgeRes = when (currentKind) {
             BadgeKind.CHANNEL -> R.drawable.ic_badge_channel
@@ -76,7 +80,9 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
                     showInfo = true
                 },
         ) {
-            Image(
+            if (style != 0) {
+                BadgeStyleIcon(style, Modifier.fillMaxSize())
+            } else Image(
                 painter = painterResource(id = badgeRes),
                 contentDescription = when (currentKind) {
                     BadgeKind.CHANNEL -> "Официальный канал Yougram"

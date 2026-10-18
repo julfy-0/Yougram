@@ -20,6 +20,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -27,6 +29,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -85,6 +89,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.Apps
+import app.yougram.feature.chat.data.ReplyKeyboardItem
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
@@ -167,7 +173,6 @@ import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.ui.component.Avatar
 import app.yougram.core.ui.component.ChatWallpaper
 import app.yougram.core.ui.wallpaper.WallpaperBackground
-import app.yougram.core.ui.wallpaper.WallpaperDialog
 import app.yougram.core.ui.wallpaper.WallpaperKind
 import app.yougram.core.ui.wallpaper.WallpaperStore
 import app.yougram.core.ui.component.FileAvatar
@@ -252,12 +257,11 @@ fun ChatScreen(
     val replies by viewModel.replies.collectAsState()
     val glass by settings.glass.collectAsState()
     val chatPrefs by settings.chatPrefs.collectAsState()
+    val cameraPrefs by settings.camera.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
     val powerSaving by settings.powerSaving.collectAsState()
     val appContext = LocalContext.current
     val wallpaper by remember(appContext) { WallpaperStore.get(appContext).config }.collectAsState()
-    var wallpaperDialog by remember { mutableStateOf(false) }
-    if (wallpaperDialog) WallpaperDialog(onDismiss = { wallpaperDialog = false })
     val lowRam = remember(appContext) {
         app.yougram.core.ui.DeviceProfile.tier(appContext) == app.yougram.core.ui.DeviceTier.Low
     }
@@ -292,6 +296,9 @@ fun ChatScreen(
     }
     var input by inputHolder
     var commandsOpen by remember { mutableStateOf(false) }
+    var keyboardOpen by remember { mutableStateOf(false) }
+    // Для клавиатуры «one_time»: id сообщения, клавиатуру которого уже использовали.
+    var usedKeyboardId by remember { mutableStateOf(0L) }
     // Упоминания людей без username: «@Имя» → id (уходят в сообщение как сущности).
     val mentionIds = remember { mutableStateMapOf<String, Long>() }
     var viewerMedia by remember { mutableStateOf<MediaItem?>(null) }
@@ -454,8 +461,9 @@ fun ChatScreen(
     }
     // Выбранное медиа сначала попадает в экран подготовки (подпись, поворот, обрезка), и только потом уходит.
     var composing by remember { mutableStateOf<PendingMedia?>(null) }
-    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) scope.launch {
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
+        if (uris.size == 1) scope.launch {
+            val uri = uris.first()
             val mime = context.contentResolver.getType(uri).orEmpty()
             val path = copyToCache(context, uri)
             if (path == null) {
@@ -469,6 +477,20 @@ fun ChatScreen(
                         else -> PendingKind.VIDEO
                     },
                 )
+            }
+        } else if (uris.size > 1) scope.launch {
+            // Несколько файлов: фото уходят одним альбомом, GIF и видео — по отдельности.
+            val picked = uris.mapNotNull { uri ->
+                copyToCache(context, uri)?.let { it to context.contentResolver.getType(uri).orEmpty() }
+            }
+            if (picked.isEmpty()) {
+                Toast.makeText(context, "Не удалось прочитать файлы", Toast.LENGTH_SHORT).show()
+            } else {
+                val photos = picked.filter { (_, mime) -> mime.startsWith("image/") && mime != "image/gif" }.map { it.first }
+                if (photos.size >= 2) viewModel.sendPhotoAlbum(photos) else photos.forEach { viewModel.sendPhoto(it) }
+                picked.filter { (_, mime) -> !(mime.startsWith("image/") && mime != "image/gif") }.forEach { (path, mime) ->
+                    if (mime == "image/gif") viewModel.sendAnimation(path) else viewModel.sendDocument(path)
+                }
             }
         }
     }
@@ -498,7 +520,9 @@ fun ChatScreen(
     val visibleMessages = remember(state.messages, filters, state.blockedUserIds) {
         state.messages.filterNot { MessageFilters.isHidden(it, filters, state.blockedUserIds) }
     }
-    val visibleState = rememberUpdatedState(visibleMessages)
+    // Альбомы (несколько фото одним сообщением) склеиваются в один пузырь.
+    val entries = remember(visibleMessages) { visibleMessages.groupAlbums() }
+    val entriesState = rememberUpdatedState(entries)
 
     fun closeSearch() {
         searchOpen = false
@@ -515,9 +539,9 @@ fun ChatScreen(
         val id = jump ?: return@LaunchedEffect
         highlightId = id
         val list = withTimeoutOrNull(2000) {
-            snapshotFlow { visibleState.value }.first { l -> l.any { it.id == id } }
+            snapshotFlow { entriesState.value }.first { l -> l.any { id in it.ids } }
         }
-        val idx = list?.indexOfFirst { it.id == id } ?: -1
+        val idx = list?.indexOfFirst { id in it.ids } ?: -1
         if (idx >= 0) {
             listState.animateScrollToItem(idx, -(listState.layoutInfo.viewportSize.height / 3))
             if (!searchOpen) {
@@ -621,6 +645,11 @@ fun ChatScreen(
         else -> emptyList()
     }
 
+    // Reply-клавиатура бота (кнопки под полем ввода). Новая клавиатура раскрывается сама.
+    val activeKeyboard = remember(state.messages) { activeReplyKeyboard(state.messages) }
+    val shownKeyboard = activeKeyboard?.takeIf { it.second != usedKeyboardId }
+    LaunchedEffect(shownKeyboard?.second) { keyboardOpen = shownKeyboard != null }
+
     // Меню «+», меню сообщения и запись кружка: пока они открыты, весь экран чата плавно размывается
     // (сами они — отдельные окна, остаются чёткими).
     val overlayOpen = attachOpen || actionMessage != null || videoRecorderOpen
@@ -661,13 +690,14 @@ fun ChatScreen(
                     ),
                 ) {
                     // Список в обратном порядке: index - 1 — более новое сообщение, index + 1 — более старое.
-                    itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
+                    itemsIndexed(entries, key = { _, e -> e.key }) { index, entry ->
+                        val message = entry.message
                         if (message.isService) {
                             ServiceMessage(message.text.trim('[', ']'))
                             return@itemsIndexed
                         }
-                        val newer = visibleMessages.getOrNull(index - 1)
-                        val older = visibleMessages.getOrNull(index + 1)
+                        val newer = entries.getOrNull(index - 1)?.message
+                        val older = entries.getOrNull(index + 1)?.message
                         val joinedWithOlder = older != null && sameGroup(older, message)
                         val joinedWithNewer = newer != null && sameGroup(message, newer)
                         SwipeToReply(
@@ -679,6 +709,7 @@ fun ChatScreen(
                         ) {
                             MessageBubble(
                                 message = message,
+                                albumMedia = entry.albumMedia,
                                 joinedWithOlder = joinedWithOlder,
                                 joinedWithNewer = joinedWithNewer,
                                 viewModel = viewModel,
@@ -700,7 +731,7 @@ fun ChatScreen(
                                 reply = message.reply?.let { replies[it.messageId] },
                                 onReplyClick = {
                                     val target = message.reply?.messageId
-                                    val idx = visibleMessages.indexOfFirst { it.id == target }
+                                    val idx = entries.indexOfFirst { e -> target != null && target in e.ids }
                                     scope.launch {
                                         if (idx >= 0) {
                                             listState.animateScrollToItem(idx)
@@ -720,7 +751,7 @@ fun ChatScreen(
                                 bubbleOpacity = chatPrefs.bubbleOpacity / 100f,
                                 bubbleBackdrop = if (bubbleBlurOn) bubbleBackdrop else null,
                                 glassSettings = glass,
-                                highlighted = message.id == highlightId,
+                                highlighted = highlightId != null && highlightId in entry.ids,
                                 searchQuery = if (searchOpen) search.query else "",
                             )
                         }
@@ -862,6 +893,61 @@ fun ChatScreen(
             }
         }
 
+        // Reply-клавиатура бота: стеклянная панель над полем ввода (как список команд).
+        run {
+            var lastKeyboard by remember { mutableStateOf<ReplyKeyboardItem?>(null) }
+            shownKeyboard?.let { lastKeyboard = it.first }
+            val kbMessageId = shownKeyboard?.second ?: 0L
+            val kbPlates = LocalPlates.current
+            val kbGlass = remember(glass.blurRadius, glass.blurType, kbPlates.commands) {
+                glass.copy(opacity = (1f - kbPlates.commands).coerceIn(0f, 1f))
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = keyboardOpen && shownKeyboard != null && shownCommands.isEmpty(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
+                    .fillMaxWidth(),
+                enter = fadeIn(fadeSpec) +
+                        scaleIn(
+                            fastScaleSpec,
+                            initialScale = 0.9f,
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                        ) +
+                        slideInVertically(slideSpec) { it / 4 },
+                exit = fadeOut(fadeSpec) +
+                        scaleOut(
+                            fastScaleSpec,
+                            targetScale = 0.94f,
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                        ) +
+                        slideOutVertically(slideSpec) { it / 5 },
+            ) {
+                val kb = lastKeyboard
+                if (kb != null) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .glass(
+                                backdrop,
+                                kbGlass,
+                                MaterialTheme.shapes.large,
+                                tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
+                    ) {
+                        ReplyKeyboardPanel(kb) { key ->
+                            if (key.sendable) {
+                                viewModel.send(key.text)
+                                if (kb.oneTime) usedKeyboardId = kbMessageId
+                            } else {
+                                Toast.makeText(context, "Эта кнопка пока не поддерживается", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Кнопка «вниз» со счётчиком новых сообщений.
         androidx.compose.animation.AnimatedVisibility(
             visible = showScrollDown,
@@ -974,7 +1060,7 @@ fun ChatScreen(
                         Modifier
                             .weight(1f)
                             .height(TopBarContentHeight)
-                            .combinedClickable(onClick = onOpenChatProfile, onLongClick = { wallpaperDialog = true }),
+                            .combinedClickable(onClick = onOpenChatProfile),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         FileAvatar(title = state.title, fileId = state.avatarFileId, fileState = viewModel::fileState, size = 40.dp)
@@ -1167,7 +1253,7 @@ fun ChatScreen(
                         border = null,
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                            Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (recording) {
@@ -1204,11 +1290,32 @@ fun ChatScreen(
                                 if (state.botCommands.isNotEmpty()) {
                                     InputAction(Icons.Filled.Menu, "Команды бота", MaterialTheme.colorScheme.primary) {
                                         commandsOpen = !commandsOpen
+                                        if (commandsOpen) keyboardOpen = false
+                                    }
+                                }
+                                if (shownKeyboard != null) {
+                                    InputAction(Icons.Filled.Apps, "Клавиатура бота", MaterialTheme.colorScheme.primary) {
+                                        keyboardOpen = !keyboardOpen
+                                        if (keyboardOpen) commandsOpen = false
                                     }
                                 }
                                 Box {
-                                    InputAction(Icons.Filled.AddCircleOutline, "Прикрепить", MaterialTheme.colorScheme.onSurfaceVariant) {
-                                        attachOpen = true
+                                    // Кнопка «+» Material 3 Expressive: форма перетекает при нажатии, плюс поворачивается в «×».
+                                    val plusRotation by animateFloatAsState(
+                                        if (attachOpen) 45f else 0f,
+                                        MaterialTheme.motionScheme.fastSpatialSpec(),
+                                        label = "plusRotation",
+                                    )
+                                    androidx.compose.material3.FilledTonalIconButton(
+                                        onClick = { attachOpen = true },
+                                        modifier = Modifier.size(40.dp),
+                                        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Add,
+                                            contentDescription = "Прикрепить",
+                                            modifier = Modifier.graphicsLayer { rotationZ = plusRotation },
+                                        )
                                     }
                                     AttachMenu(
                                         expanded = attachOpen,
@@ -1238,7 +1345,7 @@ fun ChatScreen(
                                         onRound = { openVideoRecorder() },
                                     )
                                 }
-                                Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
+                                Box(Modifier.weight(1f).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
                                     if (input.isEmpty()) {
                                         Text(
                                             "Сообщение",
@@ -1485,31 +1592,45 @@ fun ChatScreen(
                         last = true,
                     )
                 }
-                when (attachmentTab) {
-                    0 -> LazyVerticalGrid(
-                        columns = GridCells.Adaptive(48.dp),
-                        modifier = Modifier.fillMaxWidth().height(320.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
-                        items(Emojis) { emoji ->
-                            Box(
-                                Modifier.size(48.dp).clip(CircleShape).clickable { input += emoji },
-                                contentAlignment = Alignment.Center,
-                            ) { Text(emoji, fontSize = 28.sp) }
+                // Переключение вкладок: содержимое плавно съезжает в сторону выбранной вкладки.
+                val motion = MaterialTheme.motionScheme
+                AnimatedContent(
+                    targetState = attachmentTab,
+                    transitionSpec = {
+                        val dir = if (targetState > initialState) 1 else -1
+                        (slideInHorizontally(motion.defaultSpatialSpec()) { dir * it / 3 } +
+                                fadeIn(motion.defaultEffectsSpec())) togetherWith
+                                (slideOutHorizontally(motion.defaultSpatialSpec()) { -dir * it / 3 } +
+                                        fadeOut(motion.defaultEffectsSpec()))
+                    },
+                    label = "pickerTab",
+                ) { tab ->
+                    when (tab) {
+                        0 -> LazyVerticalGrid(
+                            columns = GridCells.Adaptive(48.dp),
+                            modifier = Modifier.fillMaxWidth().height(320.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            items(Emojis) { emoji ->
+                                Box(
+                                    Modifier.size(48.dp).clip(CircleShape).clickable { input += emoji },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(emoji, fontSize = 28.sp) }
+                            }
                         }
+                        1 -> StickerTab(
+                            viewModel = viewModel,
+                            query = stickerQuery,
+                            onQueryChange = { stickerQuery = it },
+                            onPickFile = { stickerPicker.launch(arrayOf("image/webp", "image/png")) },
+                            onSent = { emojiSheet = false },
+                        )
+                        else -> GifTab(
+                            viewModel = viewModel,
+                            onPickFile = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) },
+                            onSent = { emojiSheet = false },
+                        )
                     }
-                    1 -> StickerTab(
-                        viewModel = viewModel,
-                        query = stickerQuery,
-                        onQueryChange = { stickerQuery = it },
-                        onPickFile = { stickerPicker.launch(arrayOf("image/webp", "image/png")) },
-                        onSent = { emojiSheet = false },
-                    )
-                    else -> GifTab(
-                        viewModel = viewModel,
-                        onPickFile = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) },
-                        onSent = { emojiSheet = false },
-                    )
                 }
             }
         }
@@ -1561,6 +1682,8 @@ fun ChatScreen(
             },
             autoStart = videoAuto,
             hold = videoHold,
+            camera = cameraPrefs,
+            onCameraUsed = { front -> settings.updateCamera { it.copy(lastFront = front) } },
         )
     }
 
@@ -1589,7 +1712,7 @@ fun ChatScreen(
             message = message,
             isRead = state.readAt[message.id] != null,
             canEdit = message.isOutgoing && message.media == null && message.call == null && message.id !in state.deletedIds,
-            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.ANIMATION || it == MediaKind.STICKER || it == MediaKind.DOCUMENT },
+            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.VIDEO_NOTE || it == MediaKind.ANIMATION || it == MediaKind.STICKER || it == MediaKind.DOCUMENT },
             canShadowBan = sender != null && !message.isOutgoing,
             canWatchTyping = state.isGroup && sender != null && !message.isOutgoing,
             watchingTyping = sender != null && tw.watches(viewModel.chatId, sender),
@@ -1634,6 +1757,31 @@ fun ChatScreen(
             onDelete = { deleteMessage = message },
             onShadowBan = { sender?.let { viewModel.shadowBan(it) } },
             onToggleTypingWatch = { sender?.let { viewModel.toggleTypingWatch(it) } },
+        )
+    }
+
+    val storageAlert by viewModel.storageAlert.collectAsState()
+    storageAlert?.let { alert ->
+        val usedText = android.text.format.Formatter.formatFileSize(LocalContext.current, alert.usedBytes)
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissStorageAlert() },
+            title = { Text(if (alert.limitReached) "Автозагрузка отключена" else "Много места занято") },
+            text = {
+                Text(
+                    if (alert.limitReached) {
+                        "Приложение занимает $usedText — это не меньше заданного лимита, поэтому медиа больше не скачивается автоматически. Очистите кэш или измените лимит в «Данные и память»."
+                    } else {
+                        "Приложение занимает $usedText. Очистите кэш, чтобы освободить место, или измените порог предупреждения в «Данные и память»."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearCache()
+                    viewModel.dismissStorageAlert()
+                }) { Text("Очистить кэш") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.dismissStorageAlert() }) { Text("Позже") } },
         )
     }
 
@@ -1764,6 +1912,7 @@ private fun ServiceMessage(text: String) {
 @Composable
 private fun MessageBubble(
     message: MessageItem,
+    albumMedia: List<MediaItem>,
     joinedWithOlder: Boolean,
     joinedWithNewer: Boolean,
     viewModel: ChatViewModel,
@@ -1938,7 +2087,9 @@ private fun MessageBubble(
                                 modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
                             )
                         }
-                        if (media != null) {
+                        if (albumMedia.size > 1) {
+                            Box(Modifier.padding(4.dp)) { AlbumMedia(albumMedia, viewModel, onOpenPhoto) }
+                        } else if (media != null) {
                             Box(Modifier.padding(4.dp)) { MessageMedia(media, viewModel, onOpenPhoto) }
                         }
                         message.poll?.let { poll ->

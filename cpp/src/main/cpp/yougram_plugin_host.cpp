@@ -1,4 +1,4 @@
-// JNI-хост нативных плагинов Yougram (API 1–2): dlopen(), события, хуки, вызовы хоста из плагина.
+// JNI-хост нативных плагинов Yougram (SDK 2.0): dlopen(), события, хуки, вызовы хоста из плагина.
 // Без STL. Все строки-payload ходят через JNI как byte[] (чистый UTF-8, эмодзи не ломаются).
 #include <android/log.h>
 #include <dlfcn.h>
@@ -20,6 +20,8 @@ namespace {
         void* handle;
         const YgPlugin* api;
         YgHost host;
+        char* dataDir;
+        int priority;
         bool enabled;
         Plugin* next;
     };
@@ -85,6 +87,22 @@ namespace {
         char needle[160];
         snprintf(needle, sizeof(needle), ",%s,", id);
         return strstr(allowed, needle) != nullptr;
+    }
+
+// Есть ли в ответе хука "cancel": true (с любыми пробелами вокруг двоеточия).
+    bool isCancel(const char* json) {
+        const char* p = json;
+        while ((p = strstr(p, "\"cancel\"")) != nullptr) {
+            const char* q = p + 8;
+            while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') q++;
+            if (*q == ':') {
+                q++;
+                while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') q++;
+                if (strncmp(q, "true", 4) == 0) return true;
+            }
+            p++;
+        }
+        return false;
     }
 
     bool attach(JNIEnv** env, bool* attached) {
@@ -161,6 +179,7 @@ namespace {
                 disableLocked(p);
                 dlclose(p->handle);
                 free(p->id);
+                free(p->dataDir);
                 free(p);
                 return;
             }
@@ -182,9 +201,10 @@ JNIEXPORT void JNICALL Java_app_yougram_plugin_NativePluginManager_nativeInit(JN
 }
 
 JNIEXPORT jstring JNICALL Java_app_yougram_plugin_NativePluginManager_nativeLoad(
-        JNIEnv* env, jobject, jstring jid, jstring jpath) {
+        JNIEnv* env, jobject, jstring jid, jstring jpath, jstring jdataDir, jint priority) {
     char* id = dupUtf(env, jid);
     char* path = dupUtf(env, jpath);
+    char* dataDir = dupUtf(env, jdataDir);
     jstring result = nullptr;
     {
         Lock lock;
@@ -217,15 +237,23 @@ JNIEXPORT jstring JNICALL Java_app_yougram_plugin_NativePluginManager_nativeLoad
                     plugin->id = strdup(id);
                     plugin->handle = handle;
                     plugin->api = api;
+                    plugin->dataDir = strdup(dataDir);
+                    plugin->priority = static_cast<int>(priority);
                     plugin->host.api_version = YG_PLUGIN_API_VERSION;
                     plugin->host.ctx = plugin;
                     plugin->host.log = hostLog;
                     plugin->host.notify = hostNotify;
                     plugin->host.call = hostCall;
                     plugin->host.free_string = hostFreeString;
+                    plugin->host.api_minor = YG_PLUGIN_API_MINOR;
+                    plugin->host.plugin_id = plugin->id;
+                    plugin->host.data_dir = plugin->dataDir;
                     plugin->enabled = false;
-                    plugin->next = g_plugins;
-                    g_plugins = plugin;
+                    // Список отсортирован по priority (больше — раньше); при равенстве — по порядку загрузки.
+                    Plugin** link = &g_plugins;
+                    while (*link && (*link)->priority >= plugin->priority) link = &(*link)->next;
+                    plugin->next = *link;
+                    *link = plugin;
                     if (api->on_load) api->on_load(&plugin->host);
                 }
             }
@@ -233,6 +261,7 @@ JNIEXPORT jstring JNICALL Java_app_yougram_plugin_NativePluginManager_nativeLoad
     }
     free(id);
     free(path);
+    free(dataDir);
     return result;
 }
 
@@ -299,7 +328,7 @@ JNIEXPORT jbyteArray JNICALL Java_app_yougram_plugin_NativePluginManager_nativeH
             if (!out) continue;
             if (current != json) free(current);
             current = out;
-            if (strstr(out, "\"cancel\":true")) break;
+            if (isCancel(out)) break;
         }
     }
     jbyteArray result = current != json ? newBytes(env, current) : nullptr;

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -30,6 +32,8 @@ data class UpdateInfo(
     val notes: String,
     val sizeBytes: Long = 0L,
     val sha256: String? = null,
+    /** Картинка 1000×400 из файлов релиза (banner.png / banner.jpg / banner.webp), если приложена. */
+    val bannerUrl: String? = null,
 )
 
 sealed interface UpdateState {
@@ -54,6 +58,19 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
 
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
+
+    private val _postponed = MutableStateFlow<String?>(null)
+    /** Версия, для которой пользователь нажал «Позже» (до перезапуска приложения). */
+    val postponedVersion: StateFlow<String?> = _postponed.asStateFlow()
+
+    fun postpone() {
+        val info = when (val s = _state.value) {
+            is UpdateState.Available -> s.info
+            is UpdateState.Ready -> s.info
+            else -> return
+        }
+        _postponed.value = info.versionName
+    }
 
     private var job: Job? = null
 
@@ -104,6 +121,22 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
         return true
     }
 
+    // ---------- баннер ----------
+
+    private var bannerCache: Pair<String, Bitmap>? = null
+
+    /** Скачивает баннер релиза (кэшируется до перезапуска). null — если не удалось загрузить. */
+    suspend fun loadBanner(url: String): Bitmap? = withContext(Dispatchers.IO) {
+        bannerCache?.takeIf { it.first == url }?.second ?: runCatching {
+            val conn = open(url, api = false)
+            try {
+                conn.inputStream.use { BitmapFactory.decodeStream(it) }
+            } finally {
+                conn.disconnect()
+            }
+        }.getOrNull()?.also { bannerCache = url to it }
+    }
+
     // ---------- проверка ----------
 
     private fun fetchLatest(): UpdateInfo {
@@ -121,6 +154,8 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
                 }
             }
             asset ?: error("в релизе $tag нет файла .apk")
+            val banner = (0 until assets.length()).map { assets.getJSONObject(it) }
+                .firstOrNull { BANNER_NAME.matches(it.getString("name")) }
             val digest = asset.optString("digest")
             return UpdateInfo(
                 versionName = tag.removePrefix("v").removePrefix("V"),
@@ -128,6 +163,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
                 notes = json.optString("body"),
                 sizeBytes = asset.optLong("size", 0L),
                 sha256 = digest.removePrefix("sha256:").takeIf { digest.startsWith("sha256:") && it.length == 64 },
+                bannerUrl = banner?.getString("browser_download_url"),
             )
         } finally {
             conn.disconnect()
@@ -253,5 +289,6 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
 
     private companion object {
         const val REPO = "julfy-0/Yougram"
+        val BANNER_NAME = Regex("^banner.*\\.(png|jpe?g|webp)$", RegexOption.IGNORE_CASE)
     }
 }

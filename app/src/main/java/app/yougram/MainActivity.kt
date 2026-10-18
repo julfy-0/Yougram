@@ -11,11 +11,19 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import app.yougram.feature.splash.ui.LaunchSplash
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
 import app.yougram.core.ui.component.LocalOwnCustomBanner
 import app.yougram.core.ui.component.OwnCustomBanner
@@ -28,6 +36,7 @@ import app.yougram.feature.badge.ui.LocalBadgeChecker
 import app.yougram.feature.badge.ui.LocalCreatorUsers
 import app.yougram.feature.badge.ui.LocalGoldUsers
 import app.yougram.feature.badge.ui.LocalYougramBanners
+import app.yougram.feature.badge.ui.LocalBadgeStyles
 import app.yougram.feature.badge.ui.LocalYougramUsers
 import app.yougram.feature.notifications.ConnectionService
 import app.yougram.feature.notifications.NotificationCenter
@@ -82,11 +91,19 @@ class MainActivity : ComponentActivity() {
             val goldUsers by container.chatRepository.goldUsers.collectAsState()
             val creatorUsers by container.chatRepository.creatorUsers.collectAsState()
             val yougramBanners by container.chatRepository.banners.collectAsState()
+            val badgeStyles by container.chatRepository.badgeStyles.collectAsState()
             val ownUserId by container.chatRepository.ownUserId.collectAsState()
             val customBannerVersion by container.settings.customBanner.collectAsState()
             val inCall by container.callManager.call.collectAsState()
             val authStep by container.authRepository.step.collectAsState(initial = AuthStep.Loading)
             val notifPrefs by container.settings.notifications.collectAsState()
+            // Масштаб интерфейса: меняем плотность для всего дерева (и dp, и sp).
+            val uiScale = container.settings.chatPrefs.collectAsState().value.uiScale
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+            val scaledDensity = remember(baseDensity, uiScale) {
+                androidx.compose.ui.unit.Density(baseDensity.density * uiScale / 100f, baseDensity.fontScale)
+            }
+            var showSplash by rememberSaveable { mutableStateOf(savedInstanceState == null) }
 
             // После входа: запрашиваем разрешение на уведомления и поднимаем фоновое соединение.
             LaunchedEffect(authStep == AuthStep.Ready, notifPrefs.backgroundConnection) {
@@ -124,18 +141,24 @@ class MainActivity : ComponentActivity() {
 
             YougramTheme(settings = theme) {
                 CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides scaledDensity,
                     LocalGlass provides glass,
                     LocalPlates provides plates,
                     LocalYougramUsers provides yougramUsers,
                     LocalGoldUsers provides goldUsers,
                     LocalCreatorUsers provides creatorUsers,
                     LocalYougramBanners provides yougramBanners,
+                    LocalBadgeStyles provides badgeStyles,
                     LocalOwnCustomBanner provides
                             if (ownUserId != 0L && customBannerVersion > 0L) OwnCustomBanner(ownUserId, customBannerVersion) else null,
                     LocalBadgeChecker provides container.chatRepository::checkBadge,
                 ) {
-                    LockGate(container.appLock) {
-                        YougramNavHost(container)
+                    Box(Modifier.fillMaxSize()) {
+                        LockGate(container.appLock) {
+                            YougramNavHost(container)
+                        }
+                        // Заставка при холодном запуске (при повороте экрана не повторяется).
+                        if (showSplash) LaunchSplash(onFinished = { showSplash = false })
                     }
                 }
             }
@@ -162,10 +185,16 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         val activeCall = container.callManager.call.value
         if (activeCall != null && activeCall.isVideo && activeCall.phase == app.yougram.feature.calls.data.CallPhase.ACTIVE) {
-            val params = android.app.PictureInPictureParams.Builder()
-                .setAspectRatio(android.util.Rational(9, 16))
-                .build()
-            enterPictureInPictureMode(params)
+            // PiP может отказать (многооконный режим, устройство без PiP, окно не в нужном состоянии):
+            // исключение отсюда роняло приложение прямо посреди звонка.
+            if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+            if (isInMultiWindowMode || isInPictureInPictureMode) return
+            runCatching {
+                val params = android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(9, 16))
+                    .build()
+                enterPictureInPictureMode(params)
+            }
         }
     }
 

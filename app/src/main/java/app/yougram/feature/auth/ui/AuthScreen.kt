@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import app.yougram.core.ui.component.LoadingIndicator
@@ -45,7 +47,11 @@ import androidx.compose.ui.unit.dp
 import app.yougram.feature.auth.data.AuthStep
 
 @Composable
-fun AuthScreen(viewModel: AuthViewModel) {
+fun AuthScreen(
+    viewModel: AuthViewModel,
+    /** Есть другой аккаунт, в который уже входили: показываем «Назад» (null — возвращаться некуда). */
+    onBack: (() -> Unit)? = null,
+) {
     val step by viewModel.step.collectAsState()
     val ui by viewModel.ui.collectAsState()
     val proxy by viewModel.proxy.collectAsState()
@@ -175,6 +181,22 @@ fun AuthScreen(viewModel: AuthViewModel) {
                         if (proxy.proxyServer.isBlank()) "Прокси" else "Прокси: ${proxy.proxyServer}:${proxy.proxyPort}",
                     )
                 }
+            }
+        }
+
+        if (onBack != null) {
+            // Системная кнопка «назад» тоже отменяет добавление аккаунта.
+            androidx.activity.compose.BackHandler(onBack = onBack)
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(8.dp),
+            ) {
+                androidx.compose.material3.Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Назад")
             }
         }
 

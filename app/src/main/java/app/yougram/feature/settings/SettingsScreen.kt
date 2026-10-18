@@ -31,15 +31,42 @@ import app.yougram.feature.settings.component.SettingsPageColumn
 import kotlin.math.roundToInt
 
 @Composable
-fun SettingsScreen(settings: SettingsRepository, plates: PlateRepository, contentPadding: PaddingValues) {
+fun SettingsScreen(
+    settings: SettingsRepository,
+    plates: PlateRepository,
+    contentPadding: PaddingValues,
+    /** 0 — тема и цвета, 1 — панели и навигация; -1 — всё. */
+    part: Int = -1,
+) {
     val glass by settings.glass.collectAsState()
 
     SettingsPageColumn(contentPadding) {
+        if (part == -1 || part == 0) {
         SectionLabel("Тема и цвета")
         ThemeSection(settings)
 
         AppIconSection()
 
+        // На бюджетных устройствах размытие и тяжёлые анимации отключены автоматически;
+        // здесь их можно включить вручную.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        if (app.yougram.core.ui.DeviceProfile.hardwareTier(context) == app.yougram.core.ui.DeviceTier.Low) {
+            val enhanced by settings.enhancedUi.collectAsState()
+            SettingGroup {
+                item {
+                    app.yougram.feature.settings.component.SwitchRow(
+                        "Улучшенный интерфейс",
+                        enhanced,
+                        settings::setEnhancedUi,
+                        subtitle = "Размытие и плавные анимации. Может лагать на вашем устройстве",
+                    )
+                }
+            }
+            SettingsFootnote("Ваше устройство определено как бюджетное, поэтому эффекты по умолчанию выключены.")
+        }
+
+        }
+        if (part == -1 || part == 1) {
         SectionLabel("Панели")
         GlassPreview(glass.blurRadius, glass.opacity)
         SettingGroup {
@@ -75,6 +102,7 @@ fun SettingsScreen(settings: SettingsRepository, plates: PlateRepository, conten
         NavOrderSection(settings)
 
         PlateSection(plates)
+        }
     }
 }
 /** Порядок вкладок нижней панели навигации: стрелки вверх/вниз у каждой вкладки. */

@@ -21,6 +21,17 @@ object YougramBadge {
     /** Баннер «не выбран»: поле узора = 15, декодер возвращает null. */
     val NO_BANNER: String = YougramBanner(pattern = 15).encode()
 
+    /** Хвост с баннером (или без него) и видом значка [style] (0..3). */
+    fun payload(banner: YougramBanner?, style: Int): String =
+        (banner ?: YougramBanner(pattern = 15)).encode(style)
+
+    /** Вид значка, который выбрал пользователь (0 — классический). */
+    fun styleOf(bio: String): Int {
+        val i = markerIndex(bio)
+        if (i < 0) return 0
+        return YougramBanner.styleAt(bio, i + MARKER.length)
+    }
+
     /** Версия текущего клиента (major.minor.patch, каждое 0..15) невидимыми символами. */
     fun versionPayload(): String {
         val p = BuildConfig.VERSION_NAME.split(".").map { it.toIntOrNull() ?: 0 }

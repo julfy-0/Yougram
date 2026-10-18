@@ -50,7 +50,6 @@ import kotlinx.coroutines.withContext
 fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, onNavigate: (SettingsPage) -> Unit) {
     val ghost by settings.ghost.collectAsState()
     val filters by settings.filterPrefs.collectAsState()
-    val badge by settings.badge.collectAsState()
     val inAppBrowser by settings.inAppBrowser.collectAsState()
     val localPremium by settings.localPremium.collectAsState()
     SettingsPageColumn(contentPadding) {
@@ -82,28 +81,11 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
             }
             item {
                 SwitchRow(
-                    "Значок Yougram",
-                    badge,
-                    { v -> settings.setBadge(v) },
-                    subtitle = "Ставит метку в «О себе»: другие пользователи Yougram увидят значок у вашего имени",
-                    icon = Icons.Filled.VerifiedUser,
-                )
-            }
-            item {
-                SwitchRow(
                     "Локальный Premium",
                     localPremium,
                     { v -> settings.setLocalPremium(v) },
                     subtitle = "Premium-статус и звезда в интерфейсе только на этом устройстве",
                     icon = Icons.Filled.Star,
-                )
-            }
-            item {
-                SettingRow(
-                    "Баннер профиля",
-                    subtitle = "Виден только пользователям Yougram",
-                    icon = Icons.Filled.Image,
-                    onClick = { onNavigate(SettingsPage.Banner) },
                 )
             }
             item {

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -395,6 +396,7 @@ class ChatViewModel(
     }
 
     init {
+        repository.checkStorage()
         viewModelScope.launch {
             val commands = repository.botCommands(chatId)
             if (commands.isNotEmpty()) _state.update { it.copy(botCommands = commands) }
@@ -407,6 +409,19 @@ class ChatViewModel(
                     else s.copy(messages = listOf(message) + s.messages)
                 }
                 if (!message.isOutgoing) repository.markRead(chatId, listOf(message.id))
+            }
+        }
+        // Отправленное сообщение получает настоящий id вместо временного — иначе правка/удаление/ответ
+        // уходят по старому id и TDLib отвечает «Message not found» (заметно в «Избранном»).
+        viewModelScope.launch {
+            repository.sendSucceeded.collect { event ->
+                if (event.chatId != chatId) return@collect
+                _state.update { s ->
+                    if (s.messages.none { it.id == event.oldMessageId }) return@update s
+                    val replaced = s.messages.filterNot { it.id == event.message.id }
+                        .map { if (it.id == event.oldMessageId) event.message else it }
+                    s.copy(messages = replaced.sortedByDescending { it.id })
+                }
             }
         }
         viewModelScope.launch {
@@ -496,7 +511,13 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 val chatInfo = repository.getChatInfo(chatId, viaThread = threadId != 0L)
-                val history = repository.loadHistory(chatId) // от старых к новым
+                // Без таймаута зависший запрос истории (нет сети, TDLib ждёт ответа) оставлял пустой чат
+                // с бесконечным спиннером и без заголовка.
+                val history = withTimeoutOrNull(HISTORY_TIMEOUT_MS) { repository.loadHistory(chatId) } // от старых к новым
+                    ?: run {
+                        _state.update { it.copy(title = chatInfo.title, loading = false, error = "Не удалось загрузить историю") }
+                        return@launch
+                    }
                 val snapshot = repository.spySnapshot(chatId)
                 val lastRead = repository.getLastReadOutboxMessageId(chatId)
                 deletedStore = snapshot.deleted
@@ -601,6 +622,9 @@ class ChatViewModel(
 
     fun sendPhoto(path: String, caption: String = "") = sendMedia { repository.sendPhoto(chatId, path, caption) }
 
+    fun sendPhotoAlbum(paths: List<String>, caption: String = "") =
+        sendMedia { repository.sendPhotoAlbum(chatId, paths, caption) }
+
     fun sendDocument(path: String, caption: String = "") = sendMedia { repository.sendDocument(chatId, path, caption) }
 
     fun sendPoll(question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
@@ -658,6 +682,15 @@ class ChatViewModel(
 
     fun download(fileId: Int, priority: Int = 8) = repository.download(fileId, priority)
 
+    /** Автозагрузка без нажатия: не качает, если память приложения упёрлась в лимит из настроек. */
+    fun autoDownload(fileId: Int, priority: Int = 8) = repository.autoDownload(fileId, priority)
+
+    val storageAlert = repository.storageAlert
+
+    fun dismissStorageAlert() = repository.dismissStorageAlert()
+
+    fun clearCache() = action("Кэш очищен") { repository.clearCache() }
+
     fun pauseDownload(fileId: Int) = repository.pauseDownload(fileId)
 
     /** Стикер премиум-эмодзи по id. */
@@ -690,6 +723,7 @@ class ChatViewModel(
     fun dismissError() = _state.update { it.copy(error = null) }
 
     companion object {
+        private const val HISTORY_TIMEOUT_MS = 12_000L
         private const val MAX_JUMP_ROUNDS = 30
 
         fun factory(

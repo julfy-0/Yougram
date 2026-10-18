@@ -40,7 +40,17 @@ import app.yougram.feature.settings.component.SwitchRow
 
 private val CallsSavingOptions = listOf("Никогда", "Только в роуминге", "Всегда")
 
-private enum class DataDialog { ClearCache, ResetAutoDownload, CallsSaving, Proxy, Drafts }
+private enum class DataDialog { ClearCache, ResetAutoDownload, CallsSaving, Proxy, Drafts, StorageWarn, StorageCap }
+
+private const val GB = 1L shl 30
+
+/** Варианты порога предупреждения, байт (0 — не предупреждать). */
+private val WarnOptions = listOf(0L, 1 * GB, 2 * GB, 3 * GB, 5 * GB, 10 * GB, 20 * GB)
+
+/** Варианты лимита автозагрузки, байт (0 — без лимита). */
+private val CapOptions = listOf(0L, 2 * GB, 5 * GB, 10 * GB, 20 * GB, 50 * GB)
+
+private fun gbLabel(bytes: Long, zero: String) = if (bytes <= 0L) zero else "${bytes / GB} ГБ"
 
 private fun yesNo(value: Boolean) = if (value) "Да" else "Нет"
 
@@ -86,6 +96,27 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
             item { SettingRow("Использование трафика", icon = Icons.Filled.BarChart, value = size(traffic)) }
             item { SettingRow("Очистить кэш", subtitle = "Файлы можно скачать заново", icon = Icons.Filled.Delete, onClick = { dialog = DataDialog.ClearCache }) }
         }
+
+        SectionLabel("Лимиты памяти")
+        SettingGroup {
+            item {
+                SettingRow(
+                    "Предупреждать при занятой памяти",
+                    subtitle = "Покажем уведомление с кнопкой очистки кэша",
+                    value = gbLabel(prefs.storageWarnBytes, "Выкл."),
+                    onClick = { dialog = DataDialog.StorageWarn },
+                )
+            }
+            item {
+                SettingRow(
+                    "Лимит автозагрузки",
+                    subtitle = "Выше этого объёма ничего не скачивается само",
+                    value = gbLabel(prefs.autoDownloadCapBytes, "Без лимита"),
+                    onClick = { dialog = DataDialog.StorageCap },
+                )
+            }
+        }
+        SettingsFootnote("Считается вся память приложения: скачанные файлы и база. Фото, видео и файлы выше лимита по-прежнему можно скачать вручную — нажатием на сообщение. Превью, стикеры и аватарки загружаются всегда, они маленькие.")
 
         SectionLabel("Автозагрузка медиа")
         SettingGroup {
@@ -145,12 +176,34 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
             },
             onDismiss = { dialog = null },
         )
+        DataDialog.StorageWarn -> ChoiceDialog(
+            title = "Предупреждать при",
+            options = WarnOptions,
+            selected = prefs.storageWarnBytes,
+            label = { gbLabel(it, "Не предупреждать") },
+            onSelect = { v ->
+                settings.updateDataPrefs { it.copy(storageWarnBytes = v) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DataDialog.StorageCap -> ChoiceDialog(
+            title = "Лимит автозагрузки",
+            options = CapOptions,
+            selected = prefs.autoDownloadCapBytes,
+            label = { gbLabel(it, "Без лимита") },
+            onSelect = { v ->
+                settings.updateDataPrefs { it.copy(autoDownloadCapBytes = v) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
         DataDialog.ResetAutoDownload -> ConfirmDialog(
             title = "Сбросить настройки?",
             text = "Параметры автозагрузки медиа вернутся к значениям по умолчанию.",
             confirmLabel = "Сбросить",
             onConfirm = {
-                settings.updateDataPrefs { it.copy(autoMobile = true, autoWifi = true, autoRoaming = true) }
+                settings.updateDataPrefs { it.copy(autoMobile = true, autoWifi = true, autoRoaming = true, storageWarnBytes = 5L shl 30, autoDownloadCapBytes = 10L shl 30) }
                 dialog = null
             },
             onDismiss = { dialog = null },

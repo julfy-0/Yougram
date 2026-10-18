@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -79,7 +82,43 @@ internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
 }
 
 /**
- * Страница «Обновление клиента» — обычная страница настроек с общими верхней и нижней панелями.
+ * Баннер обновления 1000×400 — картинка banner.png/jpg/webp из файлов релиза на GitHub.
+ * Пока грузится — заглушка того же размера; если баннера в релизе нет или он не загрузился — обычный баннер «О приложении».
+ */
+@Composable
+private fun UpdateReleaseBanner(updater: AppUpdater, url: String?) {
+    if (url == null) {
+        YougramAboutBanner()
+        return
+    }
+    val loaded by produceState<Pair<Boolean, ImageBitmap?>>(false to null, url) {
+        value = true to updater.loadBanner(url)?.asImageBitmap()
+    }
+    val (done, bitmap) = loaded
+    if (done && bitmap == null) {
+        YougramAboutBanner()
+        return
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1000f / 400f)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = "Баннер обновления",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+    }
+}
+
+/**
+ * Страница «Обновление клиента" — обычная страница настроек с общими верхней и нижней панелями.
  * Сверху версия и список изменений (если есть обновление), ниже версия клиента, версия API и номер сборки.
  * Кнопка действия («Скачать» → прогресс → «Установить», а если обновления нет — «Проверить») закреплена
  * внизу на стеклянной панели — см. [UpdateGlassBar], её рисует MainScreen вместо нижней навигации.
@@ -117,7 +156,7 @@ fun UpdateScreen(
         bottom = contentPadding.calculateBottomPadding() + UpdateBarExtraPadding,
     )
     SettingsPageColumn(padding) {
-        YougramAboutBanner()
+        if (info != null) UpdateReleaseBanner(updater, info.bannerUrl) else YougramAboutBanner()
 
         if (info != null) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {

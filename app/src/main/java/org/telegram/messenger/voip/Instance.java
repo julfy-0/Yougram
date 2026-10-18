@@ -7,6 +7,7 @@ public final class Instance {
     public static final int ENDPOINT_TYPE_INET = 0, ENDPOINT_TYPE_LAN = 1, ENDPOINT_TYPE_UDP_RELAY = 2, ENDPOINT_TYPE_TCP_RELAY = 3;
     public static final int STATE_WAIT_INIT = 1, STATE_WAIT_INIT_ACK = 2, STATE_ESTABLISHED = 3, STATE_FAILED = 4, STATE_RECONNECTING = 5;
     public static final int DATA_SAVING_NEVER = 0;
+    public static final int VIDEO_STATE_INACTIVE = 0, VIDEO_STATE_PAUSED = 1, VIDEO_STATE_ACTIVE = 2;
 
     private Instance() {}
 

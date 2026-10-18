@@ -9,6 +9,7 @@ lifecycle = "2.8.7"
 navigation = "2.8.5"
 coroutines = "1.9.0"
 camera = "1.4.1"
+media3 = "1.8.0"
 zxing = "3.5.3"
 tdl = "13.0.0"
 
@@ -31,6 +32,8 @@ androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camera" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camera" }
 androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camera" }
+androidx-media3-transformer = { module = "androidx.media3:media3-transformer", version.ref = "media3" }
+androidx-media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camera" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 

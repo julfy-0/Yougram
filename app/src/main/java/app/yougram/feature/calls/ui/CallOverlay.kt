@@ -6,6 +6,17 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -18,6 +29,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +62,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Surface
@@ -88,10 +102,11 @@ import app.yougram.feature.calls.data.CallPhase
 import app.yougram.feature.calls.data.TgCallsEngine
 import app.yougram.feature.chat.data.ChatRepository
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Полноэкранный экран видео/аудио звонка по Material 3 Expressive. */
+/** Полноэкранный экран видео/аудио звонка: кнопки с подписями и анимации появления, нажатий и смены состояний. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropState) {
@@ -99,28 +114,90 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
     val call by manager.call.collectAsState()
     val route by manager.route.collectAsState()
 
+    fun has(permission: String) =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    // Какой ответ выбрал пользователь, пока шёл запрос разрешений («Видео» или «Голос»).
+    var pendingVideo by remember { mutableStateOf(false) }
     val acceptPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (granted) manager.accept()
-        else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        if (has(Manifest.permission.RECORD_AUDIO)) {
+            // Без разрешения на камеру принимаем звонок без видео, а не роняем его.
+            manager.accept(withVideo = pendingVideo && has(Manifest.permission.CAMERA))
+        } else {
+            Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        }
     }
 
     val requestPermissions: (Boolean) -> Unit = { withVideo ->
-        val needed = buildList {
+        // Bluetooth не обязателен: без него звонок идёт через динамик, поэтому его отказ не должен
+        // заново открывать системное окно при каждом ответе.
+        val required = buildList {
             add(Manifest.permission.RECORD_AUDIO)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
             if (withVideo) add(Manifest.permission.CAMERA)
         }
-        val allGranted = needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        if (allGranted) {
+        if (required.all(::has)) {
             manager.accept(withVideo = withVideo)
         } else {
-            acceptPermissions.launch(needed.toTypedArray())
+            pendingVideo = withVideo
+            val ask = required.filterNot(::has) +
+                    listOfNotNull(Manifest.permission.BLUETOOTH_CONNECT.takeUnless(::has))
+            acceptPermissions.launch(ask.toTypedArray())
         }
     }
 
-    val c = call ?: return
+    val remoteVideoFlow = remember(manager.engine) {
+        (manager.engine as? TgCallsEngine)?.remoteVideoActive ?: MutableStateFlow(false)
+    }
+    val remoteVideo by remoteVideoFlow.collectAsState()
+    val frontFlow = remember(manager.engine) {
+        (manager.engine as? TgCallsEngine)?.frontCamera ?: MutableStateFlow(true)
+    }
+    val frontCamera by frontFlow.collectAsState()
 
+    // Последний звонок держим, чтобы экран успел проиграть анимацию закрытия.
+    var lastCall by remember { mutableStateOf<ActiveCall?>(null) }
+    if (call != null) lastCall = call
+
+    val base = LocalGlass.current
+    val overlayGlass = remember(base) {
+        GlassSettings(blurRadius = maxOf(base.blurRadius, 40f), opacity = 0.55f)
+    }
+
+    MaterialExpressiveTheme(motionScheme = MotionScheme.expressive()) {
+        AnimatedVisibility(
+            visible = call != null,
+            enter = fadeIn(tween(260)) + slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 10 },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(220)) { it / 10 },
+        ) {
+            val c = lastCall ?: return@AnimatedVisibility
+            CallContent(
+                c = c,
+                manager = manager,
+                chats = chats,
+                backdrop = backdrop,
+                glass = overlayGlass,
+                route = route,
+                remoteVideo = remoteVideo,
+                frontCamera = frontCamera,
+                onAccept = requestPermissions,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CallContent(
+    c: ActiveCall,
+    manager: CallManager,
+    chats: ChatRepository,
+    backdrop: BackdropState,
+    glass: GlassSettings,
+    route: AudioRoute,
+    remoteVideo: Boolean,
+    frontCamera: Boolean,
+    onAccept: (Boolean) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
     var elapsed by remember(c.startedAtMillis) { mutableStateOf(0) }
     LaunchedEffect(c.startedAtMillis, c.phase) {
         val start = c.startedAtMillis ?: return@LaunchedEffect
@@ -135,219 +212,250 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
         c.phase == CallPhase.RINGING && !c.isOutgoing -> if (c.isVideo) "Входящий видеозвонок" else "Входящий звонок"
         else -> c.message ?: ""
     }
+    // Ключ смены текста: таймер не перерисовывается каждую секунду, анимируется только смена этапа.
+    val statusKey = if (c.phase == CallPhase.ACTIVE) "timer" else status
 
-    val base = LocalGlass.current
-    val overlayGlass = remember(base) {
-        GlassSettings(blurRadius = maxOf(base.blurRadius, 40f), opacity = 0.55f)
-    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .glass(backdrop, glass, RectangleShape, scheme.surfaceContainerLowest)
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+    ) {
+        // 1. Удалённый видеопоток. Флаг «собеседник шлёт видео» приходит раньше кадров (а иногда кадры не
+        // приходят вовсе), поэтому аватар прячем только после первого реально отрисованного кадра.
+        val wantRemote = c.phase == CallPhase.ACTIVE && remoteVideo
+        var remoteFrameShown by remember(c.id) { mutableStateOf(false) }
+        LaunchedEffect(wantRemote) { if (!wantRemote) remoteFrameShown = false }
+        val showRemote = wantRemote && remoteFrameShown
+        if (wantRemote) {
+            VideoSurface(
+                videoSinkSetter = { sink -> (manager.engine as? TgCallsEngine)?.remoteVideoSink = sink },
+                modifier = Modifier.fillMaxSize(),
+                onFirstFrame = { remoteFrameShown = true },
+            )
+        }
 
-    MaterialExpressiveTheme(motionScheme = MotionScheme.expressive()) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .glass(backdrop, overlayGlass, RectangleShape, MaterialTheme.colorScheme.surfaceContainerLowest)
-                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
-        ) {
-            // 1. Удалённый видеопоток
-            if (c.isVideo && c.phase == CallPhase.ACTIVE) {
-                VideoSurface(
-                    videoSinkSetter = { sink ->
-                        (manager.engine as? TgCallsEngine)?.remoteVideoSink = sink
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding(),
+        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            // 2. Аватар, имя и статус: при видео плавно уходят, пока нет кадра — на экране.
+            AnimatedVisibility(
+                visible = !showRemote,
+                enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)),
+                exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.92f, animationSpec = tween(200)),
+                modifier = Modifier.align(Alignment.TopCenter),
             ) {
-                // Если видео выключено или ещё идёт соединение: аватар и имя
-                if (!c.isVideo || c.phase != CallPhase.ACTIVE) {
-                    Column(
-                        Modifier.align(Alignment.TopCenter).padding(top = 56.dp, start = 24.dp, end = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                Column(
+                    Modifier.padding(top = 56.dp, start = 24.dp, end = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CallAvatar(c, chats)
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        c.title.ifEmpty { "Звонок" },
+                        style = MaterialTheme.typography.headlineLargeEmphasized,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    AnimatedContent(
+                        targetState = statusKey,
+                        transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(160))) },
+                        label = "callStatus",
                     ) {
-                        PulsingAvatar(c, chats, pulsing = c.phase == CallPhase.RINGING || c.phase == CallPhase.CONNECTING)
-                        Spacer(Modifier.height(12.dp))
-                        Text(c.title.ifEmpty { "Звонок" }, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(6.dp))
-                        Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if ((c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) && c.message == null && c.emojis.isNotEmpty()) {
+                        if (status.isNotEmpty()) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (c.phase == CallPhase.ACTIVE) scheme.primaryContainer else scheme.secondaryContainer,
+                                contentColor = if (c.phase == CallPhase.ACTIVE) scheme.onPrimaryContainer else scheme.onSecondaryContainer,
+                            ) {
+                                Text(
+                                    status,
+                                    style = MaterialTheme.typography.labelLargeEmphasized,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = (c.phase == CallPhase.ACTIVE || c.phase == CallPhase.CONNECTING) &&
+                                c.message == null && c.emojis.isNotEmpty(),
+                        enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                        exit = fadeOut(tween(150)) + shrinkVertically(tween(150)),
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Spacer(Modifier.height(24.dp))
-                            Text(c.emojis.joinToString("  "), fontSize = 32.sp)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Сверьте эмодзи с собеседником",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(28.dp),
+                                color = scheme.surfaceContainerHigh,
+                                contentColor = scheme.onSurface,
+                            ) {
+                                Column(
+                                    Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(c.emojis.joinToString("  "), fontSize = 32.sp)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "Сверьте эмодзи с собеседником",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
 
-                // 2. Локальный видеопоток (Превью камеры с drag-прилипанием)
-                AnimatedVisibility(
-                    visible = c.isVideo && c.phase == CallPhase.ACTIVE,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    val scope = rememberCoroutineScope()
-                    val offsetX = remember { Animatable(0f) }
-                    val offsetY = remember { Animatable(0f) }
-
-                    Box(
-                        modifier = Modifier
-                            .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
-                            .padding(16.dp)
-                            .size(110.dp, 160.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .pointerInput(Unit) {
-                                detectDragGestures(
-                                    onDragEnd = {
-                                        scope.launch {
-                                            offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessLow))
-                                            offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessLow))
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        scope.launch {
-                                            offsetX.snapTo(offsetX.value + dragAmount.x)
-                                            offsetY.snapTo(offsetY.value + dragAmount.y)
-                                        }
-                                    }
-                                )
-                            }
-                    ) {
-                        VideoSurface(
-                            videoSinkSetter = { sink ->
-                                (manager.engine as? TgCallsEngine)?.localVideoSink = sink
-                            },
-                            isOverlay = true,
-                            mirror = true,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-
-                // 3. Парящая панель управления в стиле Expressive (Surface с скруглённой формой)
-                Surface(
-                    shape = RoundedCornerShape(36.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
-                    tonalElevation = 8.dp,
+            // 3. Своё видео: плавно появляется, перетаскивается и пружинно возвращается в угол.
+            AnimatedVisibility(
+                visible = c.isVideo && c.phase == CallPhase.ACTIVE,
+                enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.8f, animationSpec = tween(250)),
+                exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.8f, animationSpec = tween(150)),
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                val scope = rememberCoroutineScope()
+                val offsetX = remember { Animatable(0f) }
+                val offsetY = remember { Animatable(0f) }
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 36.dp),
+                        .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
+                        .padding(16.dp)
+                        .size(110.dp, 160.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .border(2.dp, scheme.surfaceContainerHighest, RoundedCornerShape(28.dp))
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragEnd = {
+                                    scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessLow)) }
+                                    scope.launch { offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessLow)) }
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    scope.launch {
+                                        offsetX.snapTo(offsetX.value + dragAmount.x)
+                                        offsetY.snapTo(offsetY.value + dragAmount.y)
+                                    }
+                                },
+                            )
+                        },
                 ) {
-                    val incoming = !c.isOutgoing && c.phase == CallPhase.RINGING
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        if (incoming) {
-                            Button(
-                                onClick = { requestPermissions(true) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            ) {
-                                Icon(Icons.Filled.Videocam, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("С видео")
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Button(
-                                onClick = { requestPermissions(false) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                            ) {
-                                Icon(Icons.Filled.Call, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Голос")
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            MorphingCallButton(
+                    VideoSurface(
+                        videoSinkSetter = { sink -> (manager.engine as? TgCallsEngine)?.localVideoSink = sink },
+                        isOverlay = true,
+                        mirror = frontCamera,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+
+            // 4. Кнопки (M3 Expressive): входящий — связанная группа сегментов, активный — панель переключателей и широкая «Завершить».
+            val incoming = !c.isOutgoing && c.phase == CallPhase.RINGING
+            val green = Color(0xFF2EB85C)
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AnimatedContent(
+                    targetState = incoming,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 4 })
+                            .togetherWith(fadeOut(tween(150)))
+                    },
+                    label = "callControls",
+                ) { isIncoming ->
+                    if (isIncoming) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            CallSegmentButton(
                                 icon = Icons.Filled.CallEnd,
-                                contentDescription = "Отклонить",
-                                isActive = true,
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = Color.White,
-                                activeContainerColor = MaterialTheme.colorScheme.error,
-                                activeContentColor = Color.White,
+                                label = "Отклонить",
                                 onClick = { manager.hangUp() },
+                                container = scheme.error,
+                                content = scheme.onError,
+                                modifier = Modifier.weight(1f),
+                                leftEdge = true,
                             )
-                        } else {
-                            MorphingCallButton(
-                                icon = if (c.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                                contentDescription = "Микрофон",
-                                isActive = c.muted,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                activeContainerColor = MaterialTheme.colorScheme.errorContainer,
-                                activeContentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                onClick = { manager.setMuted(!c.muted) },
+                            CallSegmentButton(
+                                icon = Icons.Filled.Call,
+                                label = "Голос",
+                                onClick = { onAccept(false) },
+                                container = green,
+                                content = Color.White,
+                                modifier = Modifier.weight(1f),
                             )
-
-                            Spacer(Modifier.width(8.dp))
-
-                            MorphingCallButton(
-                                icon = if (c.isVideo) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
-                                contentDescription = "Камера",
-                                isActive = c.isVideo,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                onClick = { manager.toggleCamera(!c.isVideo) },
+                            CallSegmentButton(
+                                icon = Icons.Filled.Videocam,
+                                label = "Видео",
+                                onClick = { onAccept(true) },
+                                container = green,
+                                content = Color.White,
+                                modifier = Modifier.weight(1f),
+                                rightEdge = true,
                             )
-
-                            if (c.isVideo) {
-                                Spacer(Modifier.width(8.dp))
-                                Surface(
-                                    onClick = { manager.switchCamera() },
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    modifier = Modifier.size(64.dp),
+                        }
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                shape = RoundedCornerShape(36.dp),
+                                color = scheme.surfaceContainer.copy(alpha = 0.92f),
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.Top,
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Cameraswitch, contentDescription = "Сменить камеру")
+                                    CallActionButton(
+                                        icon = if (c.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                                        label = if (c.muted) "Включить" else "Микрофон",
+                                        onClick = { manager.setMuted(!c.muted) },
+                                        active = c.muted,
+                                    )
+                                    CallActionButton(
+                                        icon = if (c.isVideo) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                                        label = "Камера",
+                                        onClick = { manager.toggleCamera(!c.isVideo) },
+                                        active = c.isVideo,
+                                    )
+                                    AnimatedVisibility(
+                                        visible = c.phase == CallPhase.ACTIVE,
+                                        enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.6f) + expandHorizontally(),
+                                        exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.6f) + shrinkHorizontally(),
+                                    ) {
+                                        val (routeIcon, routeLabel) = when (route) {
+                                            AudioRoute.SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp to "Динамик"
+                                            AudioRoute.BLUETOOTH -> Icons.Filled.Bluetooth to "Bluetooth"
+                                            AudioRoute.EARPIECE -> Icons.Filled.PhoneInTalk to "Разговор"
+                                        }
+                                        CallActionButton(
+                                            icon = routeIcon,
+                                            label = routeLabel,
+                                            onClick = { manager.cycleRoute() },
+                                            active = route != AudioRoute.EARPIECE,
+                                        )
+                                    }
+                                    AnimatedVisibility(
+                                        visible = c.isVideo,
+                                        enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.6f) + expandHorizontally(),
+                                        exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.6f) + shrinkHorizontally(),
+                                    ) {
+                                        CallActionButton(
+                                            icon = Icons.Filled.Cameraswitch,
+                                            label = "Перевернуть",
+                                            onClick = { manager.switchCamera() },
+                                        )
                                     }
                                 }
                             }
-
-                            if (c.phase == CallPhase.ACTIVE) {
-                                Spacer(Modifier.width(8.dp))
-                                val (routeIcon, routeLabel) = when (route) {
-                                    AudioRoute.SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp to "Громкая связь"
-                                    AudioRoute.BLUETOOTH -> Icons.Filled.Bluetooth to "Bluetooth"
-                                    AudioRoute.EARPIECE -> Icons.Filled.PhoneInTalk to "Динамик"
-                                }
-                                Surface(
-                                    onClick = { manager.cycleRoute() },
-                                    shape = CircleShape,
-                                    color = if (route == AudioRoute.EARPIECE) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary,
-                                    contentColor = if (route == AudioRoute.EARPIECE) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(64.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(routeIcon, contentDescription = routeLabel)
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.width(8.dp))
-
-                            MorphingCallButton(
+                            Spacer(Modifier.height(12.dp))
+                            CallWideButton(
                                 icon = Icons.Filled.CallEnd,
-                                contentDescription = "Завершить",
-                                isActive = true,
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = Color.White,
-                                activeContainerColor = MaterialTheme.colorScheme.error,
-                                activeContentColor = Color.White,
+                                label = "Завершить",
                                 onClick = { manager.hangUp() },
+                                container = scheme.error,
+                                content = scheme.onError,
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }
@@ -357,38 +465,23 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
     }
 }
 
+/** Аватар в форме Cookie на «солнечном» фоне M3 Expressive; ничего не пульсирует и не крутится. */
 @Composable
-private fun PulsingAvatar(c: ActiveCall, chats: ChatRepository, pulsing: Boolean) {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val progress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart),
-        label = "pulseProgress",
-    )
-    Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
-        if (pulsing) {
-            Box(
-                Modifier
-                    .size(128.dp)
-                    .scale(1f + progress * 0.6f)
-                    .alpha((1f - progress) * 0.35f)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-            )
-            WavyCircleRing(
-                modifier = Modifier.size(160.dp),
-                mainArcColor = MaterialTheme.colorScheme.primary,
-                wavySegmentColor = MaterialTheme.colorScheme.tertiaryContainer,
-                strokeWidth = 4.dp,
-                waveAmplitude = 5.dp,
-                animating = true,
-            )
-        }
+private fun CallAvatar(c: ActiveCall, chats: ChatRepository) {
+    val scheme = MaterialTheme.colorScheme
+    Box(Modifier.size(232.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(232.dp)
+                .clip(MaterialShapes.Sunny.toShape())
+                .background(scheme.secondaryContainer),
+        )
         FileAvatar(
             title = c.title,
             fileId = c.avatarFileId,
             fileState = { id -> chats.fileState(id) },
-            size = 128.dp,
+            size = 168.dp,
+            shape = MaterialShapes.Cookie9Sided.toShape(),
         )
     }
 }

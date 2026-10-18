@@ -45,6 +45,9 @@ import dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeCopyText
 import dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeUrl
 import dev.g000sha256.tdl.dto.CallbackQueryPayloadData
 import dev.g000sha256.tdl.dto.ReplyMarkupInlineKeyboard
+import dev.g000sha256.tdl.dto.ReplyMarkupShowKeyboard
+import dev.g000sha256.tdl.dto.ReplyMarkupRemoveKeyboard
+import dev.g000sha256.tdl.dto.KeyboardButtonTypeText
 import dev.g000sha256.tdl.dto.InputAnimation
 import dev.g000sha256.tdl.dto.InputChatPhotoStatic
 import dev.g000sha256.tdl.dto.InputDocument
@@ -97,6 +100,7 @@ import dev.g000sha256.tdl.dto.MessageTopicThread
 import dev.g000sha256.tdl.dto.MessageVideo
 import dev.g000sha256.tdl.dto.MessageVideoNote
 import dev.g000sha256.tdl.dto.MessageVoiceNote
+import dev.g000sha256.tdl.dto.MessageAudio
 import dev.g000sha256.tdl.dto.PaidMediaPhoto
 import dev.g000sha256.tdl.dto.PaidMediaPreview
 import dev.g000sha256.tdl.dto.PaidMediaVideo
@@ -135,6 +139,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -217,6 +222,9 @@ data class MessageSearchPage(val hits: List<SearchMessageHit>, val nextOffset: S
 /** Страница поиска внутри чата: id сообщений от новых к старым; [nextFromMessageId] == 0 — конец. */
 data class ChatSearchPage(val ids: List<Long>, val nextFromMessageId: Long, val total: Int)
 
+/** Предупреждение о занятой памяти: [limitReached] — достигнут лимит, автозагрузка отключена. */
+data class StorageAlert(val usedBytes: Long, val limitReached: Boolean)
+
 enum class MediaKind(val label: String) {
     PHOTO("Фото"),
     VIDEO("Видео"),
@@ -224,6 +232,7 @@ enum class MediaKind(val label: String) {
     STICKER("Стикер"),
     DOCUMENT("Файл"),
     VOICE("Голосовое сообщение"),
+    AUDIO("Аудио"),
     VIDEO_NOTE("Видеосообщение"),
 }
 
@@ -245,6 +254,8 @@ data class MediaItem(
     val duration: Int = 0,
     /** Сжатая форма волны голосового (5 бит на отсчёт) или null. */
     val waveform: ByteArray? = null,
+    /** Исполнитель музыкального файла (для [MediaKind.AUDIO]); название — в [name]. */
+    val artist: String = "",
     /** Платное медиа, которое ещё не куплено: файла нет, есть только размытая заглушка. */
     val locked: Boolean = false,
     /** Сколько звёзд стоит платное медиа (для заблокированного — цена открытия). */
@@ -276,6 +287,11 @@ data class InlineButton(
     val copyText: String? = null,
 )
 
+/** Кнопка reply-клавиатуры бота (панель под полем ввода). sendable=false — спец-кнопка (контакт, гео…). */
+data class ReplyKey(val text: String, val sendable: Boolean)
+
+data class ReplyKeyboardItem(val rows: List<List<ReplyKey>>, val oneTime: Boolean)
+
 /** Ответ бота на нажатие callback-кнопки. */
 data class ButtonAnswer(val text: String, val showAlert: Boolean, val url: String)
 
@@ -292,12 +308,14 @@ data class StickerPanelState(
     val error: String? = null,
 )
 
-/** Состояние скачивания файла TDLib. */
+/** Состояние скачивания/отправки файла TDLib. */
 data class FileState(
     val path: String? = null,
     val downloaded: Long = 0L,
     val total: Long = 0L,
     val active: Boolean = false,
+    val uploaded: Long = 0L,
+    val uploading: Boolean = false,
 )
 
 /** Ссылка на сообщение, на которое отвечают. */
@@ -391,6 +409,10 @@ data class MessageItem(
     val emojis: List<CustomEmojiSpan> = emptyList(),
     /** Inline-клавиатура бота под сообщением: ряды кнопок. */
     val buttons: List<List<InlineButton>> = emptyList(),
+    /** Reply-клавиатура, которую это сообщение бота показывает. */
+    val replyKeyboard: ReplyKeyboardItem? = null,
+    /** Сообщение бота убирает reply-клавиатуру. */
+    val removesKeyboard: Boolean = false,
     /** Служебное сообщение («участник вошёл», «чат создан»…): рисуется по центру без автора. */
     val isService: Boolean = false,
     /** Опрос, если сообщение — опрос. */
@@ -399,6 +421,8 @@ data class MessageItem(
     val forward: ForwardRef? = null,
     /** Ссылки, спрятанные за словами текста («нажмите здесь»), с позициями в [text]. */
     val links: List<LinkSpan> = emptyList(),
+    /** Id альбома (несколько фото/видео одним сообщением); 0 — не альбом. */
+    val albumId: Long = 0L,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -445,6 +469,8 @@ data class ProfileDetails(
     /** Можно менять публичный адрес (создатель супергруппы или канала). */
     val canSetUsername: Boolean = false,
     val isCreator: Boolean = false,
+    /** Это профиль самого пользователя: можно менять имя, «О себе» и фото. */
+    val isSelf: Boolean = false,
 )
 
 /** Права участников группы по умолчанию. */
@@ -522,6 +548,9 @@ data class CallPage(val items: List<CallItem>, val nextOffset: String)
 data class DeleteEvent(val chatId: Long, val keptIds: Set<Long>, val removedIds: Set<Long>)
 
 /** Содержимое сообщения изменилось; [oldText] не null, если прежний текст добавлен в историю правок. */
+/** Отправка завершена: временный id сообщения заменён настоящим. */
+data class SendSucceededEvent(val chatId: Long, val oldMessageId: Long, val message: MessageItem)
+
 data class ContentEvent(
     val chatId: Long,
     val messageId: Long,
@@ -573,6 +602,13 @@ class ChatRepository(
     private val _deletions = MutableSharedFlow<DeleteEvent>(extraBufferCapacity = 64)
     val deletions: SharedFlow<DeleteEvent> = _deletions.asSharedFlow()
 
+    /** Временный id отправляемого сообщения → настоящий id после отправки. */
+    private val sentIdMap = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
+    private fun realId(messageId: Long): Long = sentIdMap[messageId] ?: messageId
+
+    private val _sendSucceeded = MutableSharedFlow<SendSucceededEvent>(extraBufferCapacity = 64)
+    val sendSucceeded: SharedFlow<SendSucceededEvent> = _sendSucceeded.asSharedFlow()
     private val _contentUpdates = MutableSharedFlow<ContentEvent>(extraBufferCapacity = 64)
     val contentUpdates: SharedFlow<ContentEvent> = _contentUpdates.asSharedFlow()
 
@@ -601,12 +637,22 @@ class ChatRepository(
     val creatorUsers: StateFlow<Set<Long>> = _creatorUsers.asStateFlow()
 
     private val _ownUserId = MutableStateFlow(0L)
+
+    /** Название чата для UI: чат с самим собой («Избранное») называется «Заметки». */
+    private fun dev.g000sha256.tdl.dto.Chat.displayTitle(): String {
+        val me = _ownUserId.value
+        return if (me != 0L && (type as? ChatTypePrivate)?.userId == me) "Заметки" else title
+    }
     /** Id текущего пользователя (0, пока не известен). */
     val ownUserId: StateFlow<Long> = _ownUserId.asStateFlow()
 
     private val _banners = MutableStateFlow<Map<Long, YougramBanner>>(emptyMap())
     /** Баннеры профилей пользователей Yougram (userId -> баннер). */
     val banners: StateFlow<Map<Long, YougramBanner>> = _banners.asStateFlow()
+
+    private val _badgeStyles = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    /** Выбранный вид значка пользователей Yougram (userId -> 1..3; классический не хранится). */
+    val badgeStyles: StateFlow<Map<Long, Int>> = _badgeStyles.asStateFlow()
 
     /** Обновляет метку и баннер пользователя по его актуальному bio. */
     private fun noteBio(userId: Long, bio: String) {
@@ -618,6 +664,8 @@ class ChatRepository(
         _creatorUsers.update { if (isCreator) it + userId else it - userId }
         val banner = if (marked) YougramBadge.bannerOf(bio) else null
         _banners.update { if (banner != null) it + (userId to banner) else it - userId }
+        val style = if (marked) YougramBadge.styleOf(bio) else 0
+        _badgeStyles.update { if (style != 0) it + (userId to style) else it - userId }
     }
 
     private val badgeChecked = ConcurrentHashMap.newKeySet<Long>()
@@ -645,11 +693,11 @@ class ChatRepository(
      * Приводит хвост bio текущего пользователя к нужному виду: метка Yougram и, если задан, баннер
      * (или ничего, если [enabled] выключен). Возвращает true, если после записи bio совпало с желаемым.
      */
-    suspend fun syncOwnBadge(enabled: Boolean, banner: YougramBanner? = null): Boolean {
+    suspend fun syncOwnBadge(enabled: Boolean, banner: YougramBanner? = null, badgeStyle: Int = 0): Boolean {
         val me = client.getMe().getOrThrow()
         _ownUserId.value = me.id
         val bio = client.getUserFullInfo(userId = me.id).getOrThrow().bio?.text.orEmpty()
-        val payload = banner?.encode() ?: YougramBadge.NO_BANNER
+        val payload = YougramBadge.payload(banner, badgeStyle)
         val desired = if (enabled) YougramBadge.MARKER + payload + YougramBadge.versionPayload() else ""
         if (YougramBadge.tail(bio) != desired) {
             val newBio = YougramBadge.strip(bio) + desired
@@ -723,6 +771,7 @@ class ChatRepository(
         }
         scope.launch {
             client.newChatUpdates.collect { update ->
+                if (_ownUserId.value == 0L) runCatching { _ownUserId.value = client.getMe().getOrThrow().id }
                 val chat = update.chat
                 val order = chat.positions.firstOrNull { it.list is ChatListMain }?.order ?: 0L
                 val folderOrders = chat.positions
@@ -733,7 +782,7 @@ class ChatRepository(
                 val avatarDone = avatar?.local?.isDownloadingCompleted == true
                 val state = ChatState(
                     id = chat.id,
-                    title = chat.title,
+                    title = chat.displayTitle(),
                     lastMessage = chat.lastMessage?.toItem(),
                     unreadCount = chat.unreadCount,
                     order = order,
@@ -748,6 +797,7 @@ class ChatRepository(
                 chatStates.update { it + (chat.id to state) }
                 if (avatar != null && !avatarDone) downloadAvatar(avatar.id)
                 publish()
+                if (chat.lastMessage == null) backfillLastMessage(chat.id)
             }
         }
         scope.launch {
@@ -802,6 +852,7 @@ class ChatRepository(
                     ))
                 }
                 publish()
+                if (update.lastMessage == null) backfillLastMessage(update.chatId)
             }
         }
         scope.launch {
@@ -858,6 +909,17 @@ class ChatRepository(
             client.messageInteractionInfoUpdates.collect { update ->
                 _reactionEvents.tryEmit(
                     ReactionEvent(update.chatId, update.messageId, update.interactionInfo.toReactions()),
+                )
+            }
+        }
+        scope.launch {
+            client.messageSendSucceededUpdates.collect { update ->
+                // Запоминаем соответствие временного id настоящему: правка/удаление/закрепление
+                // по старому id (например, взятому до подтверждения отправки) дают «Message not found».
+                sentIdMap[update.oldMessageId] = update.message.id
+                plugins?.emitMessageSent(PluginMessage.from(update.message.toItem(), update.message.content), update.oldMessageId)
+                _sendSucceeded.tryEmit(
+                    SendSucceededEvent(update.message.chatId, update.oldMessageId, update.message.toItem()),
                 )
             }
         }
@@ -1048,6 +1110,7 @@ class ChatRepository(
         val media = item.media ?: return
         if (!p.saveAttachments || item.isOutgoing) return
         if (media.size > MAX_AUTO_ATTACHMENT) return
+        if (!autoDownloadAllowed()) return
         val limit = p.maxFolderBytes
         if (limit != null && media.size > limit) return
         val meta = chatMeta(item.chatId)
@@ -1165,6 +1228,93 @@ class ChatRepository(
         client.getChat(chatId = chatId).getOrThrow().lastReadOutboxMessageId
     }.getOrDefault(0L)
 
+    // ---- Память приложения: предупреждение и лимит автозагрузки ----
+
+    @Volatile private var storageBytes = 0L
+    @Volatile private var storageCheckedAt = 0L
+    private val storageMutex = kotlinx.coroutines.sync.Mutex()
+    private var warnShown = false
+    private var capShown = false
+
+    private val _storageAlert = MutableStateFlow<StorageAlert?>(null)
+    val storageAlert: StateFlow<StorageAlert?> = _storageAlert.asStateFlow()
+
+    fun dismissStorageAlert() { _storageAlert.value = null }
+
+    /** Сколько места занимает приложение (файлы + база TDLib). Результат кэшируется на [STORAGE_TTL_MS]. */
+    private suspend fun storageUsage(force: Boolean = false): Long = storageMutex.withLock {
+        val nowMs = System.currentTimeMillis()
+        if (force || nowMs - storageCheckedAt > STORAGE_TTL_MS) {
+            val stats = (client.getStorageStatisticsFast() as? TdlResult.Success)?.result
+            if (stats != null) {
+                storageBytes = stats.filesSize + stats.databaseSize
+                storageCheckedAt = nowMs
+                evaluateStorage(storageBytes)
+            }
+        }
+        storageBytes
+    }
+
+    /** Показывает предупреждение один раз за превышение порога; после очистки снова становится активным. */
+    private fun evaluateStorage(used: Long) {
+        val prefs = settings.dataPrefs.value
+        val warn = prefs.storageWarnBytes
+        val cap = prefs.autoDownloadCapBytes
+        val overCap = cap > 0 && used >= cap
+        val overWarn = warn > 0 && used >= warn
+        if (!overWarn) warnShown = false
+        if (!overCap) capShown = false
+        when {
+            overCap && !capShown -> {
+                capShown = true
+                warnShown = true
+                _storageAlert.value = StorageAlert(used, limitReached = true)
+            }
+            overWarn && !overCap && !warnShown -> {
+                warnShown = true
+                _storageAlert.value = StorageAlert(used, limitReached = false)
+            }
+        }
+    }
+
+    /** Проверить занятую память (и при необходимости показать предупреждение). */
+    fun checkStorage() {
+        scope.launch { storageUsage() }
+    }
+
+    /** Можно ли сейчас качать что-то само: false, если занято не меньше лимита автозагрузки. */
+    private suspend fun autoDownloadAllowed(): Boolean {
+        val cap = settings.dataPrefs.value.autoDownloadCapBytes
+        val used = storageUsage()
+        return cap <= 0 || used < cap
+    }
+
+    /** Автоматическая загрузка (без нажатия пользователя): уважает лимит памяти. Ручная — [download]. */
+    fun autoDownload(fileId: Int, priority: Int = 8) {
+        scope.launch {
+            if (autoDownloadAllowed()) download(fileId, priority)
+        }
+    }
+
+    /** Удаляет кэшированные файлы (медиа можно скачать заново) и пересчитывает занятую память. */
+    suspend fun clearCache() {
+        client.optimizeStorage(
+            size = 0L,
+            ttl = 0,
+            count = 0,
+            immunityDelay = 0,
+            fileTypes = emptyArray(),
+            chatIds = longArrayOf(),
+            excludeChatIds = longArrayOf(),
+            returnDeletedFileStatistics = false,
+            chatLimit = 0,
+        ).getOrThrow()
+        _storageAlert.value = null
+        warnShown = false
+        capShown = false
+        storageUsage(force = true)
+    }
+
     /** Запускает загрузку файла; прогресс и путь придут через [fileState]. */
     fun download(fileId: Int, priority: Int = 8) {
         scope.launch {
@@ -1194,6 +1344,8 @@ class ChatRepository(
             downloaded = file.local.downloadedSize,
             total = sizeOf(file),
             active = file.local.isDownloadingActive,
+            uploaded = file.remote.uploadedSize,
+            uploading = file.remote.isUploadingActive,
         )
         fileStates.update { map ->
             val old = map[file.id]
@@ -1219,11 +1371,13 @@ class ChatRepository(
             if (result.code == 404) return false
             throw TelegramException(result.code, result.message)
         }
+        // К этому моменту TDLib уже знает последние сообщения: добираем те, что пришли пустыми.
+        chatStates.value.values.filter { it.lastMessage == null }.forEach { backfillLastMessage(it.id) }
         return true
     }
 
     suspend fun getChatTitle(chatId: Long): String =
-        chatStates.value[chatId]?.title ?: client.getChat(chatId = chatId).getOrThrow().title
+        chatStates.value[chatId]?.title ?: client.getChat(chatId = chatId).getOrThrow().displayTitle()
 
     suspend fun getChatInfo(chatId: Long, viaThread: Boolean = false): ChatInfo = runCatching {
         val chat = client.getChat(chatId = chatId).getOrThrow()
@@ -1250,7 +1404,7 @@ class ChatRepository(
         val avatar = chat.photo?.small
         avatar?.let { prepareAvatar(it) }
         ChatInfo(
-            title = chat.title,
+            title = chat.displayTitle(),
             canSendMessages = canSend,
             isChannel = isChannel,
             isGroup = isGroup,
@@ -1297,7 +1451,7 @@ class ChatRepository(
             is ChatTypeBasicGroup -> "Группа"
             else -> ""
         }
-        return SearchChatHit(chatId = chatId, title = chat.title, subtitle = subtitle, avatarFileId = avatar?.id)
+        return SearchChatHit(chatId = chatId, title = chat.displayTitle(), subtitle = subtitle, avatarFileId = avatar?.id)
     }
 
     private suspend fun chatHits(ids: List<Long>): List<SearchChatHit> = coroutineScope {
@@ -1674,10 +1828,12 @@ class ChatRepository(
                 val names = user.usernames?.activeUsernames?.toList().orEmpty()
                 val bot = user.type is UserTypeBot
                 if (!bot && full != null) noteBio(user.id, full.bio?.text.orEmpty())
+                val meId = runCatching { client.getMe().getOrThrow().id }.getOrDefault(0L)
+                val self = meId != 0L && user.id == meId
                 ProfileDetails(
                     kind = if (bot) ProfileKind.BOT else ProfileKind.USER,
                     chatId = chatId,
-                    title = chat.title,
+                    title = if (self) "${user.firstName} ${user.lastName}".trim() else chat.displayTitle(),
                     subtitle = if (bot) "бот" else statusText(user),
                     description = YougramBadge.strip(full?.bio?.text.orEmpty()),
                     phone = user.phoneNumber.takeIf { it.isNotEmpty() }?.let { "+$it" },
@@ -1686,6 +1842,8 @@ class ChatRepository(
                     link = null,
                     id = user.id,
                     avatarFileId = big?.id,
+                    canEdit = self,
+                    isSelf = self,
                 )
             }
             is ChatTypeSupergroup -> {
@@ -1824,6 +1982,9 @@ class ChatRepository(
         removePhoto: Boolean,
     ): List<String> {
         val warnings = ArrayList<String>()
+        val selfId = (client.getChat(chatId = chatId).getOrThrow().type as? ChatTypePrivate)?.userId
+            ?.takeIf { it == runCatching { client.getMe().getOrThrow().id }.getOrDefault(0L) }
+        if (selfId != null) return editSelf(selfId, title, description, photoPath)
         if (title != null) {
             runCatching { client.setChatTitle(chatId = chatId, title = title.trim()).getOrThrow() }
                 .onFailure { warnings += "Не удалось сохранить название" }
@@ -1844,6 +2005,29 @@ class ChatRepository(
         } else if (removePhoto) {
             runCatching { client.setChatPhoto(chatId = chatId, photo = null).getOrThrow() }
                 .onFailure { warnings += "Не удалось убрать фото" }
+        }
+        return warnings
+    }
+
+    /** Правки собственного профиля: имя (первое слово — имя, остальное — фамилия), «О себе» (хвост Yougram сохраняется) и фото. */
+    private suspend fun editSelf(userId: Long, title: String?, description: String?, photoPath: String?): List<String> {
+        val warnings = ArrayList<String>()
+        if (title != null) {
+            val t = title.trim()
+            runCatching {
+                client.setName(firstName = t.substringBefore(' ').trim(), lastName = t.substringAfter(' ', "").trim()).getOrThrow()
+            }.onFailure { warnings += "Не удалось сохранить имя" }
+        }
+        if (description != null) {
+            runCatching {
+                val bio = client.getUserFullInfo(userId = userId).getOrThrow().bio?.text.orEmpty()
+                val newBio = description.trim() + YougramBadge.tail(bio)
+                client.setBio(bio = newBio).getOrThrow()
+                noteBio(userId, newBio)
+            }.onFailure { warnings += "Не удалось сохранить «О себе»" }
+        }
+        if (photoPath != null) {
+            runCatching { setProfilePhoto(photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
         }
         return warnings
     }
@@ -1909,19 +2093,23 @@ class ChatRepository(
         ReplyPreview(author, item.summary.ifEmpty { "Сообщение" })
     }.getOrDefault(ReplyPreview("", "Сообщение недоступно"))
 
-    suspend fun editText(chatId: Long, messageId: Long, text: String) {
+    suspend fun editText(chatId: Long, messageId: Long, text: String, fromPlugin: Boolean = false) {
+        // Правки плагина идут мимо хука before_edit, иначе плагин зациклится на собственных правках.
+        val finalText = if (fromPlugin) text else plugins?.beforeEdit(chatId, messageId, text) ?: return
+        var messageId = messageId
         // Сразу после отправки TDLib иногда ещё не успевает синхронизировать сообщение
         // с серверной историей. В этот короткий момент editMessageText может вернуть
         // message_not_found. Повторяем только эту временную ошибку.
         var last: Throwable? = null
         repeat(4) { attempt ->
             try {
+                messageId = realId(messageId)
                 client.editMessageText(
                     chatId = chatId,
                     messageId = messageId,
                     replyMarkup = null,
                     inputMessageContent = InputMessageText(
-                        text = FormattedText(text = text, entities = emptyArray()),
+                        text = FormattedText(text = finalText, entities = emptyArray()),
                         linkPreviewOptions = null,
                         clearDraft = false,
                     ),
@@ -1929,6 +2117,7 @@ class ChatRepository(
                 return
             } catch (e: Throwable) {
                 last = e
+                android.util.Log.w("YougramEdit", "editText failed chat=$chatId id=$messageId mapped=${sentIdMap.containsKey(messageId)} attempt=$attempt: ${e.message}")
                 val message = e.message.orEmpty().lowercase()
                 val temporaryNotFound = message.contains("message_not_found") ||
                         message.contains("message not found") ||
@@ -1942,6 +2131,7 @@ class ChatRepository(
 
     /** Удаляет сообщение у всех (в личных чатах и там, где позволяют права). */
     suspend fun deleteMessage(chatId: Long, messageId: Long) {
+        val messageId = realId(messageId)
         selfDeleting.add(messageId)
         val result = client.deleteMessages(chatId = chatId, messageIds = longArrayOf(messageId), revoke = true)
         if (result is dev.g000sha256.tdl.TdlResult.Failure) selfDeleting.remove(messageId)
@@ -1951,7 +2141,7 @@ class ChatRepository(
     suspend fun pinMessage(chatId: Long, messageId: Long) {
         client.pinChatMessage(
             chatId = chatId,
-            messageId = messageId,
+            messageId = realId(messageId),
             disableNotification = false,
             onlyForSelf = false,
         ).getOrThrow()
@@ -2143,6 +2333,33 @@ class ChatRepository(
             hasSpoiler = false,
         ),
     )
+
+    /** Отправляет 2–10 фото одним альбомом; подпись цепляется к первому фото. */
+    suspend fun sendPhotoAlbum(chatId: Long, paths: List<String>, caption: String = "") {
+        val contents: List<InputMessageContent> = paths.take(10).mapIndexed { index, path ->
+            InputMessagePhoto(
+                photo = InputPhoto(
+                    photo = InputFileLocal(path = path),
+                    thumbnail = null,
+                    video = null,
+                    addedStickerFileIds = IntArray(0),
+                    width = 0,
+                    height = 0,
+                ),
+                caption = if (index == 0) captionOf(caption) else null,
+                showCaptionAboveMedia = false,
+                selfDestructType = null,
+                hasSpoiler = false,
+            )
+        }
+        client.sendMessageAlbum(
+            chatId = chatId,
+            topicId = topicParam(chatId),
+            replyTo = threadReply(chatId),
+            options = null,
+            inputMessageContents = contents.toTypedArray(),
+        ).getOrThrow()
+    }
 
     /** Отправляет любой файл документом (так же уходят видео из галереи). */
     suspend fun sendDocument(chatId: Long, path: String, caption: String = "") = sendContent(
@@ -2539,6 +2756,37 @@ class ChatRepository(
         )
     }
 
+    private val backfilling = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Long, Boolean>())
+    private val backfillGate = Semaphore(4)
+
+    /**
+     * TDLib при старте часто отдаёт чат без последнего сообщения (оно ещё лежит в базе): тогда в списке
+     * пропадают текст и время. Спрашиваем у TDLib актуальный чат, а если и там пусто — берём из истории.
+     */
+    private fun backfillLastMessage(chatId: Long) {
+        if (!backfilling.add(chatId)) return
+        scope.launch {
+            try {
+                val last = backfillGate.withPermit {
+                    runCatching { client.getChat(chatId = chatId).getOrThrow().lastMessage?.toItem() }.getOrNull()
+                        ?: runCatching {
+                            client.getChatHistory(chatId = chatId, fromMessageId = 0L, offset = 0, limit = 1, onlyLocal = false)
+                                .getOrThrow().messages.orEmpty().filterNotNull().firstOrNull()?.toItem()
+                        }.getOrNull()
+                }
+                if (last != null) {
+                    chatStates.update { map ->
+                        val s = map[chatId] ?: return@update map
+                        if (s.lastMessage != null) map else map + (chatId to s.copy(lastMessage = last))
+                    }
+                    publish()
+                }
+            } finally {
+                backfilling.remove(chatId)
+            }
+        }
+    }
+
     private fun publish() {
         val all = chatStates.value.values.map { state ->
             ChatItem(
@@ -2594,6 +2842,7 @@ class ChatRepository(
         is MessageSticker -> ""
         is MessageDocument -> c.caption.text
         is MessageVoiceNote -> c.caption.text
+        is MessageAudio -> c.caption.text
         is MessagePaidMedia -> c.caption.text
         is MessageVideoNote -> ""
         is MessageCall -> formatCallMessage(c, isOutgoing)
@@ -2658,6 +2907,7 @@ class ChatRepository(
         media != null && media.locked && body.isEmpty() -> "⭐ ${media.paidStars} · Платное медиа"
         media == null || body.isNotEmpty() -> body
         media.kind == MediaKind.DOCUMENT -> media.name.ifEmpty { media.kind.label }
+        media.kind == MediaKind.AUDIO -> listOf(media.artist, media.name).filter { it.isNotBlank() }.joinToString(" — ").ifEmpty { media.kind.label }
         else -> media.kind.label
     }
 
@@ -2718,6 +2968,8 @@ class ChatRepository(
             paidMessageStars = paidMessageStarCount,
             emojis = emojisOf(c),
             buttons = buttonsOf(this),
+            replyKeyboard = replyKeyboardOf(this),
+            removesKeyboard = replyMarkup is ReplyMarkupRemoveKeyboard,
             isService = c::class.simpleName?.removePrefix("Message") in ServiceContentNames,
             poll = pollItem,
             forward = forwardInfo?.origin?.let { origin ->
@@ -2730,6 +2982,7 @@ class ChatRepository(
                 }
             },
             links = linksOf(c),
+            albumId = mediaAlbumId,
         )
     }
 
@@ -2773,6 +3026,14 @@ class ChatRepository(
             runCatching { client.stopPoll(chatId = chatId, messageId = messageId, replyMarkup = null).getOrThrow() }
                 .map { }
         }
+
+    private fun replyKeyboardOf(m: Message): ReplyKeyboardItem? {
+        val markup = m.replyMarkup as? ReplyMarkupShowKeyboard ?: return null
+        val rows = markup.rows.orEmpty().filterNotNull().map { row ->
+            row.orEmpty().filterNotNull().map { b -> ReplyKey(b.text, b.type is KeyboardButtonTypeText) }
+        }.filter { it.isNotEmpty() }
+        return if (rows.isEmpty()) null else ReplyKeyboardItem(rows, markup.oneTime)
+    }
 
     private fun buttonsOf(m: Message): List<List<InlineButton>> {
         val markup = m.replyMarkup as? ReplyMarkupInlineKeyboard ?: return emptyList()
@@ -2845,12 +3106,38 @@ class ChatRepository(
     private companion object {
         /** Автосохранение вложений пропускает файлы крупнее 100 МБ, чтобы не съедать трафик. */
         const val MAX_AUTO_ATTACHMENT = 100L shl 20
+        private const val STORAGE_TTL_MS = 20_000L
 
         /** TDLib считает мьют на 366 дней и больше бессрочным. */
         const val MUTE_FOREVER = 400 * 24 * 3600
     }
 
     /** Разбирает медиа-контент и заодно запоминает состояния его файлов. */
+    private fun dev.g000sha256.tdl.dto.Audio.toMediaItem(): MediaItem {
+        track(audio)
+        return MediaItem(
+            kind = MediaKind.AUDIO,
+            fileId = audio.id,
+            previewFileId = null,
+            width = 0,
+            height = 0,
+            name = title.ifBlank { fileName },
+            mimeType = mimeType,
+            size = sizeOf(audio),
+            miniThumb = albumCoverMinithumbnail?.data,
+            duration = duration,
+            artist = performer,
+        )
+    }
+
+    /** Треки, добавленные в профиль пользователя (вкладка «Музыка»); для групп, каналов и при ошибке — пусто. */
+    suspend fun profileAudios(chatId: Long): List<MediaItem> = runCatching {
+        val type = client.getChat(chatId = chatId).getOrThrow().type
+        val userId = (type as? ChatTypePrivate)?.userId ?: return@runCatching emptyList()
+        client.getUserProfileAudios(userId = userId, offset = 0, limit = 100).getOrThrow()
+            .audios.orEmpty().filterNotNull().map { it.toMediaItem() }
+    }.getOrDefault(emptyList())
+
     private fun MessageContent.toMedia(): MediaItem? = when (this) {
         is MessagePhoto -> {
             val sizes = photo.sizes.orEmpty().filterNotNull()
@@ -2992,6 +3279,7 @@ class ChatRepository(
                 miniThumb = null,
             )
         }
+        is MessageAudio -> audio.toMediaItem()
         is MessageVoiceNote -> {
             track(voiceNote.voice)
             MediaItem(

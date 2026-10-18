@@ -52,6 +52,8 @@ class AccountManager(context: Context) {
      * Если уже есть аккаунт, в который так и не вошли, используется он, чтобы не плодить пустые.
      */
     fun addAccount(): String {
+        val from = _accounts.value.firstOrNull { it.id == _activeAccountId.value }
+        if (from != null && !from.isBlank) prefs.edit().putString(KEY_PREVIOUS_ID, from.id).commit()
         val existing = _accounts.value.firstOrNull { it.isBlank && it.id != _activeAccountId.value }
         if (existing != null) {
             switchAccount(existing.id)
@@ -65,6 +67,30 @@ class AccountManager(context: Context) {
 
     fun switchAndRestart(id: String) {
         if (switchAccount(id)) restartApp()
+    }
+
+    /**
+     * Отмена добавления аккаунта: возвращает на [backTo], а пустую запись, в которую так и не вошли,
+     * убирает из списка. Затем приложение перезапускается.
+     */
+    /** Аккаунт, на который вернёт отмена добавления: тот, с которого нажали «Добавить», иначе первый со входом. */
+    fun returnTargetId(): String? {
+        val active = _activeAccountId.value
+        val candidates = _accounts.value.filter { it.id != active && !it.isBlank }
+        val saved = prefs.getString(KEY_PREVIOUS_ID, null)
+        return (candidates.firstOrNull { it.id == saved } ?: candidates.firstOrNull())?.id
+    }
+
+    fun cancelAddAndRestart(backTo: String) {
+        val blank = _accounts.value.firstOrNull { it.id == _activeAccountId.value && it.isBlank }
+        if (_accounts.value.none { it.id == backTo }) return
+        _activeAccountId.value = backTo
+        prefs.edit().putString(KEY_ACTIVE_ID, backTo).remove(KEY_PREVIOUS_ID).commit()
+        if (blank != null && blank.id != backTo) {
+            updateAccounts { list -> list.filterNot { it.id == blank.id } }
+            deleteData(blank.id)
+        }
+        restartApp()
     }
 
     fun addAndRestart() {
@@ -197,6 +223,7 @@ class AccountManager(context: Context) {
     companion object {
         const val DEFAULT_ACCOUNT_ID = "tdlib"
         private const val KEY_ACTIVE_ID = "active_account_id"
+        private const val KEY_PREVIOUS_ID = "previous_account_id"
         private const val KEY_ACCOUNTS_JSON = "accounts_json"
     }
 }

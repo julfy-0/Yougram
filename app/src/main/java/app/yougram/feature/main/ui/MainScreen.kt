@@ -71,6 +71,7 @@ import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.AlertDialog
+import app.yougram.feature.update.ui.UpdateAvailableDialog
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.MoreVert
@@ -83,6 +84,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -217,6 +219,12 @@ fun MainScreen(
     /** Чат, открытый в правой панели (планшет/фолд): подсвечивается в списке. */
     selectedChatId: Long? = null,
     onOpenStories: (Long, Int) -> Unit = { _, _ -> },
+    /** Открыть профиль пользователя (из шапки настроек — свой профиль). */
+    onOpenProfile: (Long) -> Unit = {},
+    /** Планшет: страница настроек открывается в правой панели вместо подэкрана внутри списка. */
+    onOpenSettingsDetail: ((SettingsPage) -> Unit)? = null,
+    /** Ушли с вкладки «Настройки»: правая панель со страницей настроек закрывается. */
+    onSettingsTabLeft: () -> Unit = {},
 ) {
     val glass by container.settings.glass.collectAsState()
     val chatPrefs by container.settings.chatPrefs.collectAsState()
@@ -226,8 +234,9 @@ fun MainScreen(
     val navOrder = remember(navOrderRaw) { MainTab.parseOrder(navOrderRaw) }
     val ownBanner by container.settings.banner.collectAsState()
     val badgeContext = LocalContext.current
-    LaunchedEffect(badgeOn, ownBanner) {
-        val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn, ownBanner) }.getOrDefault(false)
+    val ownBadgeStyle by container.settings.badgeStyle.collectAsState()
+    LaunchedEffect(badgeOn, ownBanner, ownBadgeStyle) {
+        val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn, ownBanner, ownBadgeStyle) }.getOrDefault(false)
         if (!ok && badgeOn) {
             Toast.makeText(badgeContext, "Не удалось обновить метку или баннер Yougram в профиле (проверьте длину «О себе»)", Toast.LENGTH_LONG).show()
         }
@@ -271,6 +280,12 @@ fun MainScreen(
         tab = newTab
     }
     var accountSheetOpen by remember { mutableStateOf(false) }
+    // Открыть страницу настроек: справа (планшет) или подэкраном внутри вкладки (телефон).
+    fun openSettingsPage(page: SettingsPage) {
+        if (onOpenSettingsDetail != null && page != SettingsPage.Home) onOpenSettingsDetail(page)
+        else navigateTo(MainTab.Settings, page)
+    }
+    LaunchedEffect(tab) { if (tab != MainTab.Settings) onSettingsTabLeft() }
 
     val chatListViewModel: ChatListViewModel = viewModel(
         factory = ChatListViewModel.factory(container.chatRepository),
@@ -318,6 +333,23 @@ fun MainScreen(
     val selectionActive = tab == MainTab.Chats && selection.isNotEmpty()
     val selectedChats = remember(allChats, selection) { allChats.filter { it.id in selection } }
     var confirmDelete by remember { mutableStateOf(false) }
+    val plateContext = LocalContext.current
+    val plateScope = androidx.compose.runtime.rememberCoroutineScope()
+    val plateStore = remember { app.yougram.core.ui.chatplate.ChatPlateStore.get(plateContext) }
+    val plateStamps by plateStore.stamps.collectAsState()
+    val plateChatId = if (selectionActive && selection.size == 1) selection.first() else null
+    val platePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        val id = plateChatId
+        if (uri != null && id != null) {
+            plateScope.launch {
+                val ok = plateStore.setImage(id, uri)
+                if (!ok) android.widget.Toast.makeText(plateContext, "Не удалось загрузить картинку", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+        chatListViewModel.clearSelection()
+    }
     // Число чатов с непрочитанными (без учёта чатов без звука) для бейджей на вкладках папок.
     val folderUnread = remember(allChats, folders) {
         val unread = allChats.filter { it.unreadCount > 0 && !it.muted }
@@ -373,9 +405,16 @@ fun MainScreen(
 
     val inSettingsSubpage = tab == MainTab.Settings && settingsPage != SettingsPage.Home
 
-    // Пока открыт поиск, всё, что под ним (список чатов / настройки), плавно размывается.
+    // Пока открыт поиск, всё, что под ним (список чатов / настройки), плавно размывается;
+    // под менеджером аккаунтов — слабее («немного»).
+    val blurAllowed = app.yougram.core.ui.rememberDeviceTier() != app.yougram.core.ui.DeviceTier.Low
     val underSearchBlur by animateDpAsState(
-        targetValue = if (searching && app.yougram.core.ui.rememberDeviceTier() != app.yougram.core.ui.DeviceTier.Low) SearchBlurRadius else 0.dp,
+        targetValue = when {
+            !blurAllowed -> 0.dp
+            searching -> SearchBlurRadius
+            accountSheetOpen && tab == MainTab.Settings -> 6.dp
+            else -> 0.dp
+        },
         animationSpec = blurSpec,
         label = "underSearchBlur",
     )
@@ -506,8 +545,9 @@ fun MainScreen(
                                         page = currentPage,
                                         container = container,
                                         contentPadding = contentPadding,
-                                        onNavigate = { navigateTo(MainTab.Settings, it) },
+                                        onNavigate = { openSettingsPage(it) },
                                         onOpenChat = onOpenChat,
+                                        onOpenProfile = onOpenProfile,
                                     )
                                 }
                             }
@@ -520,7 +560,7 @@ fun MainScreen(
                                     query = query,
                                     contentPadding = contentPadding,
                                     onOpen = {
-                                        navigateTo(MainTab.Settings, it)
+                                        openSettingsPage(it)
                                         searching = false
                                         query = ""
                                     },
@@ -561,6 +601,19 @@ fun MainScreen(
             onArchiveSelected = chatListViewModel::archiveSelected,
             onDeleteSelected = { confirmDelete = true },
             onPinSelected = chatListViewModel::pinSelected,
+            plateAvailable = plateChatId != null,
+            plateHasImage = plateChatId != null && plateStamps.containsKey(plateChatId),
+            onPickPlate = {
+                platePicker.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                    ),
+                )
+            },
+            onRemovePlate = {
+                plateChatId?.let { plateStore.removeImage(it) }
+                chatListViewModel.clearSelection()
+            },
             canReadAll = tab == MainTab.Chats && allChats.any { it.unreadCount > 0 },
             onReadAll = chatListViewModel::markAllRead,
             selectedFolder = folderId,
@@ -589,6 +642,15 @@ fun MainScreen(
                     }) { Text("Удалить") }
                 },
                 dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            )
+        }
+
+        // Диалог «Обновление vX»: проверяем при входе, на самой странице обновления не показываем.
+        LaunchedEffect(Unit) { container.updater.check() }
+        if (!(tab == MainTab.Settings && settingsPage == SettingsPage.Update)) {
+            UpdateAvailableDialog(
+                updater = container.updater,
+                onOpenUpdatePage = { openSettingsPage(SettingsPage.Update) },
             )
         }
 
@@ -667,6 +729,10 @@ private fun GlassTopBar(
     onArchiveSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
     onPinSelected: () -> Unit,
+    plateAvailable: Boolean,
+    plateHasImage: Boolean,
+    onPickPlate: () -> Unit,
+    onRemovePlate: () -> Unit,
     canReadAll: Boolean,
     onReadAll: () -> Unit,
     selectedFolder: Int?,
@@ -785,6 +851,24 @@ private fun GlassTopBar(
                                         onPinSelected()
                                     },
                                 )
+                                if (plateAvailable) {
+                                    DropdownMenuItem(
+                                        text = { Text("Картинка на плашку") },
+                                        onClick = {
+                                            moreOpen = false
+                                            onPickPlate()
+                                        },
+                                    )
+                                    if (plateHasImage) {
+                                        DropdownMenuItem(
+                                            text = { Text("Убрать картинку") },
+                                            onClick = {
+                                                moreOpen = false
+                                                onRemovePlate()
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -1000,7 +1084,7 @@ private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle,
                         contentColor = scheme.onPrimary,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 4.dp, end = 2.dp)
+                            .padding(top = 6.dp, end = 6.dp)
                             .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp),
                     ) {
                         Box(Modifier.padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {

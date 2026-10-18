@@ -52,6 +52,8 @@ import app.yougram.core.telegram.TgLinkHandler
 import app.yougram.core.telegram.TgLinkResult
 import app.yougram.core.telegram.joinByInvite
 import app.yougram.core.ui.adaptive.DetailRoute
+import app.yougram.feature.settings.SettingsDetailPane
+import app.yougram.feature.settings.SettingsPage
 import app.yougram.core.ui.adaptive.TwoPaneShell
 import app.yougram.core.ui.adaptive.decodeDetail
 import app.yougram.core.ui.adaptive.encodeDetail
@@ -101,6 +103,7 @@ fun YougramNavHost(container: AppContainer) {
     val twoPaneNow = rememberUpdatedState(twoPane)
     var detailRaw by rememberSaveable { mutableStateOf("") }
     val detail = remember(detailRaw) { decodeDetail(detailRaw) }
+    val detailNow = rememberUpdatedState(detail)
     val setDetail: (List<DetailRoute>) -> Unit = remember { { list -> detailRaw = list.encodeDetail() } }
     val openChat: (Long, Long) -> Unit = remember(navController) {
         { chatId: Long, messageId: Long ->
@@ -126,9 +129,11 @@ fun YougramNavHost(container: AppContainer) {
             val items = decodeDetail(detailRaw)
             if (items.isNotEmpty()) {
                 detailRaw = ""
-                items.forEach { r ->
+                // Страницы настроек в одноколоночном режиме не переносим: настройки там — вкладка главного экрана.
+                items.filterNot { it is DetailRoute.Settings }.forEach { r ->
                     navController.navigate(
                         when (r) {
+                            is DetailRoute.Settings -> return@forEach
                             is DetailRoute.Chat -> "chat/${r.chatId}?messageId=${r.messageId}&topicId=${r.topicId}"
                             is DetailRoute.Profile -> "profile/${r.chatId}"
                         },
@@ -222,7 +227,6 @@ fun YougramNavHost(container: AppContainer) {
 
     // Тап по @username: ищем в Telegram. Пользователь или бот — профиль (в планшетном режиме в правой панели),
     // публичный канал или группа (id отрицательный) — сразу сам чат, как в обычном Telegram.
-    val detailNow = rememberUpdatedState(detail)
     val openUsername: (String) -> Unit = remember(navController, context, openChat) {
         { username: String ->
             scope.launch {
@@ -275,7 +279,14 @@ fun YougramNavHost(container: AppContainer) {
                     val vm: AuthViewModel = viewModel(
                         factory = AuthViewModel.factory(container.authRepository, container.settings),
                     )
-                    AuthScreen(viewModel = vm)
+                    // Если добавляем аккаунт поверх уже существующего — даём вернуться назад.
+                    val accounts by container.accountManager.accounts.collectAsState()
+                    val activeId by container.accountManager.activeAccountId.collectAsState()
+                    val previousId = remember(accounts, activeId) { container.accountManager.returnTargetId() }
+                    AuthScreen(
+                        viewModel = vm,
+                        onBack = previousId?.let { id -> { container.accountManager.cancelAddAndRestart(id) } },
+                    )
                 }
                 composable(
                     route = ROUTE_CHATS,
@@ -295,7 +306,13 @@ fun YougramNavHost(container: AppContainer) {
                                 onOpenChat = { chatId -> openChat(chatId, 0L) },
                                 onOpenMessage = { chatId, messageId -> openChat(chatId, messageId) },
                                 selectedChatId = selected,
+                                onOpenSettingsDetail = if (twoPaneNow.value) { page -> setDetail(listOf(DetailRoute.Settings(page.name))) } else null,
+                                onSettingsTabLeft = { if (detailNow.value.lastOrNull() is DetailRoute.Settings) setDetail(emptyList()) },
                                 onOpenStories = { chatId, storyId -> navController.navigate("stories/$chatId/$storyId") },
+                                onOpenProfile = { id ->
+                                    if (twoPaneNow.value) setDetail(detailNow.value + DetailRoute.Profile(id))
+                                    else navController.navigate("profile/$id")
+                                },
                             )
                         }
                     }
@@ -433,6 +450,20 @@ private fun DetailPane(
     container: AppContainer,
 ) {
     when (route) {
+        is DetailRoute.Settings -> {
+            val page = runCatching { SettingsPage.valueOf(route.page) }.getOrDefault(SettingsPage.Home)
+            SettingsDetailPane(
+                page = page,
+                canGoBack = stack.size > 1,
+                container = container,
+                onBack = { setStack(stack.dropLast(1)) },
+                // «Домой» закрывает правую панель, остальные страницы кладутся в стек поверх текущей.
+                onNavigate = { next ->
+                    if (next == SettingsPage.Home) setStack(emptyList()) else setStack(stack + DetailRoute.Settings(next.name))
+                },
+                onOpenChat = { id -> setStack(listOf(DetailRoute.Chat(id))) },
+            )
+        }
         is DetailRoute.Chat -> {
             ChatOrTopics(
                 container = container,

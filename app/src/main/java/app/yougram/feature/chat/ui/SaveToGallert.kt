@@ -17,11 +17,11 @@ suspend fun saveToGallery(context: Context, path: String, name: String, mime: St
             val type = mime.ifBlank {
                 when (kind) {
                     MediaKind.PHOTO -> "image/jpeg"
-                    MediaKind.VIDEO, MediaKind.ANIMATION -> "video/mp4"
+                    MediaKind.VIDEO, MediaKind.VIDEO_NOTE, MediaKind.ANIMATION -> "video/mp4"
                     else -> "application/octet-stream"
                 }
             }
-            val fileName = name.ifBlank { source.name }
+            val fileName = name.ifBlank { source.name }.let { if (type.startsWith("video/") && !it.contains('.')) "$it.mp4" else it }
             val (collection, folder) = when {
                 type.startsWith("image/") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI to Environment.DIRECTORY_PICTURES
                 type.startsWith("video/") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI to Environment.DIRECTORY_MOVIES

@@ -152,18 +152,18 @@ class CallManager(
         }
     }
 
-    fun accept(withVideo: Boolean = false) {
+    /** [withVideo]: true — с камерой, false — только голос, null — как пришёл звонок. */
+    fun accept(withVideo: Boolean? = null) {
         val c = _call.value ?: return
         if (c.isOutgoing || c.phase != CallPhase.RINGING) return
         if (!hasMic()) return
         CallLog.d(TAG, "accept id=${c.id} withVideo=$withVideo")
+        if (withVideo != null) _call.update { it?.copy(isVideo = withVideo) }
         scope.launch {
             val result = client.acceptCall(callId = c.id, protocol = protocol)
             if (result is TdlResult.Failure) {
                 CallLog.e(TAG, "acceptCall failed code=${result.code} message=${result.message}")
                 finishLocal(c, "Не удалось принять звонок", discard = false)
-            } else if (withVideo) {
-                _call.update { it?.copy(isVideo = true) }
             }
         }
     }
@@ -171,12 +171,7 @@ class CallManager(
     fun toggleCamera(enable: Boolean) {
         val c = _call.value ?: return
         CallLog.d(TAG, "toggleCamera enable=$enable")
-        val tgEngine = engine as? TgCallsEngine
-        if (enable) {
-            tgEngine?.setupCamera(isFront = true)
-        } else {
-            tgEngine?.stopCamera()
-        }
+        (engine as? TgCallsEngine)?.setCameraEnabled(enable)
         _call.update { it?.copy(isVideo = enable) }
     }
 
@@ -284,8 +279,8 @@ class CallManager(
         CallLog.d(
             TAG,
             "ready first=$first available=$available allowP2p=${state.allowP2p} " +
-                "versions=${state.protocol.libraryVersions.toList()} servers=${state.servers.size} " +
-                "emojis=${state.emojis.orEmpty().toList()}",
+                    "versions=${state.protocol.libraryVersions.toList()} servers=${state.servers.size} " +
+                    "emojis=${state.emojis.orEmpty().toList()}",
         )
         if (first && available && !hasMic()) {
             // Без микрофона собеседник услышал бы тишину: честно завершаем.
@@ -310,8 +305,8 @@ class CallManager(
 
         engineCallId = call.id
         linkUp = false
-        audio.start(call.isVideo)
-        engine.start(call.userId, state, call.isOutgoing, call.isVideo, { data -> outbox.trySend(call.id to data) }) { link ->
+        audio.start(base.isVideo)
+        engine.start(call.userId, state, call.isOutgoing, base.isVideo, { data -> outbox.trySend(call.id to data) }) { link ->
             onLink(call.id, link)
         }
         if (base.muted) engine.setMuted(true)

@@ -31,7 +31,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.yougram.core.di.AppContainer
 import app.yougram.feature.settings.about.AboutScreen
 import app.yougram.feature.settings.about.UpdateScreen
-import app.yougram.feature.settings.appearance.BannerScreen
 import app.yougram.feature.settings.extras.ExtrasScreen
 import app.yougram.feature.settings.extras.GhostModeScreen
 import app.yougram.feature.settings.extras.MessageFiltersScreen
@@ -68,6 +67,7 @@ fun SettingsPageContent(
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
     onOpenChat: (Long) -> Unit,
+    onOpenProfile: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val details: SettingsDetailsViewModel = viewModel(
@@ -90,6 +90,7 @@ fun SettingsPageContent(
             updater = container.updater,
             contentPadding = contentPadding,
             onNavigate = onNavigate,
+            onOpenProfile = onOpenProfile,
         )
         SettingsPage.HomeLayoutEditor -> HomeLayoutEditorScreen(container.settings, contentPadding)
         SettingsPage.TelegramHub -> TelegramHubScreen(
@@ -125,7 +126,6 @@ fun SettingsPageContent(
         SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
         SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)
-        SettingsPage.Banner -> BannerScreen(container.settings, contentPadding)
         SettingsPage.MessageFilters -> MessageFiltersScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.SharedFilters -> SharedFiltersScreen(container.settings, contentPadding)
         SettingsPage.ShadowBan -> ShadowBanScreen(container.settings, contentPadding)

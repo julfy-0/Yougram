@@ -135,7 +135,10 @@ fun ChatSettingsScreen(
     settings: SettingsRepository,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
+    /** Какую вкладку «Внешнего вида» показывать: 0 — масштаб, 2 — сообщения, 3 — список чатов, 4 — прочее; -1 — всё. */
+    part: Int = -1,
 ) {
+    fun show(n: Int) = part == -1 || part == n
     val prefs by settings.chatPrefs.collectAsState()
     val theme by settings.theme.collectAsState()
     val context = LocalContext.current
@@ -158,6 +161,7 @@ fun ChatSettingsScreen(
     }
 
     SettingsPageColumn(contentPadding) {
+        if (show(2)) {
         SectionLabel("Цвет блоков с сообщениями")
         SettingGroup {
             item {
@@ -178,6 +182,27 @@ fun ChatSettingsScreen(
             }
         }
 
+        }
+        if (show(0)) {
+        SectionLabel("Масштаб интерфейса, %")
+        SettingGroup {
+            item {
+                // Применяем после паузы: пока тянешь ползунок, интерфейс не «убегает» из-под пальца.
+                var pending by androidx.compose.runtime.remember(prefs.uiScale) {
+                    androidx.compose.runtime.mutableIntStateOf(prefs.uiScale)
+                }
+                androidx.compose.runtime.LaunchedEffect(pending) {
+                    if (pending != prefs.uiScale) {
+                        kotlinx.coroutines.delay(600)
+                        update { it.copy(uiScale = pending) }
+                    }
+                }
+                SliderRow(pending, 70..130) { v -> pending = v }
+            }
+        }
+
+        }
+        if (show(2)) {
         SectionLabel("Углы блоков с сообщениями")
         SettingGroup {
             item { SliderRow(prefs.bubbleRadius, 0..28) { v -> update { it.copy(bubbleRadius = v) } } }
@@ -196,6 +221,8 @@ fun ChatSettingsScreen(
             }
         }
 
+        }
+        if (show(3)) {
         SectionLabel("Список чатов")
         SettingGroup {
             item {
@@ -292,6 +319,8 @@ fun ChatSettingsScreen(
             }
         }
 
+        }
+        if (show(4)) {
         SectionLabel("Медиафайлы и звук")
         SettingGroup {
             item {
@@ -397,6 +426,7 @@ fun ChatSettingsScreen(
             }
         }
         SettingsFootnote("Применяются: размер текста, углы, прозрачность и размытие сообщений, обои, отправка по Enter и строки в списке чатов. Остальное пока только сохраняется.")
+        }
     }
 
     when (dialog) {

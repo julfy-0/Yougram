@@ -100,6 +100,8 @@ fun EditChatDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val channel = details.kind == ProfileKind.CHANNEL
+    val self = details.isSelf
+    val descriptionLimit = if (self) 55 else 255
     val scheme = MaterialTheme.colorScheme
     val cookie = MaterialShapes.Cookie9Sided.toShape()
 
@@ -197,7 +199,7 @@ fun EditChatDialog(
                         Icon(Icons.Filled.Close, contentDescription = "Закрыть")
                     }
                     Text(
-                        if (channel) "Изменить канал" else "Изменить группу",
+                        if (self) "Изменить профиль" else if (channel) "Изменить канал" else "Изменить группу",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(start = 8.dp),
                     )
@@ -241,7 +243,7 @@ fun EditChatDialog(
                                 }
                             }
                             val hasPhoto = photoPath != null || (!removePhoto && details.avatarFileId != null)
-                            if (hasPhoto) {
+                            if (hasPhoto && !self) {
                                 Box(
                                     Modifier
                                         .align(Alignment.BottomEnd)
@@ -273,19 +275,19 @@ fun EditChatDialog(
                                 onValueChange = { if (it.length <= 128) title = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
-                                label = { Text(if (channel) "Название канала" else "Название группы") },
+                                label = { Text(if (self) "Имя и фамилия" else if (channel) "Название канала" else "Название группы") },
                                 colors = editFieldColors(),
                             )
                         }
                         item {
                             TextField(
                                 value = description,
-                                onValueChange = { if (it.length <= 255) description = it },
+                                onValueChange = { if (it.length <= descriptionLimit) description = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 2,
                                 maxLines = 5,
-                                label = { Text("Описание") },
-                                supportingText = { Text("${description.length}/255") },
+                                label = { Text(if (self) "О себе" else "Описание") },
+                                supportingText = { Text("${description.length}/$descriptionLimit") },
                                 colors = editFieldColors(),
                             )
                         }

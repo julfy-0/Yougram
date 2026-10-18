@@ -1,5 +1,7 @@
 package org.telegram.messenger.voip;
 
+import org.webrtc.VideoSink;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -10,6 +12,12 @@ public class NativeInstance {
 
     private long nativePtr; // читается из C++ по имени
 
+    /**
+     * Читается из C++ по имени в stopNative (сохранение persistent state). Раньше поля не было:
+     * JNI получал NoSuchFieldError на нативном потоке, и приложение падало при завершении звонка.
+     */
+    private String persistentStateFilePath;
+
     private Instance.OnStateUpdatedListener onStateUpdatedListener;
     private Instance.OnSignalBarsUpdatedListener onSignalBarsUpdatedListener;
     private Instance.OnSignalingDataListener onSignalDataListener;
@@ -17,14 +25,22 @@ public class NativeInstance {
 
     private volatile Instance.FinalState finalState;
     private volatile CountDownLatch stopBarrier;
+    private boolean stopRequested;
 
-    /** Для аудиозвонка remoteSink = null и videoCapturer = 0. */
+    /**
+     * [remoteSink] обязателен и не должен быть null: нативный код оборачивает его при создании
+     * и вызывает на каждом кадре собеседника (для аудиозвонка кадров просто не будет).
+     */
     public static NativeInstance make(String version, Instance.Config config, String persistentStatePath,
                                       Instance.Endpoint[] endpoints, Instance.Proxy proxy, int networkType,
-                                      Instance.EncryptionKey key, float aspectRatio) {
+                                      Instance.EncryptionKey key, VideoSink remoteSink, float aspectRatio) {
         NativeInstance instance = new NativeInstance();
+        instance.persistentStateFilePath = persistentStatePath;
         instance.nativePtr = makeNativeInstance(version, instance, config, persistentStatePath, endpoints,
-                proxy, networkType, key, null, 0L, aspectRatio);
+                proxy, networkType, key, remoteSink, 0L, aspectRatio);
+        if (instance.nativePtr == 0L) {
+            throw new IllegalStateException("tgcalls: не удалось создать экземпляр");
+        }
         return instance;
     }
 
@@ -63,12 +79,20 @@ public class NativeInstance {
     }
     // -------------------------------------
 
-    /** Блокирующий вызов: только не с главного потока. */
+    /**
+     * Блокирующий вызов: только не с главного потока. Повторный вызов ничего не делает:
+     * после остановки C++ освобождает holder, и любой следующий нативный вызов был бы use-after-free.
+     */
     public Instance.FinalState stop() {
-        stopBarrier = new CountDownLatch(1);
+        CountDownLatch barrier = new CountDownLatch(1);
+        synchronized (this) {
+            if (stopRequested) return finalState;
+            stopRequested = true;
+            stopBarrier = barrier;
+        }
         stopNative();
         try {
-            stopBarrier.await(5, TimeUnit.SECONDS);
+            barrier.await(5, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
         }
         return finalState;
@@ -92,4 +116,12 @@ public class NativeInstance {
     public native Instance.TrafficStats getTrafficStats();
     public native byte[] getPersistentState();
     private native void stopNative();
+
+    // ---- видео ----
+    /** Создаёт камеру внутри tgcalls и подключает её к звонку. [type]: 1 — фронтальная, 0 — основная. */
+    public native void setupOutgoingVideo(VideoSink localSink, int type);
+    /** См. Instance.VIDEO_STATE_*. */
+    public native void setVideoState(int state);
+    public native void switchCamera(boolean front);
+    public native boolean hasVideoCapturer();
 }

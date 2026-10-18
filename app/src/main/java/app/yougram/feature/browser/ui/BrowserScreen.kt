@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -56,7 +55,6 @@ import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
@@ -78,7 +76,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -279,7 +276,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                 }
             }
 
-            // Верхняя панель: стеклянный контейнер с крупными нижними скруглениями; доходит и под строку состояния.
+            // Верхняя панель: стеклянный контейнер с прямыми углами; доходит и под строку состояния.
             Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
                 Box(
                     Modifier
@@ -288,7 +285,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                         .glass(
                             backdrop,
                             glass,
-                            RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+                            RectangleShape,
                             tint = scheme.surfaceContainer,
                         ),
                 ) {
@@ -352,48 +349,35 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                 }
             }
 
-            // Нижняя область: стекло под системной навигацией и поверх него плавающая «таблетка» с кнопками, тоже стеклянная.
+            // Нижняя панель: единое стекло — кнопки и системная навигация составляют одно целое, без отдельной «таблетки».
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .onSizeChanged { bottomBarPx = it.height },
+                    .onSizeChanged { bottomBarPx = it.height }
+                    .glass(backdrop, glass, RectangleShape, tint = scheme.surfaceContainer),
             ) {
-                Box(
+                Row(
                     Modifier
-                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(navInset)
-                        .glass(backdrop, glass, RectangleShape),
-                )
-                Surface(
-                    Modifier
-                        .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = navInset + 8.dp)
-                        .fillMaxWidth()
-                        .glass(backdrop, glass, MaterialTheme.shapes.extraLarge, tint = scheme.surfaceContainerHigh),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = Color.Transparent,
+                        .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = navInset + 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FilledTonalIconButton(onClick = { web.goBack() }, enabled = canBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                        }
-                        FilledTonalIconButton(onClick = { web.goForward() }, enabled = canForward) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Вперёд")
-                        }
-                        FilledTonalIconButton(onClick = { if (loading) web.stopLoading() else web.reload() }) {
-                            Icon(
-                                if (loading) Icons.Filled.Close else Icons.Filled.Refresh,
-                                contentDescription = if (loading) "Остановить" else "Обновить",
-                            )
-                        }
-                        FilledTonalIconButton(onClick = { shareLink(context, url) }) {
-                            Icon(Icons.Filled.Share, contentDescription = "Поделиться")
-                        }
+                    IconButton(onClick = { web.goBack() }, enabled = canBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                    IconButton(onClick = { web.goForward() }, enabled = canForward) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Вперёд")
+                    }
+                    IconButton(onClick = { if (loading) web.stopLoading() else web.reload() }) {
+                        Icon(
+                            if (loading) Icons.Filled.Close else Icons.Filled.Refresh,
+                            contentDescription = if (loading) "Остановить" else "Обновить",
+                        )
+                    }
+                    IconButton(onClick = { shareLink(context, url) }) {
+                        Icon(Icons.Filled.Share, contentDescription = "Поделиться")
                     }
                 }
             }

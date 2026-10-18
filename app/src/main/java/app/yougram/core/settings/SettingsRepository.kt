@@ -51,6 +51,8 @@ data class ThemeSettings(
     val dynamic: Boolean = true,
     /** Индекс в списке акцентов; используется, когда [dynamic] выключен. */
     val accent: Int = 0,
+    /** Свой акцентный цвет (ARGB); 0 — не задан, используется [accent] из списка. */
+    val customAccent: Int = 0,
     /** Путь к своему шрифту (копия в хранилище приложения); null — системный шрифт. */
     val fontPath: String? = null,
     /** Имя файла шрифта для показа в настройках. */
@@ -163,6 +165,8 @@ data class ChatPrefs(
     val ownBubbleColor: Long = 0L,
     /** Свой цвет пузырей чужих сообщений, ARGB; 0 — цвет по умолчанию. */
     val otherBubbleColor: Long = 0L,
+    /** Масштаб всего интерфейса, %: 100 — как есть. */
+    val uiScale: Int = 100,
 )
 
 enum class MapPreview(val label: String) {
@@ -184,6 +188,10 @@ data class DataPrefs(
     val autoMobile: Boolean = true,
     val autoWifi: Boolean = true,
     val autoRoaming: Boolean = true,
+    /** Порог предупреждения об занятой памяти приложения, байт; 0 — не предупреждать. */
+    val storageWarnBytes: Long = 5L shl 30,
+    /** Лимит памяти приложения, байт: при превышении ничего не скачивается автоматически; 0 — без лимита. */
+    val autoDownloadCapBytes: Long = 10L shl 30,
     val saveToGalleryPrivate: Boolean = false,
     val saveToGalleryGroups: Boolean = false,
     val saveToGalleryChannels: Boolean = false,
@@ -289,6 +297,7 @@ class SettingsRepository(private val context: Context) {
             mode = ThemeMode.entries.getOrElse(prefs.getInt(KEY_MODE, ThemeMode.Dark.ordinal)) { ThemeMode.Dark },
             dynamic = prefs.getBoolean(KEY_DYNAMIC, true),
             accent = prefs.getInt(KEY_ACCENT, 0),
+            customAccent = prefs.getInt(KEY_CUSTOM_ACCENT, 0),
             fontPath = prefs.getString(KEY_FONT_PATH, null)?.takeIf { java.io.File(it).exists() },
             fontName = prefs.getString(KEY_FONT_NAME, null),
         )
@@ -305,9 +314,17 @@ class SettingsRepository(private val context: Context) {
         prefs.edit().putBoolean(KEY_DYNAMIC, enabled).apply()
     }
 
+    /** Выбор готового акцента сбрасывает свой цвет. */
     fun setAccent(index: Int) {
-        _theme.update { it.copy(accent = index) }
-        prefs.edit().putInt(KEY_ACCENT, index).apply()
+        _theme.update { it.copy(accent = index, customAccent = 0) }
+        prefs.edit().putInt(KEY_ACCENT, index).putInt(KEY_CUSTOM_ACCENT, 0).apply()
+    }
+
+    /** Свой акцентный цвет из палитры; [argb] — непрозрачный цвет. */
+    fun setCustomAccent(argb: Int) {
+        val value = argb or (0xFF shl 24)
+        _theme.update { it.copy(customAccent = value) }
+        prefs.edit().putInt(KEY_CUSTOM_ACCENT, value).apply()
     }
 
     /** Свой шрифт для всего приложения; [path] = null возвращает системный. */
@@ -445,6 +462,7 @@ class SettingsRepository(private val context: Context) {
             bubbleBlur = prefs.getBoolean("c_bubble_blur", false),
             ownBubbleColor = prefs.getLong("c_bubble_own_color", 0L),
             otherBubbleColor = prefs.getLong("c_bubble_other_color", 0L),
+            uiScale = prefs.getInt("c_ui_scale", 100).coerceIn(70, 130),
         )
     )
     val chatPrefs: StateFlow<ChatPrefs> = _chatPrefs.asStateFlow()
@@ -487,6 +505,7 @@ class SettingsRepository(private val context: Context) {
             .putBoolean("c_bubble_blur", c.bubbleBlur)
             .putLong("c_bubble_own_color", c.ownBubbleColor)
             .putLong("c_bubble_other_color", c.otherBubbleColor)
+            .putInt("c_ui_scale", c.uiScale)
             .apply()
     }
 
@@ -516,6 +535,8 @@ class SettingsRepository(private val context: Context) {
             autoMobile = prefs.getBoolean("d_auto_mobile", true),
             autoWifi = prefs.getBoolean("d_auto_wifi", true),
             autoRoaming = prefs.getBoolean("d_auto_roaming", true),
+            storageWarnBytes = prefs.getLong("d_storage_warn", 5L shl 30),
+            autoDownloadCapBytes = prefs.getLong("d_storage_cap", 10L shl 30),
             saveToGalleryPrivate = prefs.getBoolean("d_gallery_private", false),
             saveToGalleryGroups = prefs.getBoolean("d_gallery_groups", false),
             saveToGalleryChannels = prefs.getBoolean("d_gallery_channels", false),
@@ -539,6 +560,8 @@ class SettingsRepository(private val context: Context) {
             .putBoolean("d_auto_mobile", d.autoMobile)
             .putBoolean("d_auto_wifi", d.autoWifi)
             .putBoolean("d_auto_roaming", d.autoRoaming)
+            .putLong("d_storage_warn", d.storageWarnBytes)
+            .putLong("d_storage_cap", d.autoDownloadCapBytes)
             .putBoolean("d_gallery_private", d.saveToGalleryPrivate)
             .putBoolean("d_gallery_groups", d.saveToGalleryGroups)
             .putBoolean("d_gallery_channels", d.saveToGalleryChannels)
@@ -552,6 +575,20 @@ class SettingsRepository(private val context: Context) {
             .putString("d_proxy_pass", d.proxyPass)
             .putString("d_proxy_type", d.proxyType)
             .apply()
+    }
+
+    // «Улучшенный интерфейс»: ручное включение размытия и анимаций на слабом устройстве (по умолчанию выкл.).
+    private val _enhancedUi = MutableStateFlow(prefs.getBoolean(KEY_ENHANCED_UI, false))
+    val enhancedUi: StateFlow<Boolean> = _enhancedUi.asStateFlow()
+
+    init {
+        app.yougram.core.ui.DeviceProfile.enhanced = _enhancedUi.value
+    }
+
+    fun setEnhancedUi(enabled: Boolean) {
+        _enhancedUi.value = enabled
+        app.yougram.core.ui.DeviceProfile.enhanced = enabled
+        prefs.edit().putBoolean(KEY_ENHANCED_UI, enabled).apply()
     }
 
     // Энергосбережение: выключает размытие панелей и запоминает прежнее значение.
@@ -752,9 +789,11 @@ class SettingsRepository(private val context: Context) {
         const val KEY_MODE = "theme_mode"
         const val KEY_DYNAMIC = "theme_dynamic"
         const val KEY_ACCENT = "theme_accent"
+        const val KEY_CUSTOM_ACCENT = "theme_custom_accent"
         const val KEY_FONT_PATH = "theme_font_path"
         const val KEY_FONT_NAME = "theme_font_name"
         const val KEY_POWER = "power_saving"
+        const val KEY_ENHANCED_UI = "enhanced_ui"
         const val KEY_CHAT_GUARD = "chat_guard"
         const val KEY_POWER_PREV_BLUR = "power_prev_blur"
     }
@@ -765,6 +804,16 @@ class SettingsRepository(private val context: Context) {
     fun setBadge(value: Boolean) {
         _badge.value = value
         prefs.edit().putBoolean("yougram_badge", value).apply()
+    }
+
+    private val _badgeStyle = MutableStateFlow(prefs.getInt("yougram_badge_style", 0).coerceIn(0, 3))
+    /** Вид своего значка Yougram (0 — классический, 1..3 — альтернативные); его видят другие пользователи Yougram. */
+    val badgeStyle: StateFlow<Int> = _badgeStyle.asStateFlow()
+
+    fun setBadgeStyle(value: Int) {
+        val v = value.coerceIn(0, 3)
+        _badgeStyle.value = v
+        prefs.edit().putInt("yougram_badge_style", v).apply()
     }
 
     private val _banner = MutableStateFlow(

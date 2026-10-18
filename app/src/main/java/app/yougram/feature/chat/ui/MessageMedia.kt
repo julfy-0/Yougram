@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -67,7 +68,13 @@ private const val VideoAutoLimit = 15L shl 20
 
 /** Медиа внутри пузыря: фото/видео/GIF/стикер с превью или строка документа. */
 @Composable
-fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (MediaItem) -> Unit) {
+fun MessageMedia(
+    media: MediaItem,
+    viewModel: ChatViewModel,
+    onOpenPhoto: (MediaItem) -> Unit,
+    /** Плитка альбома: заполняет выданное место, без собственных размеров и скруглений. */
+    tile: Boolean = false,
+) {
     // Платное медиа, которое ещё не куплено: файлов нет, показываем размытую заглушку с ценой.
     if (media.locked) {
         LockedPaidMedia(media)
@@ -97,11 +104,12 @@ fun MessageMedia(media: MediaItem, viewModel: ChatViewModel, onOpenPhoto: (Media
     when (media.kind) {
         MediaKind.DOCUMENT -> DocumentRow(media, full, onClick)
         MediaKind.VOICE -> VoiceNoteRow(media, viewModel, full)
+        MediaKind.AUDIO -> AudioFileRow(media, full) { viewModel.download(media.fileId, 16) }
         MediaKind.VIDEO_NOTE -> VideoNoteView(media, viewModel, full)
         MediaKind.STICKER -> Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable { stickerSetOpen = true }) {
             StickerView(media, viewModel, full)
         }
-        else -> VisualMedia(media, viewModel, full, onClick)
+        else -> VisualMedia(media, viewModel, full, onClick, tile)
     }
     if (stickerSetOpen && media.stickerSetId != 0L) StickerSetSheet(media.stickerSetId, viewModel) { stickerSetOpen = false }
     val viewerPath = full.path
@@ -186,7 +194,7 @@ private fun StickerView(media: MediaItem, viewModel: ChatViewModel, full: FileSt
 }
 
 @Composable
-private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileState, onClick: () -> Unit) {
+private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileState, onClick: () -> Unit, tile: Boolean = false) {
     val preview by remember(media.previewFileId) {
         media.previewFileId?.let(viewModel::fileState) ?: flowOf(FileState())
     }.collectAsState(FileState())
@@ -201,7 +209,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
         else -> false
     }
     LaunchedEffect(media.fileId) {
-        if (autoLoad) viewModel.download(media.fileId, 8)
+        if (autoLoad) viewModel.autoDownload(media.fileId, 8)
     }
     val mini = remember(media.miniThumb) {
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
@@ -224,10 +232,7 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
     val blurMod = if (blurred && !lowTier) Modifier.blur(24.dp) else Modifier
 
     Box(
-        Modifier
-            .width(260.dp)
-            .aspectRatio(ratio)
-            .clip(RoundedCornerShape(16.dp))
+        (if (tile) Modifier.fillMaxSize() else Modifier.width(260.dp).aspectRatio(ratio).clip(RoundedCornerShape(16.dp)))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -276,6 +281,8 @@ private fun VisualMedia(media: MediaItem, viewModel: ChatViewModel, full: FileSt
 @Composable
 private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) {
     val context = LocalContext.current
+    val sending = full.uploading
+    val loading = full.active || full.partial
     Row(
         Modifier
             .width(260.dp)
@@ -289,7 +296,18 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
             contentAlignment = Alignment.Center,
         ) {
             when {
-                full.active || full.partial -> DownloadControl(full, MaterialTheme.colorScheme.onPrimary, 32.dp)
+                // Отправка: волнистое кольцо вокруг кружка показывает, сколько уже ушло.
+                sending -> {
+                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        CircularWavyProgressIndicator(
+                            progress = { if (full.total > 0) full.uploaded.toFloat() / full.total else 0f },
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Icon(Icons.Filled.Upload, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                    }
+                }
+                loading -> DownloadControl(full, MaterialTheme.colorScheme.onPrimary, 40.dp)
                 full.path != null -> Icon(Icons.Filled.Description, null, tint = MaterialTheme.colorScheme.onPrimary)
                 else -> Icon(Icons.Filled.Download, null, tint = MaterialTheme.colorScheme.onPrimary)
             }
@@ -300,10 +318,19 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
             )
+            val subtitle = if (sending || loading) {
+                val done = if (sending) full.uploaded else full.downloaded
+                val total = if (full.total > 0) full.total else media.size
+                val left = (total - done).coerceAtLeast(0L)
+                "${Formatter.formatShortFileSize(context, done)} · осталось ${Formatter.formatShortFileSize(context, left)}"
+            } else {
+                Formatter.formatShortFileSize(context, media.size)
+            }
             Text(
-                Formatter.formatShortFileSize(context, media.size),
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
     }

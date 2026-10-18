@@ -25,6 +25,8 @@ data class ProfileUiState(
     val details: ProfileDetails? = null,
     /** Последние сообщения чата, из них собираются вкладки «Медиа», «Файлы», «Ссылки». */
     val shared: List<MessageItem> = emptyList(),
+    /** Треки из профиля пользователя (без аудио из переписки). */
+    val profileMusic: List<MediaItem> = emptyList(),
     val sharedLoading: Boolean = true,
     val deleted: List<MessageItem> = emptyList(),
     /** Все аватарки профиля (от новых к старым) для просмотра и скачивания. */
@@ -50,6 +52,10 @@ class ProfileViewModel(
         viewModelScope.launch {
             val avatars = runCatching { repository.avatarHistory(chatId) }.getOrDefault(emptyList())
             _state.update { it.copy(avatars = avatars) }
+        }
+        viewModelScope.launch {
+            val music = repository.profileAudios(chatId)
+            _state.update { it.copy(profileMusic = music) }
         }
         viewModelScope.launch {
             val items = runCatching { repository.sharedMessages(chatId) }.getOrDefault(emptyList())

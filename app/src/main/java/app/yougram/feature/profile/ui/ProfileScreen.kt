@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,13 +52,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
@@ -120,6 +125,7 @@ import kotlinx.coroutines.flow.flowOf
 private enum class ProfileTab(val label: String) {
     MEDIA("Медиа"),
     FILES("Файлы"),
+    MUSIC("Музыка"),
     LINKS("Ссылки"),
     DELETED("Удалённые"),
 }
@@ -170,6 +176,8 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(state.left) { if (state.left) onLeft() }
+    // Трек не должен играть после выхода из профиля.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { app.yougram.feature.chat.ui.AudioPlayback.stop() } }
     LaunchedEffect(state.error) {
         state.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -224,6 +232,13 @@ fun ProfileScreen(
             val actions = actionsFor(details, context, onOpenChat, startCall, viewModel::toggleMute, { showEdit = true }) { confirmLeave = true }
             val media = remember(state.shared) { state.shared.filter { it.media?.kind in MediaKinds } }
             val files = remember(state.shared) { state.shared.filter { it.media?.kind == MediaKind.DOCUMENT } }
+            // Музыка профиля показывается полоской под кнопками действий, а во вкладке — остальное.
+            val pinnedTrack = state.profileMusic.firstOrNull()
+            val music = remember(state.shared, state.profileMusic) {
+                (state.profileMusic + state.shared.mapNotNull { m -> m.media?.takeIf { it.kind == MediaKind.AUDIO } })
+                    .distinctBy { it.fileId }
+                    .filter { it.fileId != pinnedTrack?.fileId }
+            }
             val links = remember(state.shared) { state.shared.filter { UrlRegex.containsMatchIn(it.text) } }
 
             LazyColumn(
@@ -239,6 +254,13 @@ fun ProfileScreen(
             ) {
                 item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value, onAvatarClick = { if (state.avatars.isNotEmpty()) showAvatars = true }) } }
                 item { Appear(1, entered.value) { ActionsGroup(actions) } }
+                if (pinnedTrack != null) {
+                    item(key = "pinned-music") {
+                        Appear(1, entered.value) {
+                            ProfileMusicStrip(pinnedTrack, viewModel, onOpenAll = { tab = ProfileTab.MUSIC })
+                        }
+                    }
+                }
                 item {
                     Appear(2, entered.value) {
                         InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
@@ -271,6 +293,12 @@ fun ProfileScreen(
                     tab == ProfileTab.FILES -> {
                         if (files.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
                         files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context, viewModel) } } }
+                    }
+                    tab == ProfileTab.MUSIC -> {
+                        if (music.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                        music.forEach { track ->
+                            item(key = "m${track.fileId}") { Box(Modifier.animateItem()) { MusicRow(track, viewModel) } }
+                        }
                     }
                     tab == ProfileTab.LINKS -> {
                         if (links.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
@@ -362,22 +390,25 @@ private fun actionsFor(
         } ?: Toast.makeText(context, "У канала нет публичной ссылки", Toast.LENGTH_SHORT).show()
     }
     return when (details.kind) {
-        ProfileKind.USER, ProfileKind.BOT -> listOf(
+        ProfileKind.USER, ProfileKind.BOT -> if (details.isSelf) listOf(
+            ProfileAction(Icons.Filled.Bookmark, "Заметки", onOpenChat),
+            edit,
+        ) else listOf(
             ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat),
             ProfileAction(Icons.Filled.Call, "Звонок") { if (details.kind == ProfileKind.BOT) dial() else onCall(false) },
             ProfileAction(Icons.Filled.Videocam, "Видео") { if (details.kind == ProfileKind.BOT) dial() else onCall(true) },
             sound,
-        )
+        ) + (if (details.canEdit) listOf(edit) else emptyList())
         ProfileKind.GROUP -> listOf(
             ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat),
             sound,
         ) + (if (details.canEdit) listOf(edit) else emptyList()) +
-            ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
+                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
         ProfileKind.CHANNEL -> listOf(
             sound,
             ProfileAction(Icons.Filled.Share, "Ссылка", share),
         ) + (if (details.canEdit) listOf(edit) else emptyList()) +
-            ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
+                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
         ProfileKind.OTHER -> listOf(ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat))
     }
 }
@@ -443,17 +474,13 @@ private fun ProfileHeader(
                     .clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .clip(MaterialShapes.Cookie9Sided.toShape())
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                )
+                // Аватар целиком заполняет «звезду», без ореола вокруг.
                 FileAvatar(
                     title = details.title,
                     fileId = details.avatarFileId,
                     fileState = viewModel::fileState,
-                    size = 100.dp,
+                    size = 132.dp,
+                    shape = MaterialShapes.Cookie9Sided.toShape(),
                 )
             }
         }
@@ -708,6 +735,68 @@ private fun FileRow(media: MediaItem, context: Context, viewModel: ProfileViewMo
                     }
                 },
             )
+        }
+    }
+}
+
+/** Полоска с музыкой профиля под кнопками: тап — играть/пауза, стрелка — вкладка «Музыка». */
+@Composable
+private fun ProfileMusicStrip(media: MediaItem, viewModel: ProfileViewModel, onOpenAll: () -> Unit) {
+    val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
+    val current by app.yougram.feature.chat.ui.AudioPlayback.current.collectAsState()
+    val playing by app.yougram.feature.chat.ui.AudioPlayback.playing.collectAsState()
+    val isPlaying = current == media.fileId && playing
+    val scheme = MaterialTheme.colorScheme
+    val title = listOf(media.name.ifBlank { "Аудио" }, media.artist).filter { it.isNotBlank() }.joinToString(" — ")
+
+    Surface(
+        onClick = {
+            val path = full.path
+            when {
+                path != null -> app.yougram.feature.chat.ui.AudioPlayback.toggle(media.fileId, path)
+                !full.active -> viewModel.download(media.fileId, 16)
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = scheme.secondaryContainer,
+        contentColor = scheme.onSecondaryContainer,
+    ) {
+        Row(
+            Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when {
+                full.active -> LoadingIndicator(Modifier.size(20.dp))
+                else -> Icon(
+                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.MusicNote,
+                    contentDescription = if (isPlaying) "Пауза" else "Музыка профиля",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            IconButton(onClick = onOpenAll) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Вся музыка")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicRow(media: MediaItem, viewModel: ProfileViewModel) {
+    val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
+    SettingGroup {
+        item {
+            app.yougram.feature.chat.ui.AudioFileRow(media, full, Modifier.fillMaxWidth()) {
+                viewModel.download(media.fileId, 16)
+            }
         }
     }
 }

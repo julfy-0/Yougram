@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +54,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
     val plugins by manager.plugins.collectAsState()
     var pendingDelete by remember { mutableStateOf<InstalledPlugin?>(null) }
     var confirmInstall by remember { mutableStateOf(false) }
+    var settingsFor by remember { mutableStateOf<InstalledPlugin?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -96,10 +98,15 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
                 item {
                     SettingRow(
                         title = plugin.manifest.name,
-                        subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · C++",
+                        subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · API ${plugin.manifest.api} · C++",
                         icon = Icons.Filled.Extension,
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (plugin.manifest.settings.isNotEmpty()) {
+                                    IconButton(onClick = { settingsFor = plugin }) {
+                                        Icon(Icons.Filled.Settings, contentDescription = "Настройки плагина")
+                                    }
+                                }
                                 CheckSwitch(plugin.enabled) { manager.setEnabled(plugin.manifest.id, it) }
                                 IconButton(onClick = { pendingDelete = plugin }) {
                                     Icon(Icons.Filled.DeleteOutline, contentDescription = "Удалить")
@@ -134,7 +141,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. " +
                 "Ставьте только плагины, которым доверяете.",
         )
-        SettingsFootnote("SDK: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+        SettingsFootnote("SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
     }
 
     if (confirmInstall) {
@@ -155,6 +162,10 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             },
             dismissButton = { TextButton(onClick = { confirmInstall = false }) { Text("Отмена") } },
         )
+    }
+
+    settingsFor?.let { plugin ->
+        PluginSettingsDialog(plugin, manager) { settingsFor = null }
     }
 
     pendingDelete?.let { plugin ->

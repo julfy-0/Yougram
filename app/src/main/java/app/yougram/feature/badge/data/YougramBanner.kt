@@ -12,8 +12,12 @@ data class YougramBanner(
     val pattern: Int = 0,
     val shape: Int = 0,
 ) {
-    fun encode(): String {
-        val bits = (palette and 15) or ((pattern and 15) shl 4) or ((shape and 15) shl 8)
+    /**
+     * [badgeStyle] (0..3) — вид значка рядом с именем: пишется в два старших бита поля формы,
+     * которые старые клиенты игнорируют (форма у них берётся по модулю [SHAPES]).
+     */
+    fun encode(badgeStyle: Int = 0): String {
+        val bits = (palette and 15) or ((pattern and 15) shl 4) or ((shape and 3) shl 8) or ((badgeStyle and 3) shl 10)
         return buildString {
             for (i in 0 until PAYLOAD_LENGTH) append(ALPHABET[(bits shr (2 * i)) and 3])
         }
@@ -32,6 +36,14 @@ data class YougramBanner(
             if (start < 0 || start + PAYLOAD_LENGTH > text.length) return false
             for (i in start until start + PAYLOAD_LENGTH) if (ALPHABET.indexOf(text[i]) < 0) return false
             return true
+        }
+
+        /** Вид значка (0..3), записанный в хвосте; 0 — классический. */
+        fun styleAt(text: String, start: Int): Int {
+            if (!hasPayloadAt(text, start)) return 0
+            var bits = 0
+            for (i in 0 until PAYLOAD_LENGTH) bits = bits or (ALPHABET.indexOf(text[start + i]) shl (2 * i))
+            return (bits shr 10) and 3
         }
 
         fun decode(text: String, start: Int): YougramBanner? {

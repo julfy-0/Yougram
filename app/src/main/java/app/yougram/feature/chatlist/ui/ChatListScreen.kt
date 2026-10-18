@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.PlateArea
 import app.yougram.core.ui.component.Avatar
+import app.yougram.core.ui.chatplate.ChatPlateImage
+import app.yougram.core.ui.chatplate.ChatPlateStore
 import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.glass.LocalPlates
 import app.yougram.core.ui.glass.plateColor
@@ -122,6 +124,7 @@ fun ChatListScreen(
     val motion = MaterialTheme.motionScheme
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     val plates = LocalPlates.current
+    val plateStamps by ChatPlateStore.get(context).stamps.collectAsState()
     // Подгружаем следующую порцию, когда дошли почти до конца списка (или он короткий и всё влезло).
     val nearEnd by remember(listState, chats.size) {
         derivedStateOf {
@@ -193,25 +196,32 @@ fun ChatListScreen(
                     shape = roundedRowShape(index, chats.size, round),
                     color = container,
                 ) {
-                    ChatRow(
-                        chat = chat,
-                        lines = lines,
-                        selected = selected,
-                        highlighted = highlighted,
-                        pinned = pinned,
-                        // У скруглённой строки края — полукруги, поэтому аватар и дату отодвигаем от края.
-                        horizontalPadding = lerp(16.dp, 26.dp, round),
-                        modifier = Modifier.combinedClickable(
-                            interactionSource = interaction,
-                            onClick = {
-                                if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
-                            },
-                            onLongClick = {
-                                haptics(app.yougram.core.ui.Haptics.Kind.Click)
-                                viewModel.toggleSelected(chat.id)
-                            },
-                        ),
-                    )
+                    val plateStamp = plateStamps[chat.id]
+                    Box {
+                        if (plateStamp != null) {
+                            ChatPlateImage(chat.id, plateStamp, Modifier.matchParentSize())
+                        }
+                        ChatRow(
+                            chat = chat,
+                            withImage = plateStamp != null,
+                            lines = lines,
+                            selected = selected,
+                            highlighted = highlighted,
+                            pinned = pinned,
+                            // У скруглённой строки края — полукруги, поэтому аватар и дату отодвигаем от края.
+                            horizontalPadding = lerp(16.dp, 26.dp, round),
+                            modifier = Modifier.combinedClickable(
+                                interactionSource = interaction,
+                                onClick = {
+                                    if (selection.isNotEmpty()) viewModel.toggleSelected(chat.id) else onOpenChat(chat.id)
+                                },
+                                onLongClick = {
+                                    haptics(app.yougram.core.ui.Haptics.Kind.Click)
+                                    viewModel.toggleSelected(chat.id)
+                                },
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -294,9 +304,11 @@ private fun ChatRow(
     pinned: Boolean,
     horizontalPadding: Dp,
     modifier: Modifier,
+    withImage: Boolean = false,
 ) {
     // На подсвеченной строке (primaryContainer) вторичный текст берём из onPrimaryContainer, чтобы контраст не терялся.
-    val secondary = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+    val secondary = if (withImage) Color.White.copy(alpha = 0.8f)
+    else if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
     else MaterialTheme.colorScheme.onSurfaceVariant
     // У каждого чата своя случайная форма аватарки; выбранный чат становится скруглённым квадратом с галочкой.
     val avatarShape = if (selected) RoundedCornerShape(14.dp) else CircleShape
@@ -330,6 +342,7 @@ private fun ChatRow(
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.title,
+                        color = if (withImage) Color.White else Color.Unspecified,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

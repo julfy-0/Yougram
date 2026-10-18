@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Icon
@@ -24,6 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +65,14 @@ fun ThemeSection(settings: SettingsRepository) {
     val theme by settings.theme.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var customDialog by remember { mutableStateOf(false) }
+    if (customDialog) {
+        CustomAccentDialog(
+            initial = if (theme.customAccent != 0) Color(theme.customAccent) else Accents[theme.accent.coerceIn(Accents.indices)].color,
+            onDismiss = { customDialog = false },
+            onConfirm = { settings.setCustomAccent(it.toArgb()); customDialog = false },
+        )
+    }
     val fontPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             val result = withContext(Dispatchers.IO) { importFont(context, uri) }
@@ -139,8 +152,19 @@ fun ThemeSection(settings: SettingsRepository) {
                                     AccentSwatch(
                                         color = Accents[index].color,
                                         name = Accents[index].name,
-                                        selected = index == theme.accent,
+                                        selected = theme.customAccent == 0 && index == theme.accent,
                                         onClick = { settings.setAccent(index) },
+                                    )
+                                }
+                                // Свой цвет: открывает палитру.
+                                item(key = "custom") {
+                                    val custom = theme.customAccent
+                                    AccentSwatch(
+                                        color = if (custom != 0) Color(custom) else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        name = "Свой цвет",
+                                        selected = custom != 0,
+                                        onClick = { customDialog = true },
+                                        icon = if (custom == 0) Icons.Filled.Add else null,
                                     )
                                 }
                             }
@@ -154,7 +178,13 @@ fun ThemeSection(settings: SettingsRepository) {
 
 /** Образец акцента: выбранный плавно становится кругом, остальные — скруглённые квадраты. */
 @Composable
-private fun AccentSwatch(color: Color, name: String, selected: Boolean, onClick: () -> Unit) {
+private fun AccentSwatch(
+    color: Color,
+    name: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+) {
     val corner: Dp by animateDpAsState(
         targetValue = if (selected) 32.dp else 20.dp,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
@@ -173,6 +203,8 @@ private fun AccentSwatch(color: Color, name: String, selected: Boolean, onClick:
     ) {
         if (selected) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = checkColor, modifier = Modifier.size(28.dp))
+        } else if (icon != null) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
         }
     }
 }

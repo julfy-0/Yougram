@@ -32,8 +32,8 @@ android {
         minSdk = 31
         targetSdk = 36
 
-        versionCode = 30
-        versionName = "1.1.2"
+        versionCode = 32
+        versionName = "1.2.1"
 
         buildConfigField(
             "int",
@@ -136,6 +136,8 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.common)
     implementation(libs.zxing.core)
 
     implementation(libs.tdl.coroutines)

@@ -21,18 +21,20 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * Хост нативных (C++) плагинов. Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+ * Хост нативных (C++) плагинов, API 2.0. Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
  *
  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.
  */
 class NativePluginManager(private val context: Context) {
     companion object {
-        const val API_VERSION = "1.0"
+        const val API_VERSION = PluginApiVersion.CURRENT
         private const val TAG = "YougramPlugins"
         private const val BUNDLED_ID = "com.yougram.example.hello"
         private const val MAX_UNPACKED_BYTES = 64L * 1024 * 1024
+        private const val HOOK_TIMEOUT_MS = 1500L
         private val ENTRY = Regex("[A-Za-z0-9._-]{1,100}\\.so")
+        private val PLUGIN_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,119}")
 
         /** false, если библиотека хоста не загрузилась (например, нет сборки под ABI устройства). */
         val hostAvailable: Boolean = runCatching { System.loadLibrary("yougram_plugin_host") }
@@ -41,6 +43,9 @@ class NativePluginManager(private val context: Context) {
     }
 
     val events = PluginEventBus()
+
+    /** Значения настроек плагинов (экран рисуется по схеме из манифеста). */
+    val settings = PluginSettingsStore(context)
 
     /** API для плагинов (host->call). Выставляется из AppContainer после создания ChatRepository. */
     @Volatile var api: PluginApi? = null
@@ -59,7 +64,7 @@ class NativePluginManager(private val context: Context) {
     val plugins: StateFlow<List<InstalledPlugin>> = _plugins.asStateFlow()
 
     private external fun nativeInit()
-    private external fun nativeLoad(id: String, path: String): String?
+    private external fun nativeLoad(id: String, path: String, dataDir: String, priority: Int): String?
     private external fun nativeSetEnabled(id: String, enabled: Boolean): String?
     private external fun nativeUnload(id: String)
     private external fun nativeEmit(event: String, json: ByteArray, allowed: String)
@@ -68,13 +73,19 @@ class NativePluginManager(private val context: Context) {
     init {
         if (hostAvailable) {
             nativeInit()
-            listOf("message_received", "message_edited", "message_deleted").forEach { name ->
+            listOf("message_received", "message_sent", "message_edited", "message_deleted").forEach { name ->
                 events.on(name) { payload -> dispatch(name, payload, idsWith(PluginPermission.CHAT_READ)) }
             }
         }
     }
 
     fun permissionsOf(pluginId: String): List<String> = permissionCache[pluginId].orEmpty()
+
+    fun manifestOf(pluginId: String): PluginManifest? =
+        _plugins.value.firstOrNull { it.manifest.id == pluginId }?.manifest
+
+    fun isEnabled(pluginId: String): Boolean =
+        _plugins.value.any { it.manifest.id == pluginId && it.enabled }
 
     /** Список вида ",id1,id2," — плагины, которые включены и имеют разрешение. */
     fun idsWith(permission: String): String = _plugins.value
@@ -88,7 +99,7 @@ class NativePluginManager(private val context: Context) {
         errors.clear()
         installBundledExample()
         root.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            readManifest(dir)?.let { loadOne(dir, it) }
+            PluginManifestReader.read(dir)?.let { loadOne(dir, it) }
         }
         refresh()
     }
@@ -98,13 +109,14 @@ class NativePluginManager(private val context: Context) {
         setDisabled(pluginId, !enabled)
         val dir = File(root, pluginId)
         if (pluginId !in loaded) {
-            if (enabled) readManifest(dir)?.let { loadOne(dir, it) }
+            if (enabled) PluginManifestReader.read(dir)?.let { loadOne(dir, it) }
         } else {
             nativeSetEnabled(pluginId, enabled)?.let { errors[pluginId] = it }
         }
         refresh()
     }
 
+    /** Удаляет плагин вместе с его данными: хранилищем, файлами и настройками. */
     fun uninstall(pluginId: String) = synchronized(lock) {
         api?.onPluginStopped(pluginId)
         if (hostAvailable && pluginId in loaded) nativeUnload(pluginId)
@@ -113,7 +125,21 @@ class NativePluginManager(private val context: Context) {
         permissionCache.remove(pluginId)
         setDisabled(pluginId, false)
         File(root, pluginId).deleteRecursively()
+        api?.wipeData(pluginId)
+        settings.clear(pluginId)
         refresh()
+    }
+
+    /**
+     * Сохраняет настройки плагина и сообщает ему событием settings_changed (по одному на изменённый ключ).
+     * Бросает IllegalArgumentException с текстом для пользователя, если какое-то значение недопустимо.
+     */
+    fun applySettings(pluginId: String, values: Map<String, String>) {
+        val manifest = manifestOf(pluginId) ?: error("Плагин не найден")
+        val changed = settings.setAll(manifest, values)
+        changed.forEach { (key, value) ->
+            emitTo(pluginId, "settings_changed", linkedMapOf<String, Any?>("key" to key, "value" to value))
+        }
     }
 
     /** Устанавливает .ygplugin; бросает исключение с понятным текстом, если пакет некорректен или не загрузился. */
@@ -145,7 +171,7 @@ class NativePluginManager(private val context: Context) {
                     }
                 }
             }
-            val manifest = readManifest(staging) ?: error("manifest.json отсутствует или повреждён")
+            val manifest = PluginManifestReader.readOrThrow(staging)
             validate(manifest)
             resolveLibrary(staging, manifest.copy(bundled = false)) // есть ли .so под ABI устройства
 
@@ -177,7 +203,11 @@ class NativePluginManager(private val context: Context) {
     fun emitMessageDeleted(chatId: Long, messageIds: List<Long>) =
         events.emit("message_deleted", mapOf("chat_id" to chatId, "message_ids" to messageIds))
 
-    /** Событие только одному плагину (timer, command, action). */
+    /** Сообщение подтверждено сервером: [oldMessageId] — временный id, под которым оно отправлялось. */
+    fun emitMessageSent(message: PluginMessage, oldMessageId: Long) =
+        events.emit("message_sent", message.asMap() + ("old_message_id" to oldMessageId))
+
+    /** Событие только одному плагину (timer, command, action, settings_changed, plugin_message, http_response). */
     fun emitTo(pluginId: String, event: String, payload: Map<String, Any?>) = dispatch(event, payload, ",$pluginId,")
 
     /**
@@ -193,24 +223,40 @@ class NativePluginManager(private val context: Context) {
             )
             return null
         }
-        val allowed = idsWith(PluginPermission.HOOKS)
-        if (allowed == ",,") return text
         val payload = JSONObject().put("chat_id", chatId).put("text", text).put("reply_to", replyTo ?: 0L)
-            .toString().toByteArray(Charsets.UTF_8)
-        val out = withContext(Dispatchers.IO) {
-            try {
-                worker.submit(Callable { nativeHook("before_send", payload, allowed) }).get(1500, TimeUnit.MILLISECONDS)
-            } catch (_: TimeoutException) {
-                Log.w(TAG, "before_send hook timed out")
-                null
-            } catch (t: Throwable) {
-                Log.e(TAG, "before_send hook failed", t)
-                null
-            }
-        } ?: return text
-        val json = runCatching { JSONObject(String(out, Charsets.UTF_8)) }.getOrNull() ?: return text
+        return applyTextHook("before_send", payload, text)
+    }
+
+    /** Хук перед правкой текста сообщения: итоговый текст или null, если правку нужно отменить. */
+    suspend fun beforeEdit(chatId: Long, messageId: Long, text: String): String? {
+        if (!hostAvailable || !active) return text
+        val payload = JSONObject().put("chat_id", chatId).put("message_id", messageId).put("text", text)
+        return applyTextHook("before_edit", payload, text)
+    }
+
+    private suspend fun applyTextHook(hook: String, payload: JSONObject, text: String): String? {
+        val json = runHook(hook, payload) ?: return text
         if (json.optBoolean("cancel", false)) return null
         return json.optString("text", text).takeIf { it.isNotEmpty() } ?: text
+    }
+
+    /** Цепочка хуков плагинов с разрешением hooks. null — никто ничего не изменил (или хук не уложился во время). */
+    private suspend fun runHook(hook: String, payload: JSONObject): JSONObject? {
+        val allowed = idsWith(PluginPermission.HOOKS)
+        if (allowed == ",,") return null
+        val bytes = payload.toString().toByteArray(Charsets.UTF_8)
+        val out = withContext(Dispatchers.IO) {
+            try {
+                worker.submit(Callable { nativeHook(hook, bytes, allowed) }).get(HOOK_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            } catch (_: TimeoutException) {
+                Log.w(TAG, "$hook hook timed out")
+                null
+            } catch (t: Throwable) {
+                Log.e(TAG, "$hook hook failed", t)
+                null
+            }
+        } ?: return null
+        return runCatching { JSONObject(String(out, Charsets.UTF_8)) }.getOrNull()
     }
 
     /** Вызывается из JNI, когда плагин просит показать уведомление. */
@@ -249,7 +295,12 @@ class NativePluginManager(private val context: Context) {
         val bundled = manifest.bundled && manifest.id == BUNDLED_ID
         val failure = runCatching {
             validate(manifest)
-            nativeLoad(manifest.id, resolveLibrary(dir, manifest.copy(bundled = bundled)))
+            nativeLoad(
+                manifest.id,
+                resolveLibrary(dir, manifest.copy(bundled = bundled)),
+                PluginPaths.dataDir(context, manifest.id).absolutePath,
+                manifest.priority,
+            )
         }.getOrElse { it.message ?: it.toString() }
         if (failure != null) {
             errors[manifest.id] = failure
@@ -273,32 +324,19 @@ class NativePluginManager(private val context: Context) {
     }
 
     private fun validate(manifest: PluginManifest) {
-        require(manifest.id.matches(Regex("[A-Za-z0-9._-]{1,120}"))) { "Недопустимый id плагина" }
+        // id становится именем каталога: точки в начале (".", "..") дали бы выход из каталога плагинов.
+        require(PLUGIN_ID.matches(manifest.id)) { "Недопустимый id плагина" }
         require(manifest.name.isNotBlank() && manifest.name.length <= 120) { "Недопустимое имя плагина" }
-        require(manifest.api == API_VERSION) { "API плагина ${manifest.api} не поддерживается (нужен $API_VERSION)" }
+        require(PluginApiVersion.isSupported(manifest.api)) {
+            "API плагина ${manifest.api} не поддерживается (нужен 1.x или $API_VERSION)"
+        }
         require(ENTRY.matches(manifest.entry)) {
             if (manifest.entry.endsWith(".lua")) "Lua-плагины больше не поддерживаются: нужна библиотека .so (C++)"
             else "entry должен быть именем .so файла"
         }
+        manifest.permissions.forEach { require(it in PluginPermission.ALL) { "Неизвестное разрешение: $it" } }
+        require(manifest.priority in -100..100) { "priority: от -100 до 100" }
     }
-
-    private fun readManifest(dir: File): PluginManifest? = runCatching {
-        val json = JSONObject(File(dir, "manifest.json").readText())
-        PluginManifest(
-            id = json.getString("id"),
-            name = json.getString("name"),
-            version = json.getString("version"),
-            api = json.optString("api", API_VERSION),
-            author = json.optString("author", "Unknown"),
-            description = json.optString("description", ""),
-            entry = json.optString("entry", "libplugin.so"),
-            bundled = json.optBoolean("bundled", false),
-            permissions = buildList {
-                val array = json.optJSONArray("permissions") ?: return@buildList
-                for (i in 0 until array.length()) add(array.getString(i))
-            },
-        )
-    }.getOrNull()
 
     private fun disabledIds(): Set<String> = prefs.getStringSet("disabled", emptySet()).orEmpty()
 
@@ -311,7 +349,7 @@ class NativePluginManager(private val context: Context) {
     private fun refresh() {
         val off = disabledIds()
         _plugins.value = root.listFiles()?.filter { it.isDirectory }?.mapNotNull { dir ->
-            readManifest(dir)?.let { m -> InstalledPlugin(m, dir, m.id in loaded && m.id !in off, errors[m.id]) }
+            PluginManifestReader.read(dir)?.let { m -> InstalledPlugin(m, dir, m.id in loaded && m.id !in off, errors[m.id]) }
         }?.sortedBy { it.manifest.name.lowercase() }.orEmpty()
         active = _plugins.value.any { it.enabled }
     }
