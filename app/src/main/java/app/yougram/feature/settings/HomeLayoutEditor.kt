@@ -1,5 +1,6 @@
 package app.yougram.feature.settings
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -274,10 +275,10 @@ private fun CategoryHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            IconButton(onClick = onRename, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Edit, "Переименовать") }
-            IconButton(onClick = onUp, enabled = canUp, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.KeyboardArrowUp, "Категория выше") }
-            IconButton(onClick = onDown, enabled = canDown, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.KeyboardArrowDown, "Категория ниже") }
-            IconButton(onClick = onDelete, enabled = canDelete, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Delete, "Удалить категорию") }
+            IconButton(onClick = onRename, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Edit, tr("Переименовать")) }
+            IconButton(onClick = onUp, enabled = canUp, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.KeyboardArrowUp, tr("Категория выше")) }
+            IconButton(onClick = onDown, enabled = canDown, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.KeyboardArrowDown, tr("Категория ниже")) }
+            IconButton(onClick = onDelete, enabled = canDelete, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Delete, tr("Удалить категорию")) }
         }
         if (empty) {
             Text(
@@ -322,7 +323,7 @@ private fun EntryCard(entry: HomeEntry, shape: Shape, dragging: Boolean, modifie
                 }
             }
             Box(handle.size(48.dp), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.DragHandle, "Перетащить", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Filled.DragHandle, tr("Перетащить"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

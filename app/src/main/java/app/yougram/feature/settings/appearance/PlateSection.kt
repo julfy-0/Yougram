@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.appearance
 
+import app.yougram.core.i18n.tr
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,7 +23,7 @@ fun PlateSection(plates: PlateRepository) {
             item {
                 SettingRow(
                     title = area.title,
-                    subtitle = "Прозрачность ${(values.of(area) * 100).roundToInt()} %",
+                    subtitle = tr("Прозрачность {0} %", (values.of(area) * 100).roundToInt()),
                     belowFullWidth = true,
                     below = { DotSlider(values.of(area), { plates.set(area, it) }, 0f..1f) },
                 )

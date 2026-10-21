@@ -1,5 +1,6 @@
 package app.yougram.feature.security.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -36,7 +37,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.toShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -130,7 +131,7 @@ fun PinEntry(
                 if (value.length < MaxPinLength) onValueChange(value + "0")
             }) { Text("0", style = MaterialTheme.typography.headlineSmallEmphasized) }
             PinKey(enabled = enabled && value.isNotEmpty(), tonal = true, onClick = { onValueChange(value.dropLast(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Стереть")
+                Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = tr("Стереть"))
             }
         }
         Button(

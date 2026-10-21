@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.about
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,7 +26,7 @@ import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +56,7 @@ import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
 import app.yougram.feature.settings.component.SettingsPageColumn
+import app.yougram.feature.splash.ui.HalloweenEvent
 import app.yougram.feature.update.data.AppUpdater
 import app.yougram.feature.update.data.UpdateInfo
 import app.yougram.feature.update.data.UpdateState
@@ -64,6 +66,11 @@ import dev.g000sha256.tdl.dto.OptionValueString
 /** Баннер «О приложении»: используется и на экране «О приложении», и на экране обновления. */
 @Composable
 internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
+    // Пока включено оформление под ивенты и ивент идёт — отдельный праздничный баннер.
+    if (HalloweenEvent.isActive()) {
+        HalloweenAboutBanner(modifier)
+        return
+    }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -74,7 +81,7 @@ internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
     ) {
         Image(
             painter = painterResource(id = R.drawable.about_banner),
-            contentDescription = "Баннер Yougram",
+            contentDescription = tr("Баннер Yougram"),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
@@ -109,7 +116,7 @@ private fun UpdateReleaseBanner(updater: AppUpdater, url: String?) {
         if (bitmap != null) {
             Image(
                 bitmap = bitmap,
-                contentDescription = "Баннер обновления",
+                contentDescription = tr("Баннер обновления"),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
@@ -161,12 +168,12 @@ fun UpdateScreen(
         if (info != null) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
                 Text(
-                    "Доступна версия ${info.versionName}",
+                    tr("Доступна версия {0}", info.versionName),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "Сейчас установлена v${BuildConfig.VERSION_NAME}",
+                    tr("Сейчас установлена v{0}", BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -311,7 +318,7 @@ private fun UpdateActions(updater: AppUpdater, s: UpdateState) {
                 when (s) {
                     is UpdateState.Available -> updater.download()
                     is UpdateState.Ready -> if (!updater.install()) {
-                        Toast.makeText(context, "Разрешите установку из этого приложения и нажмите снова", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, tr("Разрешите установку из этого приложения и нажмите снова"), Toast.LENGTH_LONG).show()
                     }
                     UpdateState.UpToDate, is UpdateState.Error -> updater.check()
                     else -> Unit

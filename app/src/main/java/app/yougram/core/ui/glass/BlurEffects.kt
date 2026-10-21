@@ -39,10 +39,10 @@ uniform float2 dir;
 uniform float2 maxXY;
 half4 main(float2 c) {
     half4 sum = half4(0.0);
-    for (int i = -12; i <= 12; i++) {
+    for (int i = -6; i <= 6; i++) {
         sum += content.eval(clamp(c + dir * float(i), float2(0.0), maxXY));
     }
-    return sum / 25.0;
+    return sum / 13.0;
 }
 """
 
@@ -68,8 +68,8 @@ uniform float2 maxXY;
 half4 main(float2 c) {
     half4 sum = half4(0.0);
     float total = 0.0;
-    for (int i = 0; i < 80; i++) {
-        float t = (float(i) + 0.5) / 80.0;
+    for (int i = 0; i < 24; i++) {
+        float t = (float(i) + 0.5) / 24.0;
         float r = sqrt(t) * radius;
         float a = float(i) * 2.39996323;
         half4 s = content.eval(clamp(c + r * float2(cos(a), sin(a)), float2(0.0), maxXY));
@@ -94,10 +94,8 @@ private fun chain(prev: PlatformRenderEffect?, next: PlatformRenderEffect): Plat
     if (prev == null) next else PlatformRenderEffect.createChainEffect(next, prev)
 
 private fun box(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    // Дисперсия равномерного отрезка полуширины w равна w²/3, значит для σ = R нужно w = R·√3.
-    // Два повторения: каждое даёт σ/√2, итоговая полуширина одного прохода w/√2.
     val half = radiusPx * 1.732f / 1.414f
-    val step = half / 12f
+    val step = half / 6f
     var e: PlatformRenderEffect? = null
     repeat(2) {
         e = chain(e, pass(BOX_AGSL, maxX, maxY) { setFloatUniform("dir", step, 0f) })
@@ -107,11 +105,10 @@ private fun box(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
 }
 
 private fun kawase(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    // Дисперсия одного прохода по оси равна off²; при шагах s·2^i (i = 0..4) сумма равна s²·341, откуда s = R/√341.
     val s = radiusPx / 18.47f
     var e: PlatformRenderEffect? = null
     var off = s
-    repeat(5) {
+    repeat(4) {
         val o = off
         e = chain(e, pass(KAWASE_AGSL, maxX, maxY) { setFloatUniform("off", o) })
         off *= 2f
@@ -120,7 +117,6 @@ private fun kawase(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
 }
 
 private fun bokeh(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    // Для круга радиуса ρ дисперсия по оси равна ρ²/4, значит ρ = 2σ; чуть уменьшаем из-за шумности выборок.
     val r = radiusPx * 1.7f
     return pass(BOKEH_AGSL, maxX, maxY) { setFloatUniform("radius", r) }.asComposeRenderEffect()
 }

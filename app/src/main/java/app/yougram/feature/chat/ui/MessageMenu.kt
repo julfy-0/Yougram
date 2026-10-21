@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.MutableTransitionState
@@ -38,7 +39,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -115,6 +116,7 @@ fun MessageMenu(
     /** Сохранить через системный проводник; null — пункта нет. */
     onExport: (() -> Unit)? = null,
     onForward: () -> Unit,
+    isPinned: Boolean = false,
     onPin: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -129,12 +131,12 @@ fun MessageMenu(
     val appear = remember { MutableTransitionState(false).apply { targetState = true } }
 
     val actions = buildList {
-        add(MenuAction(Icons.AutoMirrored.Filled.Reply, "Ответить") { onReply() })
-        if (canSave) add(MenuAction(Icons.Filled.Download, "Сохранить в галерею") { onSave() })
-        if (canSave && onExport != null) add(MenuAction(Icons.Filled.FolderOpen, "Сохранить в файлы") { onExport() })
-        add(MenuAction(Icons.AutoMirrored.Filled.Send, "Переслать") { onForward() })
-        add(MenuAction(Icons.Filled.PushPin, "Закрепить") { onPin() })
-        if (canEdit) add(MenuAction(Icons.Filled.Edit, "Изменить") { onEdit() })
+        add(MenuAction(Icons.AutoMirrored.Filled.Reply, tr("Ответить")) { onReply() })
+        if (canSave) add(MenuAction(Icons.Filled.Download, tr("Сохранить в галерею")) { onSave() })
+        if (canSave && onExport != null) add(MenuAction(Icons.Filled.FolderOpen, tr("Сохранить в файлы")) { onExport() })
+        add(MenuAction(Icons.AutoMirrored.Filled.Send, tr("Переслать")) { onForward() })
+        add(MenuAction(Icons.Filled.PushPin, if (isPinned) "Открепить" else "Закрепить") { onPin() })
+        if (canEdit) add(MenuAction(Icons.Filled.Edit, tr("Изменить")) { onEdit() })
         if (canWatchTyping) {
             add(
                 MenuAction(
@@ -143,8 +145,8 @@ fun MessageMenu(
                 ) { onToggleTypingWatch() },
             )
         }
-        if (canShadowBan) add(MenuAction(Icons.Filled.VisibilityOff, "Теневой бан автора") { onShadowBan() })
-        add(MenuAction(Icons.Filled.Delete, "Удалить", danger = true) { onDelete() })
+        if (canShadowBan) add(MenuAction(Icons.Filled.VisibilityOff, tr("Теневой бан автора")) { onShadowBan() })
+        add(MenuAction(Icons.Filled.Delete, tr("Удалить"), danger = true) { onDelete() })
     }
 
     // Окно на весь экран: всё, что за ним (чат, панели, шапка), размывается; тап мимо меню закрывает его.

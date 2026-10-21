@@ -7,9 +7,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -23,25 +26,52 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.yougram.R
 import app.yougram.core.ui.rememberReduceMotion
+import app.yougram.feature.splash.ui.HalloweenEvent
 
-/** Знак приложения: скруглённый треугольник на градиентной плитке с мягкой пульсацией. */
+/**
+ * Знак приложения с мягкой пульсацией. Пока идёт хэллоуинский ивент — бейдж-тыква с оранжевым свечением,
+ * потом обычный скруглённый треугольник на градиентной плитке.
+ */
 @Composable
 fun AuthLogo(modifier: Modifier = Modifier, logoSize: Dp = 92.dp) {
     val scheme = MaterialTheme.colorScheme
-    // Пульсация отключена на слабых устройствах и при системной настройке «Удалить анимации».
-    val pulse = if (rememberReduceMotion()) 1f else {
-        val transition = rememberInfiniteTransition(label = "authLogo")
-        val value by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.05f,
-            animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "logoPulse",
-        )
-        value
+    val reduceMotion = rememberReduceMotion()
+    val transition = rememberInfiniteTransition(label = "authLogoPulse")
+    val animated by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "authLogoScale",
+    )
+    val pulse = if (reduceMotion) 1f else animated
+
+    if (HalloweenEvent.isActive()) {
+        Box(modifier.size(logoSize), contentAlignment = Alignment.Center) {
+            // Свечение шире самого значка, поэтому requiredSize (иначе его обрежет размер родителя).
+            Box(
+                Modifier
+                    .requiredSize(logoSize * 1.9f)
+                    .background(
+                        Brush.radialGradient(listOf(Color(0xFFFF8A1F).copy(alpha = 0.40f), Color.Transparent)),
+                        CircleShape,
+                    ),
+            )
+            Image(
+                painter = painterResource(R.drawable.ic_badge_halloween),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.requiredSize(logoSize * 1.15f).scale(pulse),
+            )
+        }
+        return
     }
+
     val tile = RoundedCornerShape(logoSize * 0.3f)
 
     Box(

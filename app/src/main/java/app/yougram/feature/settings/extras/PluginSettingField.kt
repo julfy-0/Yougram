@@ -10,7 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +20,7 @@ import app.yougram.feature.settings.component.CheckSwitch
 import app.yougram.plugin.PluginSetting
 import app.yougram.plugin.PluginSettingType
 
-/** Одно поле настройки плагина; тип поля берётся из схемы manifest.json. Значение — в строковом виде, как его хранит PluginSettingsStore. */
+/** Одно поле настройки модуля; тип поля берётся из схемы manifest.json. Значение — в строковом виде, как его хранит PluginSettingsStore. */
 @Composable
 fun PluginSettingField(setting: PluginSetting, value: String, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

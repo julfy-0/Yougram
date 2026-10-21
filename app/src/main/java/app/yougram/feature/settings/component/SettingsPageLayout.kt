@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.component
 
+import app.yougram.core.i18n.tr
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +25,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,7 +69,7 @@ internal fun SettingsPageColumn(contentPadding: PaddingValues, content: @Composa
 @Composable
 internal fun SettingsFootnote(text: String) {
     Text(
-        text,
+        tr(text),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -107,14 +108,14 @@ internal fun EditDialog(
     val values = remember { mutableStateListOf(*initial.toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(tr(title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 labels.forEachIndexed { i, label ->
                     OutlinedTextField(
                         value = values[i],
                         onValueChange = { values[i] = it },
-                        label = { Text(label) },
+                        label = { Text(tr(label)) },
                         singleLine = true,
                         shape = MaterialTheme.shapes.large,
                         visualTransformation = if (i in secretIndices) PasswordVisualTransformation() else VisualTransformation.None,
@@ -122,8 +123,8 @@ internal fun EditDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(values.toList()) }) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = { TextButton(onClick = { onConfirm(values.toList()) }) { Text(tr("Сохранить")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )
 }
 
@@ -139,7 +140,7 @@ internal fun <T> ChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(tr(title)) },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()).selectableGroup(),
@@ -151,7 +152,7 @@ internal fun <T> ChoiceDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )
 }
 
@@ -189,14 +190,14 @@ internal fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(text) },
+        title = { Text(tr(title)) },
+        text = { Text(tr(text)) },
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text(confirmLabel) }
+            ) { Text(tr(confirmLabel)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )
 }

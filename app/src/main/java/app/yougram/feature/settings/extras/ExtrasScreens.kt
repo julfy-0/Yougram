@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.extras
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -125,8 +126,8 @@ fun GhostModeScreen(settings: SettingsRepository, contentPadding: PaddingValues)
             }
         }
         SettingsFootnote(
-            "Пока режим включён, открытие чата не помечает сообщения прочитанными. " +
-                    "С опцией «Читать при действиях» чат читается автоматически, когда вы сами отправляете сообщение."
+            tr("Пока режим включён, открытие чата не помечает сообщения прочитанными. ") +
+                    tr("С опцией «Читать при действиях» чат читается автоматически, когда вы сами отправляете сообщение.")
         )
     }
 }
@@ -141,12 +142,12 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
     var confirmClear by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-        if (uri != null) scope.launchToast(context, "База данных экспортирована") {
+        if (uri != null) scope.launchToast(context, tr("База данных экспортирована")) {
             context.contentResolver.openOutputStream(uri)?.use { spy.exportTo(it) } ?: error("Нет доступа к файлу")
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launchToast(context, "База данных импортирована") {
+        if (uri != null) scope.launchToast(context, tr("База данных импортирована")) {
             context.contentResolver.openInputStream(uri)?.use { spy.importFrom(it) } ?: error("Нет доступа к файлу")
         }
     }
@@ -164,16 +165,16 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
             item { SwitchRow("Сохранять последний онлайн", p.saveLastOnline, { v -> settings.updateSpy { s -> s.copy(saveLastOnline = v) } }) }
         }
         SettingsFootnote(
-            "Запоминает последний известный онлайн людей со скрытым последним посещением (по их сообщениям). " +
-                    "Вы увидите очень приблизительно, когда они были в сети в последний раз."
+            tr("Запоминает последний известный онлайн людей со скрытым последним посещением (по их сообщениям). ") +
+                    tr("Вы увидите очень приблизительно, когда они были в сети в последний раз.")
         )
         SettingGroup {
             item { SwitchRow("Показывать, что делает собеседник", tw.enabled, { v -> settings.updateTypingWatch { t -> t.copy(enabled = v) } }) }
             item { SwitchRow("В личных чатах", tw.inPrivate, { v -> settings.updateTypingWatch { t -> t.copy(inPrivate = v) } }) }
         }
         SettingsFootnote(
-            "Статус «печатает…», «записывает голосовое» и т. п. в шапке чата. Сам набираемый текст Telegram не передаёт. " +
-                    "В группах выбранных людей добавляйте через долгий тап по их сообщению → «Следить за набором»."
+            tr("Статус «печатает…», «записывает голосовое» и т. п. в шапке чата. Сам набираемый текст Telegram не передаёт. ") +
+                    tr("В группах выбранных людей добавляйте через долгий тап по их сообщению → «Следить за набором».")
         )
         SettingGroup {
             item {
@@ -208,8 +209,8 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
             }
         }
         SettingsFootnote(
-            "Если папка превысит лимит, самые старые вложения будут удалены с устройства. " +
-                    "Файлы лежат в Android/data/app.yougram/files/${p.folderName}."
+            tr("Если папка превысит лимит, самые старые вложения будут удалены с устройства. ") +
+                    tr("Файлы лежат в Android/data/app.yougram/files/{0}.", p.folderName)
         )
         SettingGroup {
             item { SettingRow("Экспорт базы данных", icon = Icons.Filled.Upload, onClick = { exportLauncher.launch("yougram-spy.db") }) }
@@ -239,7 +240,7 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
             confirmLabel = "Очистить",
             onConfirm = {
                 confirmClear = false
-                scope.launchToast(context, "Архив очищен") { spy.clear() }
+                scope.launchToast(context, tr("Архив очищен")) { spy.clear() }
             },
             onDismiss = { confirmClear = false },
         )
@@ -250,7 +251,7 @@ fun SpyModeScreen(settings: SettingsRepository, spy: SpyStore, contentPadding: P
 private fun CoroutineScope.launchToast(context: Context, success: String, block: () -> Unit) {
     launch {
         val error = withContext(Dispatchers.IO) { runCatching { block() }.exceptionOrNull() }
-        Toast.makeText(context, error?.message?.let { "Ошибка: $it" } ?: success, Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, error?.message?.let { tr("Ошибка: {0}", it) } ?: success, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -268,14 +269,14 @@ fun MessageFiltersScreen(settings: SettingsRepository, contentPadding: PaddingVa
             item {
                 SettingRow(
                     "Общие фильтры",
-                    subtitle = "${f.patterns.size} фильтров",
+                    subtitle = tr("{0} фильтров", f.patterns.size),
                     onClick = { onNavigate(SettingsPage.SharedFilters) },
                 )
             }
             item {
                 SettingRow(
                     "Теневой бан",
-                    subtitle = "${f.shadowBanned.size} пользователей",
+                    subtitle = tr("{0} пользователей", f.shadowBanned.size),
                     onClick = { onNavigate(SettingsPage.ShadowBan) },
                 )
             }
@@ -299,9 +300,9 @@ fun SharedFiltersScreen(settings: SettingsRepository, contentPadding: PaddingVal
             item { SettingRow("Добавить фильтр", icon = Icons.Filled.Add, onClick = { adding = true }) }
         }
         SettingsFootnote(
-            "Сообщения, содержащие слово или фразу (без учёта регистра), скрываются. " +
-                    "Регулярное выражение указывается в слэшах, например /https?:\\/\\/\\S+/. " +
-                    "Работает, если включены «Фильтры» и «Общие фильтры в чатах»."
+            tr("Сообщения, содержащие слово или фразу (без учёта регистра), скрываются. ") +
+                    tr("Регулярное выражение указывается в слэшах, например /https?:\\/\\/\\S+/. ") +
+                    tr("Работает, если включены «Фильтры» и «Общие фильтры в чатах».")
         )
     }
 
@@ -316,7 +317,7 @@ fun SharedFiltersScreen(settings: SettingsRepository, contentPadding: PaddingVal
                     settings.addPattern(pattern)
                     adding = false
                 } else {
-                    Toast.makeText(context, "Некорректное выражение", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("Некорректное выражение"), Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { adding = false },
@@ -349,7 +350,7 @@ fun ShadowBanScreen(settings: SettingsRepository, contentPadding: PaddingValues)
                 item {
                     SettingRow(
                         user.name.ifEmpty { "ID ${user.userId}" },
-                        subtitle = "ID ${user.userId} · нажмите, чтобы убрать",
+                        subtitle = tr("ID {0} · нажмите, чтобы убрать", user.userId),
                         onClick = { removing = user.userId },
                     )
                 }
@@ -357,8 +358,8 @@ fun ShadowBanScreen(settings: SettingsRepository, contentPadding: PaddingValues)
             item { SettingRow("Добавить по ID", icon = Icons.Filled.Add, onClick = { adding = true }) }
         }
         SettingsFootnote(
-            "Сообщения этих пользователей не показываются в чатах. " +
-                    "Быстрый способ: долгое нажатие на сообщение в чате → «Теневой бан»."
+            tr("Сообщения этих пользователей не показываются в чатах. ") +
+                    tr("Быстрый способ: долгое нажатие на сообщение в чате → «Теневой бан».")
         )
     }
 
@@ -373,7 +374,7 @@ fun ShadowBanScreen(settings: SettingsRepository, contentPadding: PaddingValues)
                     settings.addShadowBan(id, values[1].trim())
                     adding = false
                 } else {
-                    Toast.makeText(context, "Введите числовой ID", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("Введите числовой ID"), Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { adding = false },

@@ -1,5 +1,6 @@
 package app.yougram.feature.stories.ui
 
+import app.yougram.core.i18n.tr
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -49,7 +50,7 @@ class StoryComposerViewModel(private val repo: StoriesRepository) : ViewModel() 
                     protect = protect,
                 )
             }.onSuccess { onDone() }
-                .onFailure { _error.value = it.message?.takeIf(String::isNotBlank) ?: "Не удалось опубликовать историю" }
+                .onFailure { _error.value = it.message?.takeIf(String::isNotBlank) ?: tr("Не удалось опубликовать историю") }
             _busy.value = false
         }
     }

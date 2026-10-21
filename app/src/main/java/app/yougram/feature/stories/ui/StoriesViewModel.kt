@@ -1,5 +1,6 @@
 package app.yougram.feature.stories.ui
 
+import app.yougram.core.i18n.tr
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -33,7 +34,7 @@ class StoriesViewModel(
                 val chat = byId[ref.chatId]
                 val m = extra[ref.chatId]
                 ref.copy(
-                    title = if (ref.isOwn) "Моя история" else chat?.title ?: m?.title ?: ref.title,
+                    title = if (ref.isOwn) tr("Моя история") else chat?.title ?: m?.title ?: ref.title,
                     avatarPath = chat?.avatarPath ?: m?.avatarPath,
                 )
             }

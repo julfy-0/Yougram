@@ -2,6 +2,7 @@
 
 package app.yougram.feature.settings
 
+import app.yougram.core.i18n.tr
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -82,7 +83,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -141,7 +142,7 @@ enum class SettingsPage(val title: String) {
     Privacy("Безопасность и конфиденциальность"),
     Notifications("Уведомления"),
     DataStorage("Данные и память"),
-    Plugins("Плагины"),
+    Plugins("Модули"),
     Archive("Архив"),
     Devices("Устройства"),
     PowerSaving("Энергосбережение"),
@@ -220,7 +221,7 @@ fun SettingsHomeScreen(
                     } != null
                 }.getOrDefault(false)
                 if (ok) viewModel.setAvatar(file.absolutePath)
-                else Toast.makeText(context, "Не удалось прочитать изображение", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("Не удалось прочитать изображение"), Toast.LENGTH_SHORT).show()
             }
         }
         var showAvatars by remember { mutableStateOf(false) }
@@ -263,20 +264,20 @@ fun SettingsHomeScreen(
                         value = "Открыть", onClick = openUpdate,
                     )
                     is UpdateState.Available -> SettingRow(
-                        title = "Доступна версия ${u.info.versionName}",
+                        title = tr("Доступна версия {0}", u.info.versionName),
                         subtitle = "Нажмите, чтобы посмотреть изменения",
                         icon = Icons.Filled.SystemUpdate,
                         value = "Открыть", onClick = openUpdate,
                     )
                     is UpdateState.Downloading -> SettingRow(
-                        title = "Загрузка ${(u.progress * 100).toInt()}%", icon = Icons.Filled.SystemUpdate,
+                        title = tr("Загрузка {0}%", (u.progress * 100).toInt()), icon = Icons.Filled.SystemUpdate,
                         onClick = openUpdate,
                         below = {
                             LinearWavyProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
                         },
                     )
                     is UpdateState.Ready -> SettingRow(
-                        title = "Версия ${u.info.versionName} скачана",
+                        title = tr("Версия {0} скачана", u.info.versionName),
                         subtitle = "Нажмите, чтобы установить",
                         icon = Icons.Filled.SystemUpdate,
                         value = "Установить", onClick = openUpdate,
@@ -293,10 +294,6 @@ fun SettingsHomeScreen(
         val byId = all.associateBy { it.id }
         val savedLayout by settings.homeLayout.collectAsState()
         val layout = remember(savedLayout) { HomeLayout.normalize(HomeLayout.parse(savedLayout), all.map { it.id }) }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { onNavigate(SettingsPage.HomeLayoutEditor) }) { Text("Изменить порядок") }
-        }
 
         layout.forEach { section ->
             if (section.entries.isNotEmpty()) {
@@ -337,7 +334,7 @@ internal class HomeEntry(
 internal fun homeEntries(devices: String?, language: String?): List<HomeEntry> = listOf(
     HomeEntry("appearance", "Внешний вид и чаты", "Тема, панели, настройки чатов, папки", Icons.Filled.Tune, null, SettingsPage.Appearance),
     HomeEntry("client", "Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
-    HomeEntry("plugins", "Плагины", "Плагины на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
+    HomeEntry("plugins", "Модули", "Модули на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
     HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
     HomeEntry("security", "Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
     HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, devices, SettingsPage.Devices),
@@ -409,7 +406,7 @@ private fun ProfileHeader(
                     if (state.avatarUpdating) {
                         LoadingIndicator(Modifier.size(18.dp), color = scheme.onPrimary)
                     } else {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = "Изменить аватар", tint = scheme.onPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.CameraAlt, contentDescription = tr("Изменить аватар"), tint = scheme.onPrimary, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -439,9 +436,10 @@ private fun ProfileHeader(
                     }
                 }
             }
+            val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
             val sub = listOfNotNull(
-                profile?.phone?.takeIf { it.isNotEmpty() },
-                profile?.username?.let { "@$it" },
+                profile?.phone?.takeIf { it.isNotEmpty() }?.let { if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else it },
+                profile?.username?.let { if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else "@$it" },
             ).joinToString(" • ")
             if (sub.isNotEmpty()) {
                 Text(
@@ -463,7 +461,7 @@ private fun ProfileHeader(
             ) {
                 Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Аккаунты (${accounts.size})", style = MaterialTheme.typography.titleMediumEmphasized)
+                Text(tr("Аккаунты ({0})", accounts.size), style = MaterialTheme.typography.titleMediumEmphasized)
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
             }

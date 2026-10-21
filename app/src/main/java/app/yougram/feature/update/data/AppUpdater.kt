@@ -1,5 +1,6 @@
 package app.yougram.feature.update.data
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
@@ -85,7 +86,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
                     if (isNewer(it.versionName, BuildConfig.VERSION_NAME)) UpdateState.Available(it)
                     else UpdateState.UpToDate
                 },
-                onFailure = { UpdateState.Error("Не удалось проверить обновления: ${it.message ?: it.javaClass.simpleName}") },
+                onFailure = { UpdateState.Error(tr("Не удалось проверить обновления: {0}", it.message ?: it.javaClass.simpleName)) },
             )
         }
     }
@@ -96,7 +97,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
         job = scope.launch {
             _state.value = runCatching { withContext(Dispatchers.IO) { downloadApk(info) } }.fold(
                 onSuccess = { UpdateState.Ready(info, it) },
-                onFailure = { UpdateState.Error("Не удалось скачать: ${it.message ?: it.javaClass.simpleName}") },
+                onFailure = { UpdateState.Error(tr("Не удалось скачать: {0}", it.message ?: it.javaClass.simpleName)) },
             )
         }
     }
@@ -153,7 +154,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
                     if (asset == null || a.getString("name").equals("yougram.apk", ignoreCase = true)) asset = a
                 }
             }
-            asset ?: error("в релизе $tag нет файла .apk")
+            asset ?: error(tr("в релизе {0} нет файла .apk", tag))
             val banner = (0 until assets.length()).map { assets.getJSONObject(it) }
                 .firstOrNull { BANNER_NAME.matches(it.getString("name")) }
             val digest = asset.optString("digest")
@@ -213,32 +214,32 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
             conn.disconnect()
         }
         verify(tmp, info)
-        check(tmp.renameTo(target)) { "не удалось сохранить файл" }
+        check(tmp.renameTo(target)) { tr("не удалось сохранить файл") }
         return target
     }
 
     private fun verify(file: File, info: UpdateInfo) {
         if (info.sizeBytes > 0) {
-            check(file.length() == info.sizeBytes) { "файл скачался не полностью (${file.length()} из ${info.sizeBytes} байт)" }
+            check(file.length() == info.sizeBytes) { tr("файл скачался не полностью ({0} из {1} байт)", file.length(), info.sizeBytes) }
         }
         info.sha256?.let { expected ->
-            check(sha256(file).equals(expected, ignoreCase = true)) { "контрольная сумма не совпала, файл повреждён" }
+            check(sha256(file).equals(expected, ignoreCase = true)) { tr("контрольная сумма не совпала, файл повреждён") }
         }
 
         val pm = appContext.packageManager
         val flags = PackageManager.GET_SIGNING_CERTIFICATES
-        val apk = pm.getPackageArchiveInfo(file.path, flags) ?: error("файл не похож на APK")
-        check(apk.packageName == appContext.packageName) { "чужой пакет ${apk.packageName}" }
+        val apk = pm.getPackageArchiveInfo(file.path, flags) ?: error(tr("файл не похож на APK"))
+        check(apk.packageName == appContext.packageName) { tr("чужой пакет {0}", apk.packageName) }
 
         val installedCode = BuildConfig.VERSION_CODE.toLong()
         check(apk.longVersionCode > installedCode) {
-            "в релизе ${info.versionName} лежит APK ${apk.versionName} (код ${apk.longVersionCode}), " +
-                    "а установлена ${BuildConfig.VERSION_NAME} (код $installedCode). Загрузите в релиз свежую сборку"
+            tr("в релизе {0} лежит APK {1} (код {2}), ", info.versionName, apk.versionName, apk.longVersionCode) +
+                    tr("а установлена {0} (код {1}). Загрузите в релиз свежую сборку", BuildConfig.VERSION_NAME, installedCode)
         }
 
         val installed = pm.getPackageInfo(appContext.packageName, flags)
         check(signers(apk).intersect(signers(installed)).isNotEmpty()) {
-            "APK подписан другим ключом, Android не установит его поверх. Соберите release тем же ключом yougram.jks"
+            tr("APK подписан другим ключом, Android не установит его поверх. Соберите release тем же ключом yougram.jks")
         }
     }
 
@@ -278,8 +279,8 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
             conn.disconnect()
             error(
                 when (code) {
-                    403, 429 -> "лимит запросов GitHub, попробуйте позже"
-                    404 -> "релиз не найден (HTTP 404)"
+                    403, 429 -> tr("лимит запросов GitHub, попробуйте позже")
+                    404 -> tr("релиз не найден (HTTP 404)")
                     else -> "HTTP $code"
                 },
             )

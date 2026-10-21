@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,7 +20,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -77,9 +78,9 @@ fun AudioFileRow(
         ) {
             when {
                 full.active -> LoadingIndicator(Modifier.size(28.dp), color = tint)
-                full.path == null -> Icon(Icons.Filled.Download, "Скачать", tint = tint)
-                active -> Icon(Icons.Filled.Pause, "Пауза", tint = tint)
-                else -> Icon(Icons.Filled.PlayArrow, "Воспроизвести", tint = tint)
+                full.path == null -> Icon(Icons.Filled.Download, tr("Скачать"), tint = tint)
+                active -> Icon(Icons.Filled.Pause, tr("Пауза"), tint = tint)
+                else -> Icon(Icons.Filled.PlayArrow, tr("Воспроизвести"), tint = tint)
             }
         }
         Spacer(Modifier.width(10.dp))

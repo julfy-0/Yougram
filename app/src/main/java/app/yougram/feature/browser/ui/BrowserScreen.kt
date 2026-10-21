@@ -2,6 +2,7 @@
 
 package app.yougram.feature.browser.ui
 
+import app.yougram.core.i18n.tr
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -60,7 +61,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -293,7 +294,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Закрыть") }
+                        IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = tr("Закрыть")) }
                         Column(Modifier.weight(1f)) {
                             Text(
                                 title.ifEmpty { host },
@@ -305,7 +306,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                                 if (secure) {
                                     Icon(
                                         Icons.Filled.Lock,
-                                        contentDescription = "Защищённое соединение",
+                                        contentDescription = tr("Защищённое соединение"),
                                         modifier = Modifier.size(12.dp).padding(end = 2.dp),
                                         tint = scheme.onSurfaceVariant,
                                     )
@@ -320,7 +321,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                             }
                         }
                         Box {
-                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Ещё") }
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = tr("Ещё")) }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.large) {
                                 DropdownMenuItem(
                                     text = { Text("Открыть во внешнем браузере") },
@@ -365,10 +366,10 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { web.goBack() }, enabled = canBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
                     }
                     IconButton(onClick = { web.goForward() }, enabled = canForward) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Вперёд")
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = tr("Вперёд"))
                     }
                     IconButton(onClick = { if (loading) web.stopLoading() else web.reload() }) {
                         Icon(
@@ -377,7 +378,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                         )
                     }
                     IconButton(onClick = { shareLink(context, url) }) {
-                        Icon(Icons.Filled.Share, contentDescription = "Поделиться")
+                        Icon(Icons.Filled.Share, contentDescription = tr("Поделиться"))
                     }
                 }
             }
@@ -423,13 +424,13 @@ private fun openIntentUri(context: Context, view: WebView, raw: String) {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: ActivityNotFoundException) {
         if (fallback != null && fallback.startsWith("https://", ignoreCase = true)) view.loadUrl(fallback)
-        else Toast.makeText(context, "Нет приложения для открытия ссылки", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Нет приложения для открытия ссылки"), Toast.LENGTH_SHORT).show()
     }
 }
 
 private fun copyLink(context: Context, url: String) {
     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("", url))
-    Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, tr("Скопировано"), Toast.LENGTH_SHORT).show()
 }
 
 private fun shareLink(context: Context, url: String) {

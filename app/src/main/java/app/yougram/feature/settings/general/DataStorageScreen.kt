@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.general
 
+import app.yougram.core.i18n.tr
 import android.net.TrafficStats
 import android.os.Process
 import android.text.format.Formatter
@@ -13,7 +14,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -27,7 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yougram.core.settings.SettingsRepository
-import app.yougram.feature.auth.ui.ProxyDialog
+import app.yougram.feature.auth.ui.ProxyManagerDialog
 import app.yougram.feature.settings.SettingsDetailsViewModel
 import app.yougram.feature.settings.component.ChoiceDialog
 import app.yougram.feature.settings.component.ConfirmDialog
@@ -50,7 +51,7 @@ private val WarnOptions = listOf(0L, 1 * GB, 2 * GB, 3 * GB, 5 * GB, 10 * GB, 20
 /** Варианты лимита автозагрузки, байт (0 — без лимита). */
 private val CapOptions = listOf(0L, 2 * GB, 5 * GB, 10 * GB, 20 * GB, 50 * GB)
 
-private fun gbLabel(bytes: Long, zero: String) = if (bytes <= 0L) zero else "${bytes / GB} ГБ"
+private fun gbLabel(bytes: Long, zero: String) = if (bytes <= 0L) zero else tr("{0} ГБ", bytes / GB)
 
 private fun yesNo(value: Boolean) = if (value) "Да" else "Нет"
 
@@ -80,6 +81,8 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val prefs by settings.dataPrefs.collectAsState()
+    val proxies by settings.proxies.collectAsState()
+    val activeProxyId by settings.activeProxyId.collectAsState()
     var traffic by remember { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) {
         viewModel.loadStorage()
@@ -156,8 +159,9 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
         SettingGroup {
             item {
                 SettingRow(
-                    "Настройки прокси",
-                    value = if (prefs.proxyServer.isBlank()) null else "${prefs.proxyServer}:${prefs.proxyPort}",
+                    "Прокси-серверы",
+                    value = proxies.firstOrNull { it.id == activeProxyId }?.title
+                        ?: if (proxies.isEmpty()) null else tr("Выключен · сохранено: {0}", proxies.size),
                     onClick = { dialog = DataDialog.Proxy },
                 )
             }
@@ -219,14 +223,12 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
             },
             onDismiss = { dialog = null },
         )
-        DataDialog.Proxy -> ProxyDialog(
-            initial = prefs,
-            onConfirm = { type, server, port, user, pass ->
-                settings.updateDataPrefs {
-                    it.copy(proxyType = type, proxyServer = server, proxyPort = port, proxyUser = user, proxyPass = pass)
-                }
-                dialog = null
-            },
+        DataDialog.Proxy -> ProxyManagerDialog(
+            proxies = proxies,
+            activeId = activeProxyId,
+            onSelect = settings::selectProxy,
+            onSave = settings::saveProxy,
+            onDelete = settings::deleteProxy,
             onDismiss = { dialog = null },
         )
         DataDialog.Drafts -> ConfirmDialog(
@@ -234,7 +236,7 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
             text = "Все несохранённые черновики сообщений будут удалены.",
             confirmLabel = "Удалить",
             onConfirm = {
-                Toast.makeText(context, "Удаление черновиков появится после интеграции с TDLib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Удаление черновиков появится после интеграции с TDLib"), Toast.LENGTH_SHORT).show()
                 dialog = null
             },
             onDismiss = { dialog = null },

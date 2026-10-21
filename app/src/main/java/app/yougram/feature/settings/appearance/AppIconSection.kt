@@ -2,6 +2,7 @@
 
 package app.yougram.feature.settings.appearance
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
@@ -23,7 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,7 +70,7 @@ fun AppIconSection() {
                 ).show()
             }
             .onFailure {
-                Toast.makeText(context, "Не удалось сменить иконку", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Не удалось сменить иконку"), Toast.LENGTH_SHORT).show()
             }
     }
 

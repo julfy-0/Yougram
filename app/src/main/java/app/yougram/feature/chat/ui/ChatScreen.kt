@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import app.yougram.core.ui.theme.LocalChatBackground
 import android.Manifest
 import android.location.Location
@@ -25,6 +26,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -114,7 +118,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -216,6 +220,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private val TopBarContentHeight = 64.dp
+private val PinnedBarHeight = 48.dp
 /** Угол со стороны автора у сообщений, склеенных в серию. */
 private val BubbleInner = 8.dp
 /** «Хвостик»: острый угол у последнего сообщения серии. */
@@ -331,13 +336,13 @@ fun ChatScreen(
     fun beginRecording() {
         AudioPlayback.stop()
         if (recorder.start()) recording = true
-        else Toast.makeText(context, "Не удалось начать запись", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Не удалось начать запись"), Toast.LENGTH_SHORT).show()
     }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             recordLocked = true // палец уже отпущен: запись идёт, как после закрепления
             beginRecording()
-        } else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        } else Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
     }
     val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.all { it }) {
@@ -345,7 +350,7 @@ fun ChatScreen(
             videoHold = HOLD_NONE
             videoRecorderOpen = true
         }
-        else Toast.makeText(context, "Нужен доступ к камере и микрофону", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Нужен доступ к камере и микрофону"), Toast.LENGTH_SHORT).show()
     }
     // Редактирование: фокус и клавиатура на поле, курсор в конце текста.
     val inputFocus = remember { FocusRequester() }
@@ -397,7 +402,7 @@ fun ChatScreen(
     var pendingCallVideo by remember { mutableStateOf(false) }
     val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result[Manifest.permission.RECORD_AUDIO] != false) onCall(viewModel.chatId, pendingCallVideo)
-        else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
     }
     fun startCall(video: Boolean) {
         val needed = buildList {
@@ -430,7 +435,7 @@ fun ChatScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             copyToCache(context, uri)?.let { viewModel.sendDocument(it) }
-                ?: Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+                ?: Toast.makeText(context, tr("Не удалось прочитать файл"), Toast.LENGTH_SHORT).show()
         }
     }
     // «Сохранить в файлы»: путь скачанного файла ждёт, пока пользователь выберет место в проводнике.
@@ -448,16 +453,16 @@ fun ChatScreen(
     var pollOpen by remember { mutableStateOf(false) }
     var pendingLocation by remember { mutableStateOf<Location?>(null) }
     fun fetchLocation() {
-        Toast.makeText(context, "Определяем местоположение…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Определяем местоположение…"), Toast.LENGTH_SHORT).show()
         scope.launch {
             val loc = currentLocation(context)
             if (loc != null) pendingLocation = loc
-            else Toast.makeText(context, "Не удалось определить местоположение", Toast.LENGTH_SHORT).show()
+            else Toast.makeText(context, tr("Не удалось определить местоположение"), Toast.LENGTH_SHORT).show()
         }
     }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) fetchLocation()
-        else Toast.makeText(context, "Нет доступа к геолокации", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Нет доступа к геолокации"), Toast.LENGTH_SHORT).show()
     }
     // Выбранное медиа сначала попадает в экран подготовки (подпись, поворот, обрезка), и только потом уходит.
     var composing by remember { mutableStateOf<PendingMedia?>(null) }
@@ -467,7 +472,7 @@ fun ChatScreen(
             val mime = context.contentResolver.getType(uri).orEmpty()
             val path = copyToCache(context, uri)
             if (path == null) {
-                Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Не удалось прочитать файл"), Toast.LENGTH_SHORT).show()
             } else {
                 composing = PendingMedia(
                     path,
@@ -484,7 +489,7 @@ fun ChatScreen(
                 copyToCache(context, uri)?.let { it to context.contentResolver.getType(uri).orEmpty() }
             }
             if (picked.isEmpty()) {
-                Toast.makeText(context, "Не удалось прочитать файлы", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Не удалось прочитать файлы"), Toast.LENGTH_SHORT).show()
             } else {
                 val photos = picked.filter { (_, mime) -> mime.startsWith("image/") && mime != "image/gif" }.map { it.first }
                 if (photos.size >= 2) viewModel.sendPhotoAlbum(photos) else photos.forEach { viewModel.sendPhoto(it) }
@@ -498,14 +503,14 @@ fun ChatScreen(
         if (uri != null) scope.launch {
             copyToCache(context, uri)?.let { path ->
                 viewModel.sendStickerFile(path)
-            } ?: Toast.makeText(context, "Не удалось прочитать стикер", Toast.LENGTH_SHORT).show()
+            } ?: Toast.makeText(context, tr("Не удалось прочитать стикер"), Toast.LENGTH_SHORT).show()
         }
     }
     val gifPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             copyToCache(context, uri)?.let { path ->
                 composing = PendingMedia(path, PendingKind.GIF)
-            } ?: Toast.makeText(context, "Не удалось прочитать GIF", Toast.LENGTH_SHORT).show()
+            } ?: Toast.makeText(context, tr("Не удалось прочитать GIF"), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(recording) {
@@ -558,8 +563,18 @@ fun ChatScreen(
 
     val density = LocalDensity.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Панель закреплённых сообщений под шапкой; тап — к сообщению, следующий тап — к более старому закреплённому.
+    var pinIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(state.pinned.size) { if (pinIndex >= state.pinned.size) pinIndex = 0 }
+    val showPinnedBar = state.pinned.isNotEmpty() && !searchOpen
     // Высота нижней панели меняется (клавиатура, многострочный ввод), поэтому измеряем её.
     var bottomBarHeightPx by remember { mutableStateOf(0) }
+    val pickerFocus = androidx.compose.ui.platform.LocalFocusManager.current
+    // Клавиатура и панель эмодзи не живут вместе: клавиатура закрывает панель.
+    val imeVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
+    LaunchedEffect(imeVisible) { if (imeVisible) emojiSheet = false }
+    androidx.activity.compose.BackHandler(enabled = emojiSheet) { emojiSheet = false }
+    LaunchedEffect(emojiSheet) { if (emojiSheet) { keyboard?.hide(); pickerFocus.clearFocus() } }
     // Клавиатура поднимает панель ввода, а список должен остаться видимым над ней.
     val imeHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val bottomBarHeight = with(density) { bottomBarHeightPx.toDp() } + imeHeight
@@ -676,7 +691,7 @@ fun ChatScreen(
                 else if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
             }
             if (state.loading && state.messages.isEmpty()) {
-                LoadingIndicator(Modifier.align(Alignment.Center))
+                LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
             } else {
                 LazyColumn(
                     state = listState,
@@ -685,7 +700,7 @@ fun ChatScreen(
                     contentPadding = PaddingValues(
                         start = 12.dp,
                         end = 12.dp,
-                        top = topInset + TopBarContentHeight + 8.dp,
+                        top = topInset + TopBarContentHeight + 8.dp + if (showPinnedBar) PinnedBarHeight else 0.dp,
                         bottom = bottomBarHeight + 8.dp,
                     ),
                 ) {
@@ -940,7 +955,7 @@ fun ChatScreen(
                                 viewModel.send(key.text)
                                 if (kb.oneTime) usedKeyboardId = kbMessageId
                             } else {
-                                Toast.makeText(context, "Эта кнопка пока не поддерживается", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Эта кнопка пока не поддерживается"), Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -975,7 +990,7 @@ fun ChatScreen(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Вниз")
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = tr("Вниз"))
                 }
             }
         }
@@ -1000,7 +1015,7 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { closeSearch() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Закрыть поиск"))
                     }
                     TextField(
                         value = searchText,
@@ -1034,10 +1049,10 @@ fun ChatScreen(
                         )
                     }
                     IconButton(onClick = { viewModel.searchOlder() }, enabled = search.ids.isNotEmpty()) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Предыдущее (старее)")
+                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = tr("Предыдущее (старее)"))
                     }
                     IconButton(onClick = { viewModel.searchNewer() }, enabled = search.index > 0) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Следующее (новее)")
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = tr("Следующее (новее)"))
                     }
                 }
             } else {
@@ -1051,7 +1066,7 @@ fun ChatScreen(
                 ) {
                     if (showBack) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
                         }
                     } else {
                         Spacer(Modifier.width(12.dp))
@@ -1094,17 +1109,62 @@ fun ChatScreen(
                         }
                     }
                     IconButton(onClick = { searchOpen = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Search, contentDescription = "Поиск в чате", modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.Search, contentDescription = tr("Поиск в чате"), modifier = Modifier.size(22.dp))
                     }
                     // Звонки доступны только в личных чатах (id чата = id пользователя).
                     if (!state.isGroup && !state.isChannel && viewModel.chatId > 0L) {
                         IconButton(onClick = { startCall(false) }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок", modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.Call, contentDescription = tr("Аудиозвонок"), modifier = Modifier.size(20.dp))
                         }
                         IconButton(onClick = { startCall(true) }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок", modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.Videocam, contentDescription = tr("Видеозвонок"), modifier = Modifier.size(22.dp))
                         }
                     }
+                }
+            }
+        }
+
+        // Панель закреплённых сообщений.
+        if (showPinnedBar) {
+            val current = state.pinned[pinIndex.coerceIn(0, state.pinned.lastIndex)]
+            Row(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = topInset + TopBarContentHeight)
+                    .fillMaxWidth()
+                    .height(PinnedBarHeight)
+                    .glass(backdrop, glass, RectangleShape)
+                    .clickable {
+                        viewModel.jumpTo(current.id)
+                        pinIndex = (pinIndex + 1) % state.pinned.size
+                    }
+                    .padding(start = 16.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .width(3.dp)
+                        .height(32.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (state.pinned.size > 1) tr("Закреплённое сообщение #{0}", state.pinned.size - state.pinned.indexOf(current))
+                        else "Закреплённое сообщение",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
+                    Text(
+                        current.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = { viewModel.unpin(current.id) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = tr("Открепить"), modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -1205,22 +1265,27 @@ fun ChatScreen(
                                 IconButton(onClick = {
                                     if (editing != null) stopEditing()
                                     replyTo = null
-                                }) { Icon(Icons.Filled.Close, contentDescription = "Отмена") }
+                                }) { Icon(Icons.Filled.Close, contentDescription = tr("Отмена")) }
                             }
                         }
                     }
                 }
-                Row(
+                // Поле ввода и панель эмодзи/стикеров/GIF — одна стеклянная панель.
+                Column(
                     Modifier
                         .fillMaxWidth()
                         .onSizeChanged { bottomBarHeightPx = it.height }
                         // В комментариях общей панели нет: размытие у самого поля ввода.
-                        .then(if (threadMode) Modifier else Modifier.glass(backdrop, glass, RectangleShape))
+                        .then(if (threadMode) Modifier else Modifier.glass(backdrop, glass, RectangleShape)),
+                ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
                         .padding(
                             start = 12.dp,
                             end = 12.dp,
                             top = 8.dp,
-                            bottom = 8.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                            bottom = 8.dp + if (emojiSheet) 0.dp else WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
                         ),
                     verticalAlignment = Alignment.Bottom,
                 ) {
@@ -1288,13 +1353,13 @@ fun ChatScreen(
                                 }
                             } else {
                                 if (state.botCommands.isNotEmpty()) {
-                                    InputAction(Icons.Filled.Menu, "Команды бота", MaterialTheme.colorScheme.primary) {
+                                    InputAction(Icons.Filled.Menu, tr("Команды бота"), MaterialTheme.colorScheme.primary) {
                                         commandsOpen = !commandsOpen
                                         if (commandsOpen) keyboardOpen = false
                                     }
                                 }
                                 if (shownKeyboard != null) {
-                                    InputAction(Icons.Filled.Apps, "Клавиатура бота", MaterialTheme.colorScheme.primary) {
+                                    InputAction(Icons.Filled.Apps, tr("Клавиатура бота"), MaterialTheme.colorScheme.primary) {
                                         keyboardOpen = !keyboardOpen
                                         if (keyboardOpen) commandsOpen = false
                                     }
@@ -1313,7 +1378,7 @@ fun ChatScreen(
                                     ) {
                                         Icon(
                                             Icons.Filled.Add,
-                                            contentDescription = "Прикрепить",
+                                            contentDescription = tr("Прикрепить"),
                                             modifier = Modifier.graphicsLayer { rotationZ = plusRotation },
                                         )
                                     }
@@ -1372,9 +1437,18 @@ fun ChatScreen(
                                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                     )
                                 }
-                                InputAction(Icons.Filled.EmojiEmotions, "Эмодзи", MaterialTheme.colorScheme.onSurfaceVariant) {
-                                    attachmentTab = 0
-                                    emojiSheet = true
+                                // Пока панель открыта, кнопка эмодзи превращается в кнопку закрытия.
+                                InputAction(
+                                    if (emojiSheet) Icons.Filled.Close else Icons.Filled.EmojiEmotions,
+                                    if (emojiSheet) "Закрыть панель" else "Эмодзи",
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                ) {
+                                    if (emojiSheet) {
+                                        emojiSheet = false
+                                    } else {
+                                        attachmentTab = 0
+                                        emojiSheet = true
+                                    }
                                 }
                             }
                         }
@@ -1552,18 +1626,12 @@ fun ChatScreen(
                         }
                     }
                 }
-            }
-        }
-
-        // Меню эмодзи / стикеров / GIF: полупрозрачная панель с размытием фона чата.
-        run {
-            GlassPickerPanel(
-                visible = emojiSheet,
-                backdrop = backdrop,
-                glass = glass,
-                transparency = LocalPlates.current.picker,
-                onDismiss = { emojiSheet = false },
-            ) {
+                AnimatedVisibility(
+                    visible = emojiSheet,
+                    enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                ) {
+                    Column(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -1632,6 +1700,10 @@ fun ChatScreen(
                         )
                     }
                 }
+                        Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))
+                    }
+                }
+                }
             }
         }
     }
@@ -1661,7 +1733,7 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { pendingLocation = null },
             title = { Text("Отправить геопозицию?") },
-            text = { Text("%.5f, %.5f (точность ~%d м)".format(loc.latitude, loc.longitude, loc.accuracy.toInt())) },
+            text = { Text(tr("%.5f, %.5f (точность ~%d м)").format(loc.latitude, loc.longitude, loc.accuracy.toInt())) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.sendLocation(loc.latitude, loc.longitude, loc.accuracy.toDouble())
@@ -1747,7 +1819,10 @@ fun ChatScreen(
                 }
             },
             onForward = { forwardMessage = message },
-            onPin = { viewModel.pin(message.id) },
+            isPinned = state.pinned.any { it.id == message.id },
+            onPin = {
+                if (state.pinned.any { it.id == message.id }) viewModel.unpin(message.id) else viewModel.pin(message.id)
+            },
             onEdit = {
                 replyTo = null
                 if (editing == null) draftBeforeEdit = input
@@ -1769,9 +1844,9 @@ fun ChatScreen(
             text = {
                 Text(
                     if (alert.limitReached) {
-                        "Приложение занимает $usedText — это не меньше заданного лимита, поэтому медиа больше не скачивается автоматически. Очистите кэш или измените лимит в «Данные и память»."
+                        tr("Приложение занимает {0} — это не меньше заданного лимита, поэтому медиа больше не скачивается автоматически. Очистите кэш или измените лимит в «Данные и память».", usedText)
                     } else {
-                        "Приложение занимает $usedText. Очистите кэш, чтобы освободить место, или измените порог предупреждения в «Данные и память»."
+                        tr("Приложение занимает {0}. Очистите кэш, чтобы освободить место, или измените порог предупреждения в «Данные и память».", usedText)
                     },
                 )
             },
@@ -2010,7 +2085,7 @@ private fun MessageBubble(
                     .size(36.dp)
                     .then(
                         if (showAvatar) {
-                            Modifier.semantics { contentDescription = "Профиль: ${sender?.name.orEmpty().ifEmpty { "отправитель" }}" }
+                            Modifier.semantics { contentDescription = tr("Профиль: {0}", sender?.name.orEmpty().ifEmpty { tr("отправитель") }) }
                         } else {
                             Modifier
                         },
@@ -2208,7 +2283,7 @@ private fun MessageFooter(
         }
         if (message.paidMessageStars > 0) {
             // Платное сообщение: отправитель заплатил звёздами.
-            Icon(Icons.Filled.Star, contentDescription = "Платное сообщение", tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
+            Icon(Icons.Filled.Star, contentDescription = tr("Платное сообщение"), tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
             Text(" ${message.paidMessageStars} · ", style = MaterialTheme.typography.labelSmall, color = muted)
         }
         Text(formatTime(message.date), style = MaterialTheme.typography.labelSmall, color = muted)
@@ -2217,14 +2292,14 @@ private fun MessageFooter(
             if (readAt != null) {
                 Icon(
                     Icons.Filled.DoneAll,
-                    contentDescription = "Прочитано",
+                    contentDescription = tr("Прочитано"),
                     tint = if (mine) content else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
             } else {
                 Icon(
                     Icons.Filled.Done,
-                    contentDescription = "Отправлено",
+                    contentDescription = tr("Отправлено"),
                     tint = muted,
                     modifier = Modifier.size(16.dp),
                 )
@@ -2245,7 +2320,7 @@ private fun ForwardHeader(forward: ForwardRef, info: SenderInfo?, modifier: Modi
     val signature = forward.signature.takeIf { it.isNotBlank() }
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(color = content.copy(alpha = 0.7f))) { append("Переслано от ") }
+            withStyle(SpanStyle(color = content.copy(alpha = 0.7f))) { append(tr("Переслано от ")) }
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(name) }
             if (signature != null) withStyle(SpanStyle(color = content.copy(alpha = 0.7f))) { append(" · $signature") }
         },
@@ -2329,7 +2404,7 @@ private fun SwipeToReply(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Reply,
-                    contentDescription = "Ответить",
+                    contentDescription = tr("Ответить"),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -2495,7 +2570,9 @@ private fun InputAction(icon: ImageVector, description: String, tint: Color, onC
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(24.dp))
+        androidx.compose.animation.Crossfade(targetState = icon, label = "inputActionIcon") { current ->
+            Icon(current, contentDescription = description, tint = tint, modifier = Modifier.size(24.dp))
+        }
     }
 }
 

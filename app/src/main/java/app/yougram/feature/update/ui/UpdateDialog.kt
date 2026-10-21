@@ -1,5 +1,6 @@
 package app.yougram.feature.update.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -50,11 +51,11 @@ fun UpdateAvailableDialog(
 
     AlertDialog(
         onDismissRequest = { updater.postpone() },
-        title = { Text("Обновление ${info.versionName}") },
+        title = { Text(tr("Обновление {0}", info.versionName)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Сейчас установлена v${BuildConfig.VERSION_NAME}",
+                    tr("Сейчас установлена v{0}", BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

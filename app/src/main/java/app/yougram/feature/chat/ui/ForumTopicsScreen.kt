@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,7 +97,7 @@ fun ChatOrTopics(
         forum == null -> Box(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center,
-        ) { LoadingIndicator() }
+        ) { LoadingIndicator(contained = true) }
 
         forum == true -> ForumTopicsScreen(
             repository = container.chatRepository,
@@ -176,7 +177,7 @@ fun ForumTopicsScreen(
                     modifier = Modifier.align(Alignment.Center),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                list == null -> LoadingIndicator(Modifier.align(Alignment.Center))
+                list == null -> LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
                 list.isEmpty() -> Text(
                     "Тем пока нет",
                     modifier = Modifier.align(Alignment.Center),
@@ -222,7 +223,7 @@ fun ForumTopicsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showBack) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад")) }
                 } else {
                     Spacer(Modifier.width(12.dp))
                 }
@@ -278,7 +279,7 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
                 )
                 if (topic.isClosed) {
                     Icon(
-                        Icons.Filled.Lock, contentDescription = "Тема закрыта",
+                        Icons.Filled.Lock, contentDescription = tr("Тема закрыта"),
                         modifier = Modifier.padding(start = 6.dp).size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -317,7 +318,7 @@ private fun TopicRow(topic: ForumTopicItem, onClick: () -> Unit) {
                     }
                 } else if (topic.isPinned) {
                     Icon(
-                        Icons.Filled.PushPin, contentDescription = "Закреплена",
+                        Icons.Filled.PushPin, contentDescription = tr("Закреплена"),
                         modifier = Modifier.padding(start = 8.dp).size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

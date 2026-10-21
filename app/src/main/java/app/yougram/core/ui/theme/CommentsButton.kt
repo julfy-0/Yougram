@@ -1,5 +1,6 @@
 package app.yougram.core.ui.theme
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,7 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,7 +20,7 @@ import app.yougram.feature.chat.comments.data.CommentsInfo
 /** Кнопка под постом. Цвета берёт из BubbleStyle, поэтому всегда читаема. */
 @Composable
 fun CommentsButton(info: CommentsInfo, style: BubbleStyle, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val label = if (info.count == 0) "Оставить комментарий" else "Комментарии: ${info.count}"
+    val label = if (info.count == 0) "Оставить комментарий" else tr("Комментарии: {0}", info.count)
     Row(
         modifier = modifier
             .fillMaxWidth()

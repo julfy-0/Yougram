@@ -1,5 +1,6 @@
 package app.yougram.core.util
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -14,7 +15,7 @@ object ApkInstaller {
     /** Копирует файл TDLib в cache и запускает системный установщик. */
     fun install(context: Context, tdlibFilePath: String) {
         if (!context.packageManager.canRequestPackageInstalls()) {
-            android.widget.Toast.makeText(context, "Разрешите установку из этого приложения и нажмите на файл ещё раз", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(context, tr("Разрешите установку из этого приложения и нажмите на файл ещё раз"), android.widget.Toast.LENGTH_LONG).show()
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -31,7 +32,7 @@ object ApkInstaller {
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }.onFailure {
-            android.widget.Toast.makeText(context, "Не удалось запустить установку", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, tr("Не удалось запустить установку"), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 }

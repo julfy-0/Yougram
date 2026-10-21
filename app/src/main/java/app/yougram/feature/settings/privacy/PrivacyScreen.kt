@@ -1,5 +1,7 @@
 package app.yougram.feature.settings.privacy
 
+import app.yougram.core.i18n.Localization
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,7 +22,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -104,7 +106,7 @@ fun PrivacyScreen(
                     "Ключи доступа",
                     icon = Icons.Filled.Key,
                     value = sec.passkeys?.let { if (it == 0) "Выкл." else it.toString() } ?: "…",
-                    onClick = { toast("Добавление ключей доступа пока не поддерживается") },
+                    onClick = { toast(tr("Добавление ключей доступа пока не поддерживается")) },
                 )
             }
             item {
@@ -181,6 +183,27 @@ fun PrivacyScreen(
                 })
             }
         }
+
+        SectionLabel("Мои номер и юзернейм")
+        SettingGroup {
+            item {
+                SwitchRow(
+                    "Скрывать номер и юзернейм",
+                    prefs.hideOwnContacts,
+                    { v -> settings.updatePrivacyPrefs { it.copy(hideOwnContacts = v) } },
+                    subtitle = "В настройках, списке аккаунтов и своём профиле",
+                )
+            }
+            item {
+                SwitchRow(
+                    "Скрывать при записи экрана",
+                    prefs.hideOwnContactsOnRecord,
+                    { v -> settings.updatePrivacyPrefs { it.copy(hideOwnContactsOnRecord = v) } },
+                    subtitle = "Пока идёт запись или трансляция экрана",
+                )
+            }
+        }
+        SettingsFootnote("Скрывается только в этом клиенте, на сервере ничего не меняется.")
     }
 
     when (dialog) {
@@ -247,7 +270,7 @@ fun PrivacyScreen(
             confirmLabel = "Удалить",
             onConfirm = {
                 dialog = null
-                viewModel.clearPaymentData { toast("Данные удалены") }
+                viewModel.clearPaymentData { toast(tr("Данные удалены")) }
             },
             onDismiss = { dialog = null },
         )
@@ -257,7 +280,7 @@ fun PrivacyScreen(
             confirmLabel = "Удалить",
             onConfirm = {
                 dialog = null
-                viewModel.clearImportedContacts { toast("Контакты удалены") }
+                viewModel.clearImportedContacts { toast(tr("Контакты удалены")) }
             },
             onDismiss = { dialog = null },
         )
@@ -345,15 +368,11 @@ private fun autoDeleteLabel(seconds: Int): String = when (seconds) {
     86_400 -> "1 день"
     604_800 -> "1 неделя"
     2_678_400 -> "1 месяц"
-    else -> "${seconds / 86_400} дн."
+    else -> tr("{0} дн.", seconds / 86_400)
 }
 
 private fun monthsLabel(days: Int): String {
     val m = (days / 30.4).roundToInt().coerceAtLeast(1)
-    val word = when {
-        m % 10 == 1 && m % 100 != 11 -> "месяц"
-        m % 10 in 2..4 && m % 100 !in 12..14 -> "месяца"
-        else -> "месяцев"
-    }
+    val word = Localization.pluralForm(m, tr("месяц"), tr("месяца"), tr("месяцев"))
     return "$m $word"
 }

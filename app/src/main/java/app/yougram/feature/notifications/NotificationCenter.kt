@@ -1,5 +1,6 @@
 package app.yougram.feature.notifications
 
+import app.yougram.core.i18n.tr
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -101,10 +102,10 @@ class NotificationCenter(
     private fun createChannels() {
         fun channel(id: String, name: String, importance: Int) =
             nm.createNotificationChannel(NotificationChannel(id, name, importance))
-        channel(CH_PRIVATE, "Личные сообщения", NotificationManager.IMPORTANCE_HIGH)
-        channel(CH_GROUPS, "Группы", NotificationManager.IMPORTANCE_HIGH)
-        channel(CH_CHANNELS, "Каналы", NotificationManager.IMPORTANCE_HIGH)
-        channel(CH_SILENT, "Без звука", NotificationManager.IMPORTANCE_LOW)
+        channel(CH_PRIVATE, tr("Личные сообщения"), NotificationManager.IMPORTANCE_HIGH)
+        channel(CH_GROUPS, tr("Группы"), NotificationManager.IMPORTANCE_HIGH)
+        channel(CH_CHANNELS, tr("Каналы"), NotificationManager.IMPORTANCE_HIGH)
+        channel(CH_SILENT, tr("Без звука"), NotificationManager.IMPORTANCE_LOW)
     }
 
     private fun channelFor(kind: ChatKind) = when (kind) {
@@ -150,7 +151,7 @@ class NotificationCenter(
             if (m.content is MessagePinMessage && !prefs.pinnedMessages) continue
             if (g.entries.any { it.id == n.id }) continue
             val (name, text) = chats.describeForNotification(m)
-            val shown = if (prefs.preview && type.showPreview) text else "Новое сообщение"
+            val shown = if (prefs.preview && type.showPreview) text else tr("Новое сообщение")
             g.entries += Entry(n.id, m.id, name, shown, n.date * 1000L)
             fresh = true
             if (!n.isSilent) loud = true
@@ -175,7 +176,7 @@ class NotificationCenter(
 
     private fun render(g: Group, alertNow: Boolean) {
         if (appVisible || !nm.areNotificationsEnabled() || g.entries.isEmpty()) return
-        val me = Person.Builder().setName("Вы").build()
+        val me = Person.Builder().setName(tr("Вы")).build()
         val style = NotificationCompat.MessagingStyle(me)
         if (g.kind != ChatKind.PRIVATE) {
             style.setConversationTitle(g.title)
@@ -219,12 +220,12 @@ class NotificationCenter(
             context, base + 3, actionIntent(ACTION_DISMISS),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val replyAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_send, "Ответить", replyPi)
-            .addRemoteInput(RemoteInput.Builder(KEY_REPLY).setLabel("Ответить").build())
+        val replyAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_send, tr("Ответить"), replyPi)
+            .addRemoteInput(RemoteInput.Builder(KEY_REPLY).setLabel(tr("Ответить")).build())
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
             .setShowsUserInterface(false)
             .build()
-        val readAction = NotificationCompat.Action.Builder(android.R.drawable.checkbox_on_background, "Прочитано", readPi)
+        val readAction = NotificationCompat.Action.Builder(android.R.drawable.checkbox_on_background, tr("Прочитано"), readPi)
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
             .setShowsUserInterface(false)
             .build()
@@ -263,7 +264,7 @@ class NotificationCenter(
         val summary = NotificationCompat.Builder(context, CH_SILENT)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentTitle("Yougram")
-            .setContentText("Новых сообщений: $total, чатов: ${groups.size}")
+            .setContentText(tr("Новых сообщений: {0}, чатов: {1}", total, groups.size))
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
@@ -290,7 +291,7 @@ class NotificationCenter(
         try {
             chats.sendText(chatId, clean, replyToId.takeIf { it != 0L })
         } catch (e: Exception) {
-            toast("Не удалось отправить: ${e.message.orEmpty()}")
+            toast(tr("Не удалось отправить: {0}", e.message.orEmpty()))
             return
         }
         // Как и в чате: в режиме призрака читаем только если включено «читать при действии».

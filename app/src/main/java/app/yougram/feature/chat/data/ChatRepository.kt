@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.data
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import app.yougram.core.di.AppContainer
 import app.yougram.core.settings.SettingsRepository
@@ -109,6 +110,7 @@ import dev.g000sha256.tdl.dto.PollTypeQuiz
 import dev.g000sha256.tdl.dto.ReactionTypeCustomEmoji
 import dev.g000sha256.tdl.dto.ReactionTypeEmoji
 import dev.g000sha256.tdl.dto.SearchMessagesFilterEmpty
+import dev.g000sha256.tdl.dto.SearchMessagesFilterPinned
 import dev.g000sha256.tdl.dto.Sticker as TdSticker
 import dev.g000sha256.tdl.dto.StickerTypeRegular
 import dev.g000sha256.tdl.dto.User
@@ -551,6 +553,12 @@ data class DeleteEvent(val chatId: Long, val keptIds: Set<Long>, val removedIds:
 /** Отправка завершена: временный id сообщения заменён настоящим. */
 data class SendSucceededEvent(val chatId: Long, val oldMessageId: Long, val message: MessageItem)
 
+/** Сообщение закреплено или откреплено в чате. */
+data class PinEvent(val chatId: Long, val messageId: Long, val isPinned: Boolean)
+
+/** Закреплённое сообщение для панели над чатом: краткий текст (или тип медиа). */
+data class PinnedItem(val id: Long, val text: String)
+
 data class ContentEvent(
     val chatId: Long,
     val messageId: Long,
@@ -612,6 +620,9 @@ class ChatRepository(
     private val _contentUpdates = MutableSharedFlow<ContentEvent>(extraBufferCapacity = 64)
     val contentUpdates: SharedFlow<ContentEvent> = _contentUpdates.asSharedFlow()
 
+    private val _pinEvents = MutableSharedFlow<PinEvent>(extraBufferCapacity = 64)
+    val pinEvents: SharedFlow<PinEvent> = _pinEvents.asSharedFlow()
+
     private val _readEvents = MutableSharedFlow<ReadEvent>(extraBufferCapacity = 64)
     val readEvents: SharedFlow<ReadEvent> = _readEvents.asSharedFlow()
 
@@ -641,7 +652,7 @@ class ChatRepository(
     /** Название чата для UI: чат с самим собой («Избранное») называется «Заметки». */
     private fun dev.g000sha256.tdl.dto.Chat.displayTitle(): String {
         val me = _ownUserId.value
-        return if (me != 0L && (type as? ChatTypePrivate)?.userId == me) "Заметки" else title
+        return if (me != 0L && (type as? ChatTypePrivate)?.userId == me) tr("Заметки") else title
     }
     /** Id текущего пользователя (0, пока не известен). */
     val ownUserId: StateFlow<Long> = _ownUserId.asStateFlow()
@@ -913,6 +924,11 @@ class ChatRepository(
             }
         }
         scope.launch {
+            client.messageIsPinnedUpdates.collect { update ->
+                _pinEvents.tryEmit(PinEvent(update.chatId, update.messageId, update.isPinned))
+            }
+        }
+        scope.launch {
             client.messageSendSucceededUpdates.collect { update ->
                 // Запоминаем соответствие временного id настоящему: правка/удаление/закрепление
                 // по старому id (например, взятому до подтверждения отправки) дают «Message not found».
@@ -1083,14 +1099,14 @@ class ChatRepository(
 
     private fun actionLabel(a: ChatAction): String? = when (a) {
         is ChatActionCancel -> null
-        is ChatActionTyping -> "печатает"
-        is ChatActionRecordingVoiceNote -> "записывает голосовое"
-        is ChatActionRecordingVideoNote -> "записывает кружок"
-        is ChatActionUploadingPhoto -> "отправляет фото"
-        is ChatActionUploadingVideo -> "отправляет видео"
-        is ChatActionUploadingDocument -> "отправляет файл"
-        is ChatActionChoosingSticker -> "выбирает стикер"
-        else -> "что-то делает"
+        is ChatActionTyping -> tr("печатает")
+        is ChatActionRecordingVoiceNote -> tr("записывает голосовое")
+        is ChatActionRecordingVideoNote -> tr("записывает кружок")
+        is ChatActionUploadingPhoto -> tr("отправляет фото")
+        is ChatActionUploadingVideo -> tr("отправляет видео")
+        is ChatActionUploadingDocument -> tr("отправляет файл")
+        is ChatActionChoosingSticker -> tr("выбирает стикер")
+        else -> tr("что-то делает")
     }
 
     private suspend fun chatMeta(chatId: Long): ChatMeta {
@@ -1446,9 +1462,9 @@ class ChatRepository(
             is ChatTypeSupergroup -> {
                 val group = (client.getSupergroup(supergroupId = type.supergroupId) as? TdlResult.Success)?.result
                 group?.usernames?.activeUsernames?.firstOrNull()?.let { "@$it" }
-                    ?: if (type.isChannel) "Канал" else "Группа"
+                    ?: if (type.isChannel) tr("Канал") else tr("Группа")
             }
-            is ChatTypeBasicGroup -> "Группа"
+            is ChatTypeBasicGroup -> tr("Группа")
             else -> ""
         }
         return SearchChatHit(chatId = chatId, title = chat.displayTitle(), subtitle = subtitle, avatarFileId = avatar?.id)
@@ -1508,7 +1524,7 @@ class ChatRepository(
                     val avatar = chat?.photo?.small
                     avatar?.let { prepareAvatar(it) }
                     val author = when {
-                        item.isOutgoing -> "Вы"
+                        item.isOutgoing -> tr("Вы")
                         message.chatId < 0 && item.senderUserId != null -> sender(item.senderUserId)?.name.orEmpty()
                         else -> ""
                     }
@@ -1518,7 +1534,7 @@ class ChatRepository(
                         chatTitle = chat?.title.orEmpty(),
                         avatarFileId = avatar?.id,
                         author = author,
-                        text = item.summary.ifEmpty { "Сообщение" },
+                        text = item.summary.ifEmpty { tr("Сообщение") },
                         date = message.date,
                     )
                 }
@@ -1770,7 +1786,7 @@ class ChatRepository(
                 avatar?.let { prepareAvatar(it) }
                 SenderInfo(
                     key = key,
-                    name = "${user.firstName} ${user.lastName}".trim().ifEmpty { "Без имени" },
+                    name = "${user.firstName} ${user.lastName}".trim().ifEmpty { tr("Без имени") },
                     username = user.usernames?.activeUsernames?.firstOrNull(),
                     avatarFileId = avatar?.id,
                 )
@@ -1788,7 +1804,7 @@ class ChatRepository(
     /** Досье для личного чата [chatId]; данные берутся из TDLib и локального архива, внешних запросов нет. */
     suspend fun loadDossier(chatId: Long): UserDossier {
         val chat = client.getChat(chatId = chatId).getOrThrow()
-        val type = chat.type as? ChatTypePrivate ?: error("Досье доступно только для личных чатов")
+        val type = chat.type as? ChatTypePrivate ?: error(tr("Досье доступно только для личных чатов"))
         val user = client.getUser(userId = type.userId).getOrThrow()
         val full = (client.getUserFullInfo(userId = type.userId) as? TdlResult.Success)?.result
         val bio = full?.bio?.text.orEmpty()
@@ -1834,7 +1850,7 @@ class ChatRepository(
                     kind = if (bot) ProfileKind.BOT else ProfileKind.USER,
                     chatId = chatId,
                     title = if (self) "${user.firstName} ${user.lastName}".trim() else chat.displayTitle(),
-                    subtitle = if (bot) "бот" else statusText(user),
+                    subtitle = if (bot) tr("бот") else statusText(user),
                     description = YougramBadge.strip(full?.bio?.text.orEmpty()),
                     phone = user.phoneNumber.takeIf { it.isNotEmpty() }?.let { "+$it" },
                     username = names.firstOrNull(),
@@ -1987,24 +2003,24 @@ class ChatRepository(
         if (selfId != null) return editSelf(selfId, title, description, photoPath)
         if (title != null) {
             runCatching { client.setChatTitle(chatId = chatId, title = title.trim()).getOrThrow() }
-                .onFailure { warnings += "Не удалось сохранить название" }
+                .onFailure { warnings += tr("Не удалось сохранить название") }
         }
         if (description != null) {
             runCatching { client.setChatDescription(chatId = chatId, description = description.trim()).getOrThrow() }
-                .onFailure { warnings += "Не удалось сохранить описание" }
+                .onFailure { warnings += tr("Не удалось сохранить описание") }
         }
         if (username != null) {
             runCatching {
                 val chat = client.getChat(chatId = chatId).getOrThrow()
                 val supergroupId = (chat.type as ChatTypeSupergroup).supergroupId
                 client.setSupergroupUsername(supergroupId = supergroupId, username = username).getOrThrow()
-            }.onFailure { warnings += "Не удалось сохранить адрес" }
+            }.onFailure { warnings += tr("Не удалось сохранить адрес") }
         }
         if (photoPath != null) {
-            runCatching { setNewChatPhoto(chatId, photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+            runCatching { setNewChatPhoto(chatId, photoPath) }.onFailure { warnings += tr("Не удалось поставить фото") }
         } else if (removePhoto) {
             runCatching { client.setChatPhoto(chatId = chatId, photo = null).getOrThrow() }
-                .onFailure { warnings += "Не удалось убрать фото" }
+                .onFailure { warnings += tr("Не удалось убрать фото") }
         }
         return warnings
     }
@@ -2016,7 +2032,7 @@ class ChatRepository(
             val t = title.trim()
             runCatching {
                 client.setName(firstName = t.substringBefore(' ').trim(), lastName = t.substringAfter(' ', "").trim()).getOrThrow()
-            }.onFailure { warnings += "Не удалось сохранить имя" }
+            }.onFailure { warnings += tr("Не удалось сохранить имя") }
         }
         if (description != null) {
             runCatching {
@@ -2024,10 +2040,10 @@ class ChatRepository(
                 val newBio = description.trim() + YougramBadge.tail(bio)
                 client.setBio(bio = newBio).getOrThrow()
                 noteBio(userId, newBio)
-            }.onFailure { warnings += "Не удалось сохранить «О себе»" }
+            }.onFailure { warnings += tr("Не удалось сохранить «О себе»") }
         }
         if (photoPath != null) {
-            runCatching { setProfilePhoto(photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+            runCatching { setProfilePhoto(photoPath) }.onFailure { warnings += tr("Не удалось поставить фото") }
         }
         return warnings
     }
@@ -2083,14 +2099,14 @@ class ChatRepository(
     suspend fun describeForNotification(message: Message): Pair<String, String> {
         val item = message.toItem()
         val name = item.senderKey?.let { sender(it)?.name }.orEmpty()
-        return name to item.summary.ifEmpty { "Сообщение" }
+        return name to item.summary.ifEmpty { tr("Сообщение") }
     }
 
     /** Автор и текст оригинала для цитаты в пузыре. */
     suspend fun replyPreview(ref: ReplyRef): ReplyPreview = runCatching {
         val item = client.getMessage(chatId = ref.chatId, messageId = ref.messageId).getOrThrow().toItem()
-        val author = if (item.isOutgoing) "Вы" else item.senderKey?.let { sender(it)?.name }.orEmpty()
-        ReplyPreview(author, item.summary.ifEmpty { "Сообщение" })
+        val author = if (item.isOutgoing) tr("Вы") else item.senderKey?.let { sender(it)?.name }.orEmpty()
+        ReplyPreview(author, item.summary.ifEmpty { tr("Сообщение") })
     }.getOrDefault(ReplyPreview("", "Сообщение недоступно"))
 
     suspend fun editText(chatId: Long, messageId: Long, text: String, fromPlugin: Boolean = false) {
@@ -2126,7 +2142,7 @@ class ChatRepository(
                 delay(250L * (attempt + 1))
             }
         }
-        throw last ?: IllegalStateException("Не удалось изменить сообщение")
+        throw last ?: IllegalStateException(tr("Не удалось изменить сообщение"))
     }
 
     /** Удаляет сообщение у всех (в личных чатах и там, где позволяют права). */
@@ -2145,6 +2161,28 @@ class ChatRepository(
             disableNotification = false,
             onlyForSelf = false,
         ).getOrThrow()
+    }
+
+    suspend fun unpinMessage(chatId: Long, messageId: Long) {
+        client.unpinChatMessage(chatId = chatId, messageId = realId(messageId)).getOrThrow()
+    }
+
+    /** Все закреплённые сообщения чата, от новых к старым. */
+    suspend fun loadPinned(chatId: Long): List<PinnedItem> {
+        val found = client.searchChatMessages(
+            chatId = chatId,
+            topicId = null,
+            query = "",
+            senderId = null,
+            fromMessageId = 0L,
+            offset = 0,
+            limit = 100,
+            filter = SearchMessagesFilterPinned(),
+        ).getOrThrow()
+        return found.messages.orEmpty().filterNotNull()
+            .map { it.toItem() }
+            .map { PinnedItem(it.id, it.summary.ifEmpty { tr("Сообщение") }) }
+            .sortedByDescending { it.id }
     }
 
     suspend fun forwardMessage(toChatId: Long, fromChatId: Long, messageId: Long) {
@@ -2481,21 +2519,13 @@ class ChatRepository(
     }
 
     private fun membersText(count: Int, channel: Boolean): String {
-        val word = if (channel) plural(count, "подписчик", "подписчика", "подписчиков")
-        else plural(count, "участник", "участника", "участников")
+        val word = if (channel) plural(count, tr("подписчик"), tr("подписчика"), tr("подписчиков"))
+        else plural(count, tr("участник"), tr("участника"), tr("участников"))
         return "%,d %s".format(count, word)
     }
 
-    private fun plural(n: Int, one: String, few: String, many: String): String {
-        val m100 = n % 100
-        val m10 = n % 10
-        return when {
-            m100 in 11..14 -> many
-            m10 == 1 -> one
-            m10 in 2..4 -> few
-            else -> many
-        }
-    }
+    private fun plural(n: Int, one: String, few: String, many: String): String =
+        app.yougram.core.i18n.Localization.pluralForm(n, one, few, many)
 
     /** Все контакты пользователя. */
     suspend fun loadContacts(): List<ContactItem> {
@@ -2606,13 +2636,13 @@ class ChatRepository(
         val chatId = created.chatId
         val warnings = ArrayList<String>()
         val failed = created.failedToAddMembers.failedToAddMembers.size
-        if (failed > 0) warnings += "Не удалось добавить участников: $failed"
+        if (failed > 0) warnings += tr("Не удалось добавить участников: {0}", failed)
         if (description.isNotBlank()) {
             runCatching { client.setChatDescription(chatId = chatId, description = description.trim()).getOrThrow() }
-                .onFailure { warnings += "Не удалось сохранить описание" }
+                .onFailure { warnings += tr("Не удалось сохранить описание") }
         }
         if (photoPath != null) {
-            runCatching { setNewChatPhoto(chatId, photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+            runCatching { setNewChatPhoto(chatId, photoPath) }.onFailure { warnings += tr("Не удалось поставить фото") }
         }
         return CreatedChat(chatId, warnings)
     }
@@ -2634,10 +2664,10 @@ class ChatRepository(
             val ok = supergroupId != null && runCatching {
                 client.setSupergroupUsername(supergroupId = supergroupId, username = username).getOrThrow()
             }.isSuccess
-            if (!ok) warnings += "Не удалось задать публичный адрес, канал остался приватным"
+            if (!ok) warnings += tr("Не удалось задать публичный адрес, канал остался приватным")
         }
         if (photoPath != null) {
-            runCatching { setNewChatPhoto(chat.id, photoPath) }.onFailure { warnings += "Не удалось поставить фото" }
+            runCatching { setNewChatPhoto(chat.id, photoPath) }.onFailure { warnings += tr("Не удалось поставить фото") }
         }
         return CreatedChat(chat.id, warnings)
     }
@@ -2721,14 +2751,14 @@ class ChatRepository(
     private suspend fun statusText(user: User): String {
         val st = user.status
         val text0 = when (st) {
-            is UserStatusOnline -> "в сети"
+            is UserStatusOnline -> tr("в сети")
             is UserStatusOffline ->
-                "был(а) " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                tr("был(а) ") + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                     .format(Date(st.wasOnline * 1000L))
-            is UserStatusRecently -> "был(а) недавно"
-            is UserStatusLastWeek -> "был(а) на этой неделе"
-            is UserStatusLastMonth -> "был(а) в этом месяце"
-            else -> "был(а) давно"
+            is UserStatusRecently -> tr("был(а) недавно")
+            is UserStatusLastWeek -> tr("был(а) на этой неделе")
+            is UserStatusLastMonth -> tr("был(а) в этом месяце")
+            else -> tr("был(а) давно")
         }
         val approx = if (settings.spyPrefs.value.saveLastOnline && st !is UserStatusOnline && st !is UserStatusOffline) {
             io { spy.lastSeen(user.id) }
@@ -2749,7 +2779,7 @@ class ChatRepository(
         val text = statusText(this)
         return ContactItem(
             id = id,
-            name = "$firstName $lastName".trim().ifEmpty { "Без имени" },
+            name = "$firstName $lastName".trim().ifEmpty { tr("Без имени") },
             statusText = text,
             online = st is UserStatusOnline,
             avatarFileId = avatar?.id,
@@ -2851,13 +2881,13 @@ class ChatRepository(
 
     private fun formatCallMessage(call: MessageCall, isOutgoing: Boolean): String {
         val reason = call.discardReason
-        val typeStr = if (call.isVideo) "видеозвонок" else "звонок"
+        val typeStr = if (call.isVideo) tr("видеозвонок") else tr("звонок")
         val dur = if (call.duration > 0) " (${formatCallDuration(call.duration)})" else ""
         return when {
-            reason is CallDiscardReasonMissed -> "Пропущенный $typeStr"
-            reason is CallDiscardReasonDeclined -> "Отклонённый $typeStr"
-            isOutgoing -> if (call.duration > 0) "Исходящий $typeStr$dur" else "Исходящий $typeStr (без ответа)"
-            else -> "Входящий $typeStr$dur"
+            reason is CallDiscardReasonMissed -> tr("Пропущенный {0}", typeStr)
+            reason is CallDiscardReasonDeclined -> tr("Отклонённый {0}", typeStr)
+            isOutgoing -> if (call.duration > 0) tr("Исходящий {0}{1}", typeStr, dur) else tr("Исходящий {0} (без ответа)", typeStr)
+            else -> tr("Входящий {0}{1}", typeStr, dur)
         }
     }
 
@@ -2870,41 +2900,41 @@ class ChatRepository(
 
     /** Человекочитаемое название типа сообщения без отдельной поддержки в UI. */
     private fun typeLabel(c: MessageContent): String {
-        val name = c::class.simpleName?.removePrefix("Message") ?: return "[Сообщение]"
+        val name = c::class.simpleName?.removePrefix("Message") ?: return tr("[Сообщение]")
         val label = when (name) {
-            "Sticker" -> "Стикер"
-            "Audio" -> "Аудио"
-            "Voice", "VoiceNote" -> "Голосовое сообщение"
-            "Location" -> "Геопозиция"
-            "Venue" -> "Место"
-            "Contact" -> "Контакт"
-            "Poll" -> "Опрос"
-            "Dice" -> "Кубик"
-            "Game" -> "Игра"
-            "Invoice" -> "Счёт"
-            "Story" -> "История"
-            "Call" -> "Звонок"
-            "PinMessage" -> "Сообщение закреплено"
-            "ChatJoinByLink", "ChatJoinByRequest", "ChatAddMembers" -> "Новый участник"
-            "ChatDeleteMember" -> "Участник вышел"
-            "ChatChangeTitle" -> "Название изменено"
-            "ChatChangePhoto" -> "Фото изменено"
-            "ChatDeletePhoto" -> "Фото удалено"
-            "BasicGroupChatCreate", "SupergroupChatCreate" -> "Чат создан"
-            "ContactRegistered" -> "Присоединился к Telegram"
-            "PaidMessagesRefunded" -> "Звёзды за сообщения возвращены"
-            "PaidMessagePriceChanged" -> "Цена сообщений изменена"
-            "Gift" -> "Подарок"
-            "GiftedStars" -> "Подарок: звёзды"
-            "GiftedPremium" -> "Подарок: Premium"
-            "Unsupported" -> "Это сообщение не поддерживается"
-            else -> "Сообщение"
+            "Sticker" -> tr("Стикер")
+            "Audio" -> tr("Аудио")
+            "Voice", "VoiceNote" -> tr("Голосовое сообщение")
+            "Location" -> tr("Геопозиция")
+            "Venue" -> tr("Место")
+            "Contact" -> tr("Контакт")
+            "Poll" -> tr("Опрос")
+            "Dice" -> tr("Кубик")
+            "Game" -> tr("Игра")
+            "Invoice" -> tr("Счёт")
+            "Story" -> tr("История")
+            "Call" -> tr("Звонок")
+            "PinMessage" -> tr("Сообщение закреплено")
+            "ChatJoinByLink", "ChatJoinByRequest", "ChatAddMembers" -> tr("Новый участник")
+            "ChatDeleteMember" -> tr("Участник вышел")
+            "ChatChangeTitle" -> tr("Название изменено")
+            "ChatChangePhoto" -> tr("Фото изменено")
+            "ChatDeletePhoto" -> tr("Фото удалено")
+            "BasicGroupChatCreate", "SupergroupChatCreate" -> tr("Чат создан")
+            "ContactRegistered" -> tr("Присоединился к Telegram")
+            "PaidMessagesRefunded" -> tr("Звёзды за сообщения возвращены")
+            "PaidMessagePriceChanged" -> tr("Цена сообщений изменена")
+            "Gift" -> tr("Подарок")
+            "GiftedStars" -> tr("Подарок: звёзды")
+            "GiftedPremium" -> tr("Подарок: Premium")
+            "Unsupported" -> tr("Это сообщение не поддерживается")
+            else -> tr("Сообщение")
         }
         return "[$label]"
     }
 
     private fun summaryOf(body: String, media: MediaItem?): String = when {
-        media != null && media.locked && body.isEmpty() -> "⭐ ${media.paidStars} · Платное медиа"
+        media != null && media.locked && body.isEmpty() -> tr("⭐ {0} · Платное медиа", media.paidStars)
         media == null || body.isNotEmpty() -> body
         media.kind == MediaKind.DOCUMENT -> media.name.ifEmpty { media.kind.label }
         media.kind == MediaKind.AUDIO -> listOf(media.artist, media.name).filter { it.isNotBlank() }.joinToString(" — ").ifEmpty { media.kind.label }

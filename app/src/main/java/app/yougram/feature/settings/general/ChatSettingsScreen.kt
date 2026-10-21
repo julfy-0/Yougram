@@ -2,6 +2,7 @@
 
 package app.yougram.feature.settings.general
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -68,7 +69,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -154,7 +155,7 @@ fun ChatSettingsScreen(
                 if (saveChatWallpaper(context, uri)) {
                     update { it.copy(wallpaper = System.currentTimeMillis()) }
                 } else {
-                    Toast.makeText(context, "Не удалось загрузить картинку", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("Не удалось загрузить картинку"), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -314,7 +315,7 @@ fun ChatSettingsScreen(
                     "Стикеры и эмодзи",
                     subtitle = "Настройки стикеров, эмодзи и реакций",
                     icon = Icons.Filled.EmojiEmotions,
-                    onClick = { Toast.makeText(context, "Скоро", Toast.LENGTH_SHORT).show() },
+                    onClick = { Toast.makeText(context, tr("Скоро"), Toast.LENGTH_SHORT).show() },
                 )
             }
         }

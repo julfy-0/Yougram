@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -47,7 +47,7 @@ fun NavGraphBuilder.commentsRoute(navController: NavHostController, container: A
             resolved == null -> Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
-            ) { LoadingIndicator() }
+            ) { LoadingIndicator(contained = true) }
 
             resolved.second == 0L -> Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),

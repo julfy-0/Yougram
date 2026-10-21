@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
@@ -29,7 +30,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -286,7 +287,7 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.align(Alignment.TopStart).padding(top = 36.dp, start = 16.dp)) {
                         GlassButton(backdrop, 44.dp, onDismiss) {
-                            Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+                            Icon(Icons.Filled.Close, contentDescription = tr("Закрыть"), tint = Color.White)
                         }
                     }
                     Box(
@@ -316,7 +317,7 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         GlassButton(backdrop, 52.dp, { seekTo(position - 10_000); poke++ }) {
-                            Icon(Icons.Filled.Replay10, contentDescription = "Назад на 10 с", tint = Color.White)
+                            Icon(Icons.Filled.Replay10, contentDescription = tr("Назад на 10 с"), tint = Color.White)
                         }
                         GlassButton(backdrop, 76.dp, { togglePlay() }) {
                             Icon(
@@ -327,7 +328,7 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                             )
                         }
                         GlassButton(backdrop, 52.dp, { seekTo(position + 10_000); poke++ }) {
-                            Icon(Icons.Filled.Forward10, contentDescription = "Вперёд на 10 с", tint = Color.White)
+                            Icon(Icons.Filled.Forward10, contentDescription = tr("Вперёд на 10 с"), tint = Color.White)
                         }
                     }
 

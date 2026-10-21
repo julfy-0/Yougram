@@ -1,6 +1,7 @@
 package app.yougram.core.settings
 
 import android.content.Context
+import app.yougram.core.ui.OwnContactMask
 import app.yougram.feature.badge.data.YougramBanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -181,6 +182,10 @@ data class PrivacyPrefs(
     val syncContacts: Boolean = false,
     val mapPreview: MapPreview = MapPreview.None,
     val linkPreview: Boolean = false,
+    /** Скрывать свои номер и юзернейм в интерфейсе клиента. */
+    val hideOwnContacts: Boolean = false,
+    /** Скрывать свои номер и юзернейм, пока идёт запись/трансляция экрана. */
+    val hideOwnContactsOnRecord: Boolean = true,
 )
 
 /** Данные и память: автозагрузка, сохранение в галерею, стриминг, экономия трафика в звонках, прокси. */
@@ -208,6 +213,25 @@ data class DataPrefs(
     /** "socks5" | "http" | "mtproto". */
     val proxyType: String = "socks5",
 )
+
+/** Сохранённый прокси-сервер. [pass] — пароль для SOCKS5/HTTP или секрет для MTProto. */
+data class ProxyEntry(
+    val id: String,
+    /** "socks5" | "http" | "mtproto". */
+    val type: String = "socks5",
+    val server: String,
+    val port: String,
+    val user: String = "",
+    val pass: String = "",
+) {
+    val title: String get() = "$server:$port"
+    val typeLabel: String
+        get() = when (type) {
+            "mtproto" -> "MTProto"
+            "http" -> "HTTP"
+            else -> "SOCKS5"
+        }
+}
 
 /** Режим призрака: не выдаём факт прочтения. */
 data class GhostPrefs(
@@ -515,9 +539,15 @@ class SettingsRepository(private val context: Context) {
             syncContacts = prefs.getBoolean("p_sync_contacts", false),
             mapPreview = MapPreview.entries.getOrElse(prefs.getInt("p_map_preview", 0)) { MapPreview.None },
             linkPreview = prefs.getBoolean("p_link_preview", false),
+            hideOwnContacts = prefs.getBoolean("p_hide_own", false),
+            hideOwnContactsOnRecord = prefs.getBoolean("p_hide_own_rec", true),
         )
     )
     val privacyPrefs: StateFlow<PrivacyPrefs> = _privacyPrefs.asStateFlow()
+
+    init {
+        OwnContactMask.set(_privacyPrefs.value.hideOwnContacts, _privacyPrefs.value.hideOwnContactsOnRecord)
+    }
 
     fun updatePrivacyPrefs(transform: (PrivacyPrefs) -> PrivacyPrefs) {
         val p = transform(_privacyPrefs.value)
@@ -526,7 +556,10 @@ class SettingsRepository(private val context: Context) {
             .putBoolean("p_sync_contacts", p.syncContacts)
             .putInt("p_map_preview", p.mapPreview.ordinal)
             .putBoolean("p_link_preview", p.linkPreview)
+            .putBoolean("p_hide_own", p.hideOwnContacts)
+            .putBoolean("p_hide_own_rec", p.hideOwnContactsOnRecord)
             .apply()
+        OwnContactMask.set(p.hideOwnContacts, p.hideOwnContactsOnRecord)
     }
 
     // Данные и память.
@@ -575,6 +608,103 @@ class SettingsRepository(private val context: Context) {
             .putString("d_proxy_pass", d.proxyPass)
             .putString("d_proxy_type", d.proxyType)
             .apply()
+    }
+
+
+    // Список сохранённых прокси. Активный прокси копируется в поля proxy* у DataPrefs: так TDLib применяет его
+    // прежним путём (см. AppContainer.start), а список — только удобный выбор между серверами.
+    private val _proxies = MutableStateFlow(loadProxies())
+    val proxies: StateFlow<List<ProxyEntry>> = _proxies.asStateFlow()
+
+    private val _activeProxyId = MutableStateFlow(loadActiveProxyId(_proxies.value))
+    /** Id включённого прокси; null — прокси выключен. */
+    val activeProxyId: StateFlow<String?> = _activeProxyId.asStateFlow()
+
+    private fun loadProxies(): List<ProxyEntry> {
+        val raw = prefs.getString("proxy_list", null)
+        if (raw != null) {
+            return runCatching {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { i ->
+                    val o = arr.getJSONObject(i)
+                    ProxyEntry(
+                        id = o.getString("id"),
+                        type = o.optString("type", "socks5").ifBlank { "socks5" },
+                        server = o.optString("server"),
+                        port = o.optString("port"),
+                        user = o.optString("user"),
+                        pass = o.optString("pass"),
+                    )
+                }
+            }.getOrDefault(emptyList())
+        }
+        // Миграция: прежде хранился один прокси в d_proxy_*.
+        val server = prefs.getString("d_proxy_server", "").orEmpty()
+        val port = prefs.getString("d_proxy_port", "").orEmpty()
+        if (server.isBlank() || port.isBlank()) return emptyList()
+        val migrated = ProxyEntry(
+            id = java.util.UUID.randomUUID().toString(),
+            type = prefs.getString("d_proxy_type", "socks5").orEmpty().ifBlank { "socks5" },
+            server = server,
+            port = port,
+            user = prefs.getString("d_proxy_user", "").orEmpty(),
+            pass = prefs.getString("d_proxy_pass", "").orEmpty(),
+        )
+        prefs.edit().putString("proxy_list", proxiesToJson(listOf(migrated))).putString("proxy_active", migrated.id).apply()
+        return listOf(migrated)
+    }
+
+    private fun loadActiveProxyId(list: List<ProxyEntry>): String? =
+        prefs.getString("proxy_active", null)?.takeIf { id -> list.any { it.id == id } }
+
+    private fun proxiesToJson(list: List<ProxyEntry>): String = JSONArray().apply {
+        list.forEach {
+            put(
+                JSONObject()
+                    .put("id", it.id).put("type", it.type).put("server", it.server)
+                    .put("port", it.port).put("user", it.user).put("pass", it.pass),
+            )
+        }
+    }.toString()
+
+    private fun persistProxies() {
+        prefs.edit()
+            .putString("proxy_list", proxiesToJson(_proxies.value))
+            .putString("proxy_active", _activeProxyId.value)
+            .apply()
+    }
+
+    /** Переносит активный прокси (или его отсутствие) в DataPrefs, откуда его берёт TDLib. */
+    private fun pushActiveProxy() {
+        val e = _proxies.value.firstOrNull { it.id == _activeProxyId.value }
+        updateDataPrefs {
+            if (e == null) it.copy(proxyServer = "", proxyPort = "", proxyUser = "", proxyPass = "")
+            else it.copy(proxyType = e.type, proxyServer = e.server, proxyPort = e.port, proxyUser = e.user, proxyPass = e.pass)
+        }
+    }
+
+    /** Добавляет прокси или заменяет существующий с тем же id. Если он активен, изменения сразу применяются. */
+    fun saveProxy(entry: ProxyEntry) {
+        _proxies.update { list ->
+            if (list.any { it.id == entry.id }) list.map { if (it.id == entry.id) entry else it } else list + entry
+        }
+        persistProxies()
+        if (_activeProxyId.value == entry.id) pushActiveProxy()
+    }
+
+    fun deleteProxy(id: String) {
+        _proxies.update { list -> list.filterNot { it.id == id } }
+        val wasActive = _activeProxyId.value == id
+        if (wasActive) _activeProxyId.value = null
+        persistProxies()
+        if (wasActive) pushActiveProxy()
+    }
+
+    /** Включает прокси с данным id; null — выключить прокси совсем. */
+    fun selectProxy(id: String?) {
+        _activeProxyId.value = id?.takeIf { target -> _proxies.value.any { it.id == target } }
+        persistProxies()
+        pushActiveProxy()
     }
 
     // «Улучшенный интерфейс»: ручное включение размытия и анимаций на слабом устройстве (по умолчанию выкл.).

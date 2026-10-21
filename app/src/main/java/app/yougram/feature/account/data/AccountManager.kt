@@ -39,7 +39,16 @@ class AccountManager(context: Context) {
     private val _activeAccountId = MutableStateFlow(loadActiveId(_accounts.value))
     val activeAccountId: StateFlow<String> = _activeAccountId.asStateFlow()
 
-    /** Делает аккаунт активным (вступит в силу после перезапуска). false — такого аккаунта нет или он уже активен. */
+    /** Пересборка приложения под выбранный аккаунт без перезапуска процесса; ставит [app.yougram.YougramApp]. */
+    @Volatile
+    var onReload: (() -> Unit)? = null
+
+    private fun applyAccountChange() {
+        val reload = onReload
+        if (reload != null) reload() else restartApp()
+    }
+
+    /** Делает аккаунт активным (вступит в силу после перезагрузки контейнера). false — такого аккаунта нет или он уже активен. */
     fun switchAccount(id: String): Boolean {
         if (id == _activeAccountId.value || _accounts.value.none { it.id == id }) return false
         _activeAccountId.value = id
@@ -66,7 +75,7 @@ class AccountManager(context: Context) {
     }
 
     fun switchAndRestart(id: String) {
-        if (switchAccount(id)) restartApp()
+        if (switchAccount(id)) applyAccountChange()
     }
 
     /**
@@ -90,12 +99,12 @@ class AccountManager(context: Context) {
             updateAccounts { list -> list.filterNot { it.id == blank.id } }
             deleteData(blank.id)
         }
-        restartApp()
+        applyAccountChange()
     }
 
     fun addAndRestart() {
         addAccount()
-        restartApp()
+        applyAccountChange()
     }
 
     fun updateAccountDetails(
@@ -148,7 +157,7 @@ class AccountManager(context: Context) {
                 list.map { if (it.id == current) AccountEntry(id = current, name = "Новый аккаунт") else it }
             }
         }
-        restartApp()
+        applyAccountChange()
     }
 
     /** Перезапуск процесса: TDLib-клиент привязан к аккаунту, выбранному при старте. */

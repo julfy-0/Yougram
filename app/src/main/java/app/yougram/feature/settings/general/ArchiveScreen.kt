@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.general
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,7 +56,7 @@ fun ArchiveScreen(
         if (archived.isEmpty()) {
             SettingsFootnote("Архив пуст. Чат можно отправить в архив долгим нажатием в списке чатов.")
         } else {
-            SectionLabel("Архивные чаты (${archived.size})")
+            SectionLabel(tr("Архивные чаты ({0})", archived.size))
             SettingGroup {
                 archived.forEach { chat ->
                     item {
@@ -89,7 +90,7 @@ fun ArchiveScreen(
                                 }
                             }
                             IconButton(onClick = { scope.launch { runCatching { chats.setChatArchived(chat.id, false) } } }) {
-                                Icon(Icons.Filled.Unarchive, contentDescription = "Вернуть из архива")
+                                Icon(Icons.Filled.Unarchive, contentDescription = tr("Вернуть из архива"))
                             }
                         }
                     }

@@ -2,6 +2,7 @@
 
 package app.yougram.feature.settings.general
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -32,7 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.toShape
@@ -118,7 +119,7 @@ fun CreateChatScreen(
                 photoPath?.let { File(it).delete() }
                 photoPath = file.absolutePath
             } else {
-                Toast.makeText(context, "Не удалось прочитать изображение", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Не удалось прочитать изображение"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -169,7 +170,7 @@ fun CreateChatScreen(
                     } else {
                         Icon(
                             Icons.Filled.CameraAlt,
-                            contentDescription = "Выбрать фото",
+                            contentDescription = tr("Выбрать фото"),
                             modifier = Modifier.size(40.dp),
                             tint = scheme.onPrimaryContainer,
                         )
@@ -190,7 +191,7 @@ fun CreateChatScreen(
                     ) {
                         Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Убрать фото",
+                            contentDescription = tr("Убрать фото"),
                             modifier = Modifier.size(20.dp),
                             tint = scheme.onSecondaryContainer,
                         )
@@ -271,7 +272,7 @@ fun CreateChatScreen(
                 SettingsFootnote("В приватный канал можно вступить только по пригласительной ссылке.")
             }
         } else {
-            SectionLabel("Участники" + if (selected.isNotEmpty()) " · ${selected.size}" else "")
+            SectionLabel(tr("Участники") + if (selected.isNotEmpty()) " · ${selected.size}" else "")
             SettingGroup {
                 item {
                     TextField(
@@ -342,7 +343,7 @@ fun CreateChatScreen(
                         }
                         onCreated(res.chatId)
                     } catch (e: Exception) {
-                        Toast.makeText(context, e.message ?: "Не удалось создать", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, e.message ?: tr("Не удалось создать"), Toast.LENGTH_LONG).show()
                         busy = false
                     }
                 }

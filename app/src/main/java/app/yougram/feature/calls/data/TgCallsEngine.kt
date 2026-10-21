@@ -1,5 +1,6 @@
 package app.yougram.feature.calls.data
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -161,7 +162,7 @@ class TgCallsEngine(context: Context) : CallEngine {
                         Instance.ENDPOINT_TYPE_UDP_RELAY,
                         null, type.supportsTurn, type.supportsStun, type.username, type.password, false,
                     )
-                    else -> error("Неизвестный тип сервера звонка")
+                    else -> error(tr("Неизвестный тип сервера звонка"))
                 }
             }.toTypedArray()
 

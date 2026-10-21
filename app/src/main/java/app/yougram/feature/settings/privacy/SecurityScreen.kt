@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.privacy
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +19,7 @@ import androidx.compose.material.icons.filled.Pin
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -65,7 +66,7 @@ private fun timeoutLabel(seconds: Int): String = when (seconds) {
     60 -> "Через 1 минуту"
     300 -> "Через 5 минут"
     3600 -> "Через 1 час"
-    else -> "Через $seconds с"
+    else -> tr("Через {0} с", seconds)
 }
 
 @Composable
@@ -102,7 +103,7 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
             return
         }
         if (!appLock.biometricAvailable()) {
-            toast("Отпечаток или лицо не настроены в системе")
+            toast(tr("Отпечаток или лицо не настроены в системе"))
             return
         }
         if (appLock.biometricLevel() == BiometricLevel.Weak) {
@@ -114,7 +115,7 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
                 onSuccess = { appLock.setBiometric(true, weak = true) },
                 weak = true,
             )
-            if (!ok) toast("Не удалось включить вход по лицу")
+            if (!ok) toast(tr("Не удалось включить вход по лицу"))
             return
         }
         val shown = appLock.prepareBiometricKey() && showBiometricPrompt(
@@ -127,7 +128,7 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
         )
         if (!shown) {
             appLock.deleteBiometricKey()
-            toast("Не удалось включить отпечаток")
+            toast(tr("Не удалось включить отпечаток"))
         }
     }
 
@@ -198,8 +199,8 @@ fun SecurityScreen(appLock: AppLock, contentPadding: PaddingValues) {
             }
         }
         SettingsFootnote(
-            "При значении «Сразу» приложение блокируется, как только вы сворачиваете его или выключаете экран. " +
-                    "После 5 неверных попыток вход блокируется на время, которое растёт с каждой серией.",
+            tr("При значении «Сразу» приложение блокируется, как только вы сворачиваете его или выключаете экран. ") +
+                    tr("После 5 неверных попыток вход блокируется на время, которое растёт с каждой серией."),
         )
     }
 
@@ -297,7 +298,7 @@ private fun SecurityFlow(
                         input = ""
                     }
                     is VerifyResult.LockedOut -> {
-                        message = "Слишком много попыток. Повторите через ${result.remainingMs / 1000 + 1} с"
+                        message = tr("Слишком много попыток. Повторите через {0} с", result.remainingMs / 1000 + 1)
                         isError = true
                         input = ""
                     }

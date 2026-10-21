@@ -1,5 +1,6 @@
 package app.yougram.feature.stories.data
 
+import app.yougram.core.i18n.tr
 import app.yougram.core.telegram.TelegramClient
 import app.yougram.core.telegram.getOrThrow
 import dev.g000sha256.tdl.TdlResult
@@ -95,7 +96,7 @@ class StoriesRepository(
     /** Упорядоченная лента: свой круг первым, затем непросмотренные, затем по порядку TDLib. Title/avatar заполняет UI. */
     val refs: StateFlow<List<StoryRef>> = combine(active, _myId) { map, me ->
         val own = map[me]
-        val ownRef = StoryRef(me, "Моя история", null, own?.ids.orEmpty(), own?.maxRead ?: 0, isOwn = true)
+        val ownRef = StoryRef(me, tr("Моя история"), null, own?.ids.orEmpty(), own?.maxRead ?: 0, isOwn = true)
         val others = map.filterKeys { it != me }
             .map { (id, a) -> StoryRef(id, "", null, a.ids, a.maxRead, order = a.order) }
             .sortedWith(compareByDescending<StoryRef> { it.unread }.thenByDescending { it.order })
@@ -139,7 +140,7 @@ class StoriesRepository(
                 val r = client.downloadFile(fileId = file.id, priority = 16, offset = 0L, limit = 0L, synchronous = true)
                 if (r is TdlResult.Success) path = r.result.local.path.takeIf { it.isNotBlank() }
             }
-            ChatMeta(if (chatId == _myId.value) "Моя история" else chat.title, path).also { metaCache[chatId] = it }
+            ChatMeta(if (chatId == _myId.value) tr("Моя история") else chat.title, path).also { metaCache[chatId] = it }
         }.getOrNull()
     }
 

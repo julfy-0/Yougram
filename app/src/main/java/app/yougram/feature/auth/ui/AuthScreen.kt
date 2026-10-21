@@ -1,5 +1,8 @@
 package app.yougram.feature.auth.ui
 
+import app.yougram.core.i18n.tr
+import androidx.compose.ui.graphics.Color
+import app.yougram.feature.splash.ui.HalloweenEvent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -29,7 +32,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,7 +57,9 @@ fun AuthScreen(
 ) {
     val step by viewModel.step.collectAsState()
     val ui by viewModel.ui.collectAsState()
-    val proxy by viewModel.proxy.collectAsState()
+    val proxies by viewModel.proxies.collectAsState()
+    val activeProxyId by viewModel.activeProxyId.collectAsState()
+    val activeProxy = proxies.firstOrNull { it.id == activeProxyId }
     var showProxy by remember { mutableStateOf(false) }
 
     // Пружины Expressive: пространственные для движения, «эффектные» для прозрачности.
@@ -80,15 +85,18 @@ fun AuthScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val halloween = HalloweenEvent.isActive()
                 AuthLogo()
                 Spacer(Modifier.height(20.dp))
                 Text(
                     "Yougram",
                     style = MaterialTheme.typography.displaySmallEmphasized,
+                    color = if (halloween) Color(0xFFFF8A1F) else Color.Unspecified,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Telegram, настроенный под вас",
+                    if (halloween) "🎃 Happy Halloween! Telegram, настроенный под вас"
+                    else "Telegram, настроенный под вас",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -109,14 +117,14 @@ fun AuthScreen(
                                 AuthStep.Loading, AuthStep.Ready -> Box(
                                     Modifier.fillMaxWidth().padding(vertical = 24.dp),
                                     contentAlignment = Alignment.Center,
-                                ) { LoadingIndicator() }
+                                ) { LoadingIndicator(contained = true) }
 
                                 AuthStep.MissingCredentials -> AuthNotice(
                                     icon = Icons.Filled.Warning,
                                     title = "Не заданы ключи API",
-                                    text = "1. Получите TG_API_ID и TG_API_HASH на my.telegram.org (API development tools).\n" +
-                                            "2. Впишите их в local.properties в корне проекта.\n" +
-                                            "3. Пересоберите и запустите приложение.",
+                                    text = tr("1. Получите TG_API_ID и TG_API_HASH на my.telegram.org (API development tools).\n") +
+                                            tr("2. Впишите их в local.properties в корне проекта.\n") +
+                                            tr("3. Пересоберите и запустите приложение."),
                                 )
 
                                 AuthStep.EnterPhone -> AuthInputStep(
@@ -145,7 +153,7 @@ fun AuthScreen(
                                     title = "Облачный пароль",
                                     subtitle = "Включена двухэтапная проверка",
                                     label = "Пароль",
-                                    hint = s.hint.takeIf { it.isNotEmpty() }?.let { "Подсказка: $it" },
+                                    hint = s.hint.takeIf { it.isNotEmpty() }?.let { tr("Подсказка: {0}", it) },
                                     busy = ui.busy,
                                     onEdit = viewModel::clearError,
                                     onSubmit = viewModel::submitPassword,
@@ -178,7 +186,7 @@ fun AuthScreen(
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = { showProxy = true }) {
                     Text(
-                        if (proxy.proxyServer.isBlank()) "Прокси" else "Прокси: ${proxy.proxyServer}:${proxy.proxyPort}",
+                        if (activeProxy == null) "Прокси" else tr("Прокси: {0}", activeProxy.title),
                     )
                 }
             }
@@ -201,12 +209,12 @@ fun AuthScreen(
         }
 
         if (showProxy) {
-            ProxyDialog(
-                initial = proxy,
-                onConfirm = { type, server, port, user, pass ->
-                    viewModel.saveProxy(type, server, port, user, pass)
-                    showProxy = false
-                },
+            ProxyManagerDialog(
+                proxies = proxies,
+                activeId = activeProxyId,
+                onSelect = viewModel::selectProxy,
+                onSave = viewModel::saveProxy,
+                onDelete = viewModel::deleteProxy,
                 onDismiss = { showProxy = false },
             )
         }

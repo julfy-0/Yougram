@@ -2,6 +2,7 @@
 
 package app.yougram.feature.profile.ui
 
+import app.yougram.core.i18n.tr
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -75,7 +76,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
@@ -157,7 +158,7 @@ fun ProfileScreen(
     val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val userId = state.details?.id
         if (userId != null && result[Manifest.permission.RECORD_AUDIO] != false) onCall(userId, pendingVideo)
-        else Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
     }
     val startCall: (Boolean) -> Unit = { video ->
         val userId = state.details?.id
@@ -227,7 +228,7 @@ fun ProfileScreen(
 
     SystemBarsGlass(Modifier.fillMaxSize()) {
         if (details == null) {
-            if (state.loading) LoadingIndicator(Modifier.align(Alignment.Center))
+            if (state.loading) LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
         } else {
             val actions = actionsFor(details, context, onOpenChat, startCall, viewModel::toggleMute, { showEdit = true }) { confirmLeave = true }
             val media = remember(state.shared) { state.shared.filter { it.media?.kind in MediaKinds } }
@@ -316,7 +317,7 @@ fun ProfileScreen(
             onClick = onBack,
             modifier = Modifier.padding(top = topInset, start = 4.dp),
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
         }
     }
 
@@ -332,7 +333,7 @@ fun ProfileScreen(
         val title = state.details?.title.orEmpty()
         AlertDialog(
             onDismissRequest = { confirmLeave = false },
-            title = { Text("Покинуть «$title»?") },
+            title = { Text(tr("Покинуть «{0}»?", title)) },
             text = { Text("Вы перестанете получать сообщения из этого чата.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -363,16 +364,16 @@ private fun actionsFor(
     onEdit: () -> Unit,
     onLeave: () -> Unit,
 ): List<ProfileAction> {
-    val edit = ProfileAction(Icons.Filled.Edit, "Изменить", onEdit)
+    val edit = ProfileAction(Icons.Filled.Edit, tr("Изменить"), onEdit)
     val dial = {
         val phone = details.phone
         if (phone == null) {
-            Toast.makeText(context, "Номер телефона скрыт", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Номер телефона скрыт"), Toast.LENGTH_SHORT).show()
         } else {
             try {
                 context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
             } catch (_: ActivityNotFoundException) {
-                Toast.makeText(context, "Нет приложения для звонков", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Нет приложения для звонков"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -387,29 +388,29 @@ private fun actionsFor(
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_TEXT, "https://$link")
             context.startActivity(Intent.createChooser(send, null))
-        } ?: Toast.makeText(context, "У канала нет публичной ссылки", Toast.LENGTH_SHORT).show()
+        } ?: Toast.makeText(context, tr("У канала нет публичной ссылки"), Toast.LENGTH_SHORT).show()
     }
     return when (details.kind) {
         ProfileKind.USER, ProfileKind.BOT -> if (details.isSelf) listOf(
-            ProfileAction(Icons.Filled.Bookmark, "Заметки", onOpenChat),
+            ProfileAction(Icons.Filled.Bookmark, tr("Заметки"), onOpenChat),
             edit,
         ) else listOf(
-            ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat),
-            ProfileAction(Icons.Filled.Call, "Звонок") { if (details.kind == ProfileKind.BOT) dial() else onCall(false) },
-            ProfileAction(Icons.Filled.Videocam, "Видео") { if (details.kind == ProfileKind.BOT) dial() else onCall(true) },
+            ProfileAction(Icons.Filled.ChatBubble, tr("Чат"), onOpenChat),
+            ProfileAction(Icons.Filled.Call, tr("Звонок")) { if (details.kind == ProfileKind.BOT) dial() else onCall(false) },
+            ProfileAction(Icons.Filled.Videocam, tr("Видео")) { if (details.kind == ProfileKind.BOT) dial() else onCall(true) },
             sound,
         ) + (if (details.canEdit) listOf(edit) else emptyList())
         ProfileKind.GROUP -> listOf(
-            ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat),
+            ProfileAction(Icons.Filled.ChatBubble, tr("Чат"), onOpenChat),
             sound,
         ) + (if (details.canEdit) listOf(edit) else emptyList()) +
-                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
+                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, tr("Покинуть"), onLeave)
         ProfileKind.CHANNEL -> listOf(
             sound,
-            ProfileAction(Icons.Filled.Share, "Ссылка", share),
+            ProfileAction(Icons.Filled.Share, tr("Ссылка"), share),
         ) + (if (details.canEdit) listOf(edit) else emptyList()) +
-                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, "Покинуть", onLeave)
-        ProfileKind.OTHER -> listOf(ProfileAction(Icons.Filled.ChatBubble, "Чат", onOpenChat))
+                ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, tr("Покинуть"), onLeave)
+        ProfileKind.OTHER -> listOf(ProfileAction(Icons.Filled.ChatBubble, tr("Чат"), onOpenChat))
     }
 }
 
@@ -516,7 +517,7 @@ private fun ActionsGroup(actions: List<ProfileAction>) {
     val scheme = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         actions.forEach { action ->
-            val danger = action.label == "Покинуть"
+            val danger = action.label == tr("Покинуть")
             Surface(
                 onClick = action.onClick,
                 modifier = Modifier.weight(1f).heightIn(min = 76.dp),
@@ -540,20 +541,25 @@ private fun ActionsGroup(actions: List<ProfileAction>) {
 @Composable
 private fun InfoGroup(details: ProfileDetails, context: Context, onDossier: () -> Unit) {
     val isUser = details.kind == ProfileKind.USER || details.kind == ProfileKind.BOT
-    val others = details.otherUsernames.joinToString(", ") { "@$it" }
+    val hideOwn = details.isSelf && app.yougram.core.ui.rememberOwnContactsHidden()
+    val others = if (hideOwn) "" else details.otherUsernames.joinToString(", ") { "@$it" }
     val rows = buildList {
         if (details.description.isNotEmpty()) {
             add(InfoRowData(details.description, if (isUser) "О себе" else "Описание", null, false))
         }
-        details.phone?.let { add(InfoRowData(it, "Телефон", null, true)) }
+        details.phone?.let {
+            if (hideOwn) add(InfoRowData(app.yougram.core.ui.OWN_PHONE_MASK, "Телефон", null, false))
+            else add(InfoRowData(it, "Телефон", null, true))
+        }
         if (isUser) {
             details.username?.let {
-                val label = "Имя пользователя" + if (others.isNotEmpty()) " · также $others" else ""
-                add(InfoRowData("@$it", label, Icons.Filled.QrCode2, true))
+                val label = tr("Имя пользователя") + if (others.isNotEmpty()) tr(" · также {0}", others) else ""
+                if (hideOwn) add(InfoRowData(app.yougram.core.ui.OWN_USERNAME_MASK, label, null, false))
+                else add(InfoRowData("@$it", label, Icons.Filled.QrCode2, true))
             }
         } else {
             details.link?.let {
-                val label = "Ссылка-приглашение" + if (others.isNotEmpty()) " · также $others" else ""
+                val label = tr("Ссылка-приглашение") + if (others.isNotEmpty()) tr(" · также {0}", others) else ""
                 add(InfoRowData(it, label, Icons.Filled.QrCode2, true))
             }
         }
@@ -783,7 +789,7 @@ private fun ProfileMusicStrip(media: MediaItem, viewModel: ProfileViewModel, onO
                 overflow = TextOverflow.Ellipsis,
             )
             IconButton(onClick = onOpenAll) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Вся музыка")
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = tr("Вся музыка"))
             }
         }
     }
@@ -820,7 +826,7 @@ private fun LinkRow(message: MessageItem, context: Context) {
 private fun copyText(context: Context, text: String) {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     clipboard?.setPrimaryClip(ClipData.newPlainText("", text))
-    Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, tr("Скопировано"), Toast.LENGTH_SHORT).show()
 }
 
 private fun openUrl(context: Context, url: String) {
@@ -828,7 +834,7 @@ private fun openUrl(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(full)))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "Нет приложения для открытия ссылки", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Нет приложения для открытия ссылки"), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -842,7 +848,7 @@ private fun ProfileVideoDialog(media: MediaItem, viewModel: ProfileViewModel, on
         app.yougram.feature.chat.ui.VideoViewerDialog(path, onDismiss)
     } else {
         androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) { LoadingIndicator(contained = true) }
         }
     }
 }

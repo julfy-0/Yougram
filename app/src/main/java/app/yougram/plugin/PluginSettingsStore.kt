@@ -1,5 +1,6 @@
 package app.yougram.plugin
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 
 /** Значения настроек плагинов (по схеме из manifest.json). Хранятся в строковом виде, наружу отдаются типизированными. */
@@ -12,7 +13,7 @@ class PluginSettingsStore(private val context: Context) {
         context.getSharedPreferences(PluginPaths.settingsName(pluginId), Context.MODE_PRIVATE)
 
     private fun setting(manifest: PluginManifest, key: String): PluginSetting =
-        manifest.settings.firstOrNull { it.key == key } ?: throw IllegalArgumentException("Нет настройки «$key»")
+        manifest.settings.firstOrNull { it.key == key } ?: throw IllegalArgumentException(tr("Нет настройки «{0}»", key))
 
     /** Текущее значение в строковом виде (или значение по умолчанию). */
     fun raw(manifest: PluginManifest, key: String): String {
@@ -53,22 +54,22 @@ class PluginSettingsStore(private val context: Context) {
 
     private fun normalize(s: PluginSetting, value: String): String = when (s.type) {
         PluginSettingType.SWITCH -> {
-            require(value == "true" || value == "false") { "«${s.title}»: ожидается true или false" }
+            require(value == "true" || value == "false") { tr("«{0}»: ожидается true или false", s.title) }
             value
         }
         PluginSettingType.NUMBER -> {
             val n = value.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
-                ?: throw IllegalArgumentException("«${s.title}»: ожидается число")
-            s.min?.let { require(n >= it) { "«${s.title}»: не меньше ${format(it)}" } }
-            s.max?.let { require(n <= it) { "«${s.title}»: не больше ${format(it)}" } }
+                ?: throw IllegalArgumentException(tr("«{0}»: ожидается число", s.title))
+            s.min?.let { require(n >= it) { tr("«{0}»: не меньше {1}", s.title, format(it)) } }
+            s.max?.let { require(n <= it) { tr("«{0}»: не больше {1}", s.title, format(it)) } }
             format(n)
         }
         PluginSettingType.CHOICE -> {
-            require(s.options.any { it.value == value }) { "«${s.title}»: недопустимый вариант" }
+            require(s.options.any { it.value == value }) { tr("«{0}»: недопустимый вариант", s.title) }
             value
         }
         PluginSettingType.TEXT -> {
-            require(value.length <= MAX_TEXT) { "«${s.title}»: слишком длинный текст" }
+            require(value.length <= MAX_TEXT) { tr("«{0}»: слишком длинный текст", s.title) }
             value
         }
     }

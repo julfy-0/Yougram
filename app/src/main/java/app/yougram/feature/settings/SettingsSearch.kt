@@ -2,6 +2,8 @@
 
 package app.yougram.feature.settings
 
+import app.yougram.core.i18n.Localization
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,7 +44,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -76,7 +78,7 @@ private val searchEntries = listOf(
     SearchEntry(SettingsPage.MessageFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.MessageFilters, "фильтр сообщений"),
     SearchEntry(SettingsPage.SharedFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.SharedFilters, "фильтр общие"),
     SearchEntry(SettingsPage.ShadowBan.title, null, Icons.Filled.VisibilityOff, SettingsPage.ShadowBan, "бан теневой"),
-    SearchEntry("Плагины", "Плагины на C++", Icons.Filled.Extension, SettingsPage.Plugins, "плагин расширение ygplugin"),
+    SearchEntry("Модули", "Модули на C++", Icons.Filled.Extension, SettingsPage.Plugins, "модуль плагин расширение ygplugin"),
     SearchEntry("Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, SettingsPage.PowerSaving, "батарея заряд"),
     SearchEntry("Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, SettingsPage.Account, "телефон имя username профиль аватар"),
     SearchEntry("Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, SettingsPage.Privacy, "приватность видимость номер пароль пин код биометрия отпечаток двухфакторная безопасность конфиденциальность"),
@@ -107,11 +109,13 @@ fun SettingsSearchResults(
     modifier: Modifier = Modifier,
 ) {
     val q = query.trim().lowercase()
-    val found = remember(q) {
+    val lang = Localization.current
+    val found = remember(q, lang) {
         searchEntries.filter {
-            it.title.lowercase().contains(q) ||
+            it.title.lowercase().contains(q) || tr(it.title).lowercase().contains(q) ||
                     it.subtitle?.lowercase()?.contains(q) == true ||
-                    it.keywords.contains(q)
+                    it.subtitle?.let { s -> tr(s).lowercase().contains(q) } == true ||
+                    it.keywords.contains(q) || tr(it.keywords).lowercase().contains(q)
         }
     }
     Column(
@@ -150,7 +154,7 @@ fun SettingsSearchResults(
                 )
             }
         } else {
-            SectionLabel("Найдено: ${found.size}")
+            SectionLabel(tr("Найдено: {0}", found.size))
             SettingGroup {
                 found.forEach { e ->
                     item { SettingRow(e.title, subtitle = e.subtitle, icon = e.icon, onClick = { onOpen(e.page) }) }

@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.comments.ui
 
+import app.yougram.core.i18n.tr
 import app.yougram.core.ui.theme.LocalChatBackground
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
@@ -39,7 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -103,7 +104,7 @@ fun CommentsScreen(
     Box(Modifier.fillMaxSize().background(LocalChatBackground.current)) {
         Box(Modifier.fillMaxSize().backdropSource(backdrop).background(LocalChatBackground.current)) {
             when {
-                state.loading && state.comments.isEmpty() -> LoadingIndicator(Modifier.align(Alignment.Center))
+                state.loading && state.comments.isEmpty() -> LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
                 state.error -> Text(
                     "Комментарии недоступны",
                     Modifier.align(Alignment.Center),
@@ -151,7 +152,7 @@ fun CommentsScreen(
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
             }
             Spacer(Modifier.width(16.dp))
             Column {
@@ -218,7 +219,7 @@ fun CommentsScreen(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Отправить",
+                    contentDescription = tr("Отправить"),
                     tint = if (canSend) MaterialTheme.colorScheme.onPrimary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )

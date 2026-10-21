@@ -44,7 +44,7 @@ fun DevicesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingVa
     SettingsPageColumn(contentPadding) {
         if (sessions == null) {
             Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
+                LoadingIndicator(contained = true)
             }
         } else {
             LinkDeviceCard(onScan = { scanning = true })

@@ -128,6 +128,6 @@ fun WebsitesScreen(viewModel: SettingsDetailsViewModel, contentPadding: PaddingV
 @Composable
 private fun LoadingBox() {
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-        LoadingIndicator()
+        LoadingIndicator(contained = true)
     }
 }

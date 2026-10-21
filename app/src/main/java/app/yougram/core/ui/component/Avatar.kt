@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,13 +33,8 @@ fun rememberCookieAvatarShape(): Shape = MaterialShapes.Cookie9Sided.toShape()
 /** Круглая аватарка: картинка из файла TDLib, а пока её нет — первая буква названия. */
 @Composable
 fun Avatar(title: String, path: String?, size: Dp = 48.dp, shape: Shape = CircleShape) {
-    val bitmap: ImageBitmap? by produceState<ImageBitmap?>(initialValue = null, key1 = path) {
-        value = if (path == null) null else withContext(Dispatchers.IO) {
-            BitmapFactory.decodeFile(path)?.asImageBitmap()
-        }
-    }
+    val image = rememberFileBitmap(path = path, maxSide = 192)
 
-    val image = bitmap
     if (image != null) {
         Image(
             bitmap = image,

@@ -1,5 +1,6 @@
 package app.yougram.feature.settings
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -126,10 +127,10 @@ private fun NavOrderSection(settings: SettingsRepository) {
                     trailing = {
                         Row {
                             IconButton(onClick = { move(i, -1) }, enabled = i > 0, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Filled.KeyboardArrowUp, "${tab.title}: выше")
+                                Icon(Icons.Filled.KeyboardArrowUp, tr("{0}: выше", tab.title))
                             }
                             IconButton(onClick = { move(i, 1) }, enabled = i < order.lastIndex, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Filled.KeyboardArrowDown, "${tab.title}: ниже")
+                                Icon(Icons.Filled.KeyboardArrowDown, tr("{0}: ниже", tab.title))
                             }
                         }
                     },

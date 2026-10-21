@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,10 @@ fun GlassPickerPanel(
     transparency: Float,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    /** false — без затемняющей области: тапы вне панели проходят насквозь (поле ввода остаётся доступным). */
+    dismissOnOutsideTap: Boolean = true,
+    /** Высота панели в пикселях (без учёта клавиатуры); нужна, чтобы поднять поле ввода над ней. */
+    onHeightChanged: (Int) -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
@@ -75,7 +80,7 @@ fun GlassPickerPanel(
 
     Box(modifier.fillMaxSize()) {
         // Невидимая область вне панели: тап закрывает меню (пока оно открыто).
-        if (visible) {
+        if (visible && dismissOnOutsideTap) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -96,6 +101,7 @@ fun GlassPickerPanel(
                 Modifier
                     .fillMaxWidth()
                     .imePadding()
+                    .onSizeChanged { onHeightChanged(it.height) }
                     .glass(
                         backdrop,
                         panelGlass,

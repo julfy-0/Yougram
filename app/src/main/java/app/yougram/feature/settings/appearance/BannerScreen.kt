@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.appearance
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -22,7 +23,7 @@ import app.yougram.core.ui.component.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import app.yougram.core.ui.component.OutlinedButton
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,7 +81,7 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
             if (saveCustomBanner(context, uri)) {
                 settings.setCustomBanner(System.currentTimeMillis())
             } else {
-                Toast.makeText(context, "Не удалось загрузить картинку", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Не удалось загрузить картинку"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -150,8 +151,8 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
             ) { Text("Вернуться к шаблонам") }
         }
         Text(
-            "Картинка хранится только на этом устройстве и заменяет шаблон в вашем профиле. " +
-                    "Другим пользователям Yougram по-прежнему виден выбранный ниже шаблон: в «О себе» помещаются только 12 бит.",
+            tr("Картинка хранится только на этом устройстве и заменяет шаблон в вашем профиле. ") +
+                    tr("Другим пользователям Yougram по-прежнему виден выбранный ниже шаблон: в «О себе» помещаются только 12 бит."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -210,7 +211,7 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
         Button(
             onClick = {
                 settings.setBanner(draft)
-                Toast.makeText(context, "Баннер сохранён", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Баннер сохранён"), Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) { Text("Применить") }
@@ -223,10 +224,10 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
 
         Text(
             buildString {
-                append("Баннер записывается невидимыми символами в «О себе» (занимает 10 из 70 символов) ")
-                append("и виден только в Yougram: для остальных приложений профиль выглядит как обычно. ")
-                append("Если скрыть «О себе» в настройках приватности, баннер тоже станет невидим.")
-                if (!badge) append("\n\nСейчас значок Yougram выключен, поэтому баннер не публикуется. Включите значок в разделе «Режим призрака и шпион».")
+                append(tr("Баннер записывается невидимыми символами в «О себе» (занимает 10 из 70 символов) "))
+                append(tr("и виден только в Yougram: для остальных приложений профиль выглядит как обычно. "))
+                append(tr("Если скрыть «О себе» в настройках приватности, баннер тоже станет невидим."))
+                if (!badge) append(tr("\n\nСейчас значок Yougram выключен, поэтому баннер не публикуется. Включите значок в разделе «Режим призрака и шпион»."))
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

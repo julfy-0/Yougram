@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -29,7 +30,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +67,7 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
             InlineButtonKind.COPY -> {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText("text", button.copyText.orEmpty()))
-                Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Скопировано"), Toast.LENGTH_SHORT).show()
             }
             InlineButtonKind.CALLBACK -> {
                 if (pending != null) return
@@ -83,13 +84,13 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
                             }
                         }
                         .onFailure { e ->
-                            Toast.makeText(context, e.message ?: "Бот не ответил", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, e.message ?: tr("Бот не ответил"), Toast.LENGTH_SHORT).show()
                         }
                     pending = null
                 }
             }
             InlineButtonKind.OTHER ->
-                Toast.makeText(context, "Эта кнопка пока не поддерживается", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Эта кнопка пока не поддерживается"), Toast.LENGTH_SHORT).show()
         }
     }
 

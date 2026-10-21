@@ -1,20 +1,21 @@
 package app.yougram.feature.settings.hub
 
-import android.content.Context
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Text
+import app.yougram.feature.settings.component.SectionLabel
+import app.yougram.feature.settings.component.SettingGroup
+import app.yougram.feature.settings.component.SettingRow
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -25,7 +26,7 @@ import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.ui.wallpaper.WallpaperContent
 import app.yougram.feature.settings.SettingsDetailsViewModel
 import app.yougram.feature.settings.appearance.BannerScreen
-import app.yougram.feature.settings.appearance.HalloweenPromo
+import app.yougram.feature.settings.appearance.ThemePresetsScreen
 import app.yougram.feature.settings.SettingsPage
 import app.yougram.feature.settings.SettingsScreen
 import app.yougram.feature.settings.component.LocalEmbeddedPage
@@ -33,9 +34,7 @@ import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.general.ChatSettingsScreen
 import app.yougram.feature.settings.general.FoldersScreen
 
-private const val PromoKey = "halloween_2026"
-
-private val AppearanceTabs = listOf("Тема", "Панели", "Сообщения", "Список чатов", "Прочее", "Обои", "Баннер и значок", "Папки")
+private val AppearanceTabs = listOf("Тема", "Панели", "Сообщения", "Список чатов", "Прочее", "Обои", "Баннер и значок", "Папки", "Темы")
 
 /** Страница «Внешний вид и чаты»: настройки разложены по вкладкам-чипам вместо одной длинной ленты. */
 @Composable
@@ -47,19 +46,6 @@ fun AppearanceChatsScreen(
     onNavigate: (SettingsPage) -> Unit,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val context = LocalContext.current
-    val promoPrefs = remember { context.getSharedPreferences("yougram_promo", Context.MODE_PRIVATE) }
-    var showPromo by rememberSaveable { mutableStateOf(!promoPrefs.getBoolean(PromoKey, false)) }
-    if (showPromo) {
-        HalloweenPromo(
-            onDismiss = { showPromo = false },
-            onDone = {
-                promoPrefs.edit().putBoolean(PromoKey, true).apply()
-                showPromo = false
-                tab = 6
-            },
-        )
-    }
     SettingsPageColumn(contentPadding) {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -75,13 +61,27 @@ fun AppearanceChatsScreen(
                     SettingsScreen(settings, plates, PaddingValues(), part = 0)
                     ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 0) // масштаб интерфейса
                 }
-                1 -> SettingsScreen(settings, plates, PaddingValues(), part = 1)
+                1 -> {
+                    SettingsScreen(settings, plates, PaddingValues(), part = 1)
+                    SectionLabel("Главная страница настроек")
+                    SettingGroup {
+                        item {
+                            SettingRow(
+                                title = "Порядок настроек",
+                                subtitle = "Разделы и пункты на главной странице настроек",
+                                icon = Icons.Filled.Tune,
+                                onClick = { onNavigate(SettingsPage.HomeLayoutEditor) },
+                            )
+                        }
+                    }
+                }
                 2 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 2)
                 3 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 3)
                 4 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 4)
                 5 -> WallpaperContent()
                 6 -> BannerScreen(settings, PaddingValues())
-                else -> FoldersScreen(details, PaddingValues())
+                7 -> FoldersScreen(details, PaddingValues())
+                else -> ThemePresetsScreen(settings, plates, PaddingValues())
             }
         }
     }

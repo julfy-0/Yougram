@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
@@ -49,7 +50,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -113,12 +114,12 @@ fun AttachMenu(
     val scaleSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(150) else motion.defaultSpatialSpec()
     val appear = remember { MutableTransitionState(false).apply { targetState = true } }
     val actions = listOf(
-        AttachAction(Icons.Filled.AttachFile, "Файл", onFile),
-        AttachAction(Icons.Filled.Image, "Фото или видео", onMedia),
-        AttachAction(Icons.Filled.Poll, "Опрос", onPoll),
-        AttachAction(Icons.Filled.LocationOn, "Геопозиция", onLocation),
-        AttachAction(Icons.Filled.Mic, "Голосовое сообщение", onVoice),
-        AttachAction(Icons.Filled.Videocam, "Видеосообщение (кружок)", onRound),
+        AttachAction(Icons.Filled.AttachFile, tr("Файл"), onFile),
+        AttachAction(Icons.Filled.Image, tr("Фото или видео"), onMedia),
+        AttachAction(Icons.Filled.Poll, tr("Опрос"), onPoll),
+        AttachAction(Icons.Filled.LocationOn, tr("Геопозиция"), onLocation),
+        AttachAction(Icons.Filled.Mic, tr("Голосовое сообщение"), onVoice),
+        AttachAction(Icons.Filled.Videocam, tr("Видеосообщение (кружок)"), onRound),
     )
     Dialog(
         onDismissRequest = onDismiss,
@@ -222,12 +223,12 @@ fun PollDialog(
                                 PlateField(
                                     value,
                                     { options[index] = it.take(MaxOption) },
-                                    "Вариант ${index + 1}",
+                                    tr("Вариант {0}", index + 1),
                                     Modifier.weight(1f),
                                 )
                                 if (options.size > 2) {
                                     IconButton(onClick = { options.removeAt(index) }) {
-                                        Icon(Icons.Filled.Close, contentDescription = "Убрать вариант")
+                                        Icon(Icons.Filled.Close, contentDescription = tr("Убрать вариант"))
                                     }
                                 }
                             }

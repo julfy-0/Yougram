@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.privacy
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,11 +44,11 @@ fun LinkDeviceCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
             LaptopIllustration()
             Text(
                 text = buildAnnotatedString {
-                    append("Войдите в ")
+                    append(tr("Войдите в "))
                     withStyle(SpanStyle(color = accent)) { append("Telegram Desktop") }
-                    append(" или ")
+                    append(tr(" или "))
                     withStyle(SpanStyle(color = accent)) { append("Telegram Web") }
-                    append(", отсканировав QR-код.")
+                    append(tr(", отсканировав QR-код."))
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,

@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -37,7 +38,7 @@ import app.yougram.core.ui.component.LoadingIndicator
 import app.yougram.core.ui.component.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -322,7 +323,7 @@ private fun DocumentRow(media: MediaItem, full: FileState, onClick: () -> Unit) 
                 val done = if (sending) full.uploaded else full.downloaded
                 val total = if (full.total > 0) full.total else media.size
                 val left = (total - done).coerceAtLeast(0L)
-                "${Formatter.formatShortFileSize(context, done)} · осталось ${Formatter.formatShortFileSize(context, left)}"
+                tr("{0} · осталось {1}", Formatter.formatShortFileSize(context, done), Formatter.formatShortFileSize(context, left))
             } else {
                 Formatter.formatShortFileSize(context, media.size)
             }
@@ -374,9 +375,9 @@ internal fun openFile(context: Context, path: String, mimeType: String) {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "Нет приложения для открытия файла", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Нет приложения для открытия файла"), Toast.LENGTH_SHORT).show()
     } catch (_: Exception) {
-        Toast.makeText(context, "Не удалось открыть файл", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Не удалось открыть файл"), Toast.LENGTH_SHORT).show()
     }
 }
 

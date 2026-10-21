@@ -1,5 +1,6 @@
 package app.yougram.feature.notifications
 
+import app.yougram.core.i18n.tr
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -21,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -38,10 +40,11 @@ class ConnectionService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Фоновое соединение", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL, tr("Фоновое соединение"), NotificationManager.IMPORTANCE_LOW),
         )
     }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // startForeground нужно вызвать сразу, иначе система убьёт процесс.
         if (!promote()) {
@@ -50,9 +53,12 @@ class ConnectionService : Service() {
         }
         if (job == null) {
             job = scope.launch {
-                combine(container.authRepository.step, container.settings.notifications) { step, prefs ->
-                    // Выходим, если фоновое соединение выключено или пользователь вышел из аккаунта.
-                    prefs.backgroundConnection && step != AuthStep.EnterPhone
+                // flatMapLatest: при смене аккаунта следим уже за новым контейнером.
+                (application as YougramApp).containerState.flatMapLatest { c ->
+                    combine(c.authRepository.step, c.settings.notifications) { step, prefs ->
+                        // Выходим, если фоновое соединение выключено или пользователь вышел из аккаунта.
+                        prefs.backgroundConnection && step != AuthStep.EnterPhone
+                    }
                 }.distinctUntilChanged().collect { keep ->
                     if (!keep) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -73,7 +79,7 @@ class ConnectionService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentTitle("Yougram")
-            .setContentText("Соединение с Telegram")
+            .setContentText(tr("Соединение с Telegram"))
             .setOngoing(true)
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)

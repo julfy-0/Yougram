@@ -1,5 +1,6 @@
 package app.yougram.feature.stories.ui
 
+import app.yougram.core.i18n.tr
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -174,7 +175,7 @@ class StoryViewerViewModel(
         viewModelScope.launch {
             runCatching { repo.react(s.ref.chatId, s.storyId, if (remove) null else emoji) }.onFailure {
                 items.update { m -> m + (s.key to item) }
-                _message.value = "Не удалось поставить реакцию"
+                _message.value = tr("Не удалось поставить реакцию")
             }
         }
     }
@@ -183,7 +184,7 @@ class StoryViewerViewModel(
         val s = state.value ?: return
         viewModelScope.launch {
             val ok = runCatching { repo.reply(s.ref.chatId, s.storyId, text.trim()) }.isSuccess
-            if (!ok) _message.value = "Не удалось отправить ответ"
+            if (!ok) _message.value = tr("Не удалось отправить ответ")
             onDone(ok)
         }
     }
@@ -216,7 +217,7 @@ class StoryViewerViewModel(
         viewModelScope.launch {
             _viewers.value = runCatching { repo.viewers(s.storyId) }.fold(
                 onSuccess = { ViewersState(list = it) },
-                onFailure = { ViewersState(error = "Не удалось загрузить просмотры") },
+                onFailure = { ViewersState(error = tr("Не удалось загрузить просмотры")) },
             )
         }
     }

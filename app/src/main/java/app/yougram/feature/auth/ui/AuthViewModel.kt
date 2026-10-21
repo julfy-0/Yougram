@@ -1,11 +1,12 @@
 package app.yougram.feature.auth.ui
 
+import app.yougram.core.i18n.tr
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import app.yougram.core.settings.DataPrefs
+import app.yougram.core.settings.ProxyEntry
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.feature.auth.data.AuthRepository
 import app.yougram.feature.auth.data.AuthStep
@@ -25,8 +26,9 @@ class AuthViewModel(
     val step: StateFlow<AuthStep> = repository.step
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AuthStep.Loading)
 
-    /** Текущие настройки прокси (то же хранилище, что и в «Данные и память»). */
-    val proxy: StateFlow<DataPrefs> = settings.dataPrefs
+    /** Сохранённые прокси и активный (то же хранилище, что и в «Данные и память»). */
+    val proxies: StateFlow<List<ProxyEntry>> = settings.proxies
+    val activeProxyId: StateFlow<String?> = settings.activeProxyId
 
     data class Ui(val busy: Boolean = false, val error: String? = null)
 
@@ -37,12 +39,10 @@ class AuthViewModel(
     fun submitCode(code: String) = run { repository.sendCode(code) }
     fun submitPassword(password: String) = run { repository.sendPassword(password) }
 
-    /** Сохраняет прокси; в TDLib он применяется автоматически (см. AppContainer.start). */
-    fun saveProxy(type: String, server: String, port: String, user: String, pass: String) {
-        settings.updateDataPrefs {
-            it.copy(proxyType = type, proxyServer = server, proxyPort = port, proxyUser = user, proxyPass = pass)
-        }
-    }
+    /** Активный прокси в TDLib применяется автоматически (см. AppContainer.start). */
+    fun saveProxy(entry: ProxyEntry) = settings.saveProxy(entry)
+    fun deleteProxy(id: String) = settings.deleteProxy(id)
+    fun selectProxy(id: String?) = settings.selectProxy(id)
 
     /** Ошибка исчезает, как только пользователь начинает править поле. */
     fun clearError() {
@@ -64,13 +64,13 @@ class AuthViewModel(
     private fun humanize(raw: String?): String {
         val m = raw.orEmpty()
         return when {
-            m.contains("PHONE_NUMBER_INVALID", true) -> "Неверный номер телефона"
-            m.contains("PHONE_NUMBER_BANNED", true) -> "Этот номер заблокирован в Telegram"
-            m.contains("PHONE_CODE_INVALID", true) -> "Неверный код"
-            m.contains("PHONE_CODE_EXPIRED", true) -> "Код устарел, запросите новый"
-            m.contains("PASSWORD_HASH_INVALID", true) -> "Неверный пароль"
-            m.contains("FLOOD", true) || m.contains("Too Many Requests", true) -> "Слишком много попыток, подождите немного"
-            m.isBlank() -> "Неизвестная ошибка"
+            m.contains("PHONE_NUMBER_INVALID", true) -> tr("Неверный номер телефона")
+            m.contains("PHONE_NUMBER_BANNED", true) -> tr("Этот номер заблокирован в Telegram")
+            m.contains("PHONE_CODE_INVALID", true) -> tr("Неверный код")
+            m.contains("PHONE_CODE_EXPIRED", true) -> tr("Код устарел, запросите новый")
+            m.contains("PASSWORD_HASH_INVALID", true) -> tr("Неверный пароль")
+            m.contains("FLOOD", true) || m.contains("Too Many Requests", true) -> tr("Слишком много попыток, подождите немного")
+            m.isBlank() -> tr("Неизвестная ошибка")
             else -> m
         }
     }

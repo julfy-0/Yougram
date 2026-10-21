@@ -1,5 +1,6 @@
 package app.yougram.feature.account.data
 
+import app.yougram.core.i18n.tr
 import app.yougram.core.telegram.TelegramClient
 import app.yougram.core.telegram.getOrThrow
 import dev.g000sha256.tdl.dto.AccountTtl
@@ -123,7 +124,7 @@ class AccountRepository(
             runCatching { client.getChat(chatId = personalId).getOrThrow().title }.getOrNull()
         } else null
         val phoneStr = if (me.phoneNumber.isEmpty()) "" else "+${me.phoneNumber}"
-        val nameStr = "${me.firstName} ${me.lastName}".trim().ifEmpty { "Аккаунт" }
+        val nameStr = "${me.firstName} ${me.lastName}".trim().ifEmpty { tr("Аккаунт") }
         val avatarId = me.profilePhoto?.small?.id
 
         accountManager?.updateAccountDetails(
@@ -173,7 +174,7 @@ class AccountRepository(
 
     suspend fun loadPersonalChats(): List<PersonalChatOption> =
         client.getSuitablePersonalChats().getOrThrow().chatIds.map { id ->
-            PersonalChatOption(id, runCatching { client.getChat(chatId = id).getOrThrow().title }.getOrDefault("Канал"))
+            PersonalChatOption(id, runCatching { client.getChat(chatId = id).getOrThrow().title }.getOrDefault(tr("Канал")))
         }
 
     /** [chatId] == 0 — убрать личный канал. */
@@ -349,12 +350,12 @@ class AccountRepository(
                         chatId = 0L,
                         title = runCatching {
                             client.getUser(userId = sender.userId).getOrThrow().let { "${it.firstName} ${it.lastName}".trim() }
-                        }.getOrDefault("Пользователь"),
+                        }.getOrDefault(tr("Пользователь")),
                     )
                     is MessageSenderChat -> BlockedItem(
                         userId = 0L,
                         chatId = sender.chatId,
-                        title = runCatching { client.getChat(chatId = sender.chatId).getOrThrow().title }.getOrDefault("Чат"),
+                        title = runCatching { client.getChat(chatId = sender.chatId).getOrThrow().title }.getOrDefault(tr("Чат")),
                     )
                     else -> BlockedItem(0L, 0L, "")
                 }

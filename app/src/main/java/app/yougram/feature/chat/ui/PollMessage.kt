@@ -1,5 +1,7 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.Localization
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +25,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -72,7 +74,7 @@ fun PollMessage(
         scope.launch {
             viewModel.votePoll(messageId, ids).onFailure {
                 haptics(app.yougram.core.ui.Haptics.Kind.Reject)
-                Toast.makeText(context, it.message ?: "Не удалось проголосовать", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, it.message ?: tr("Не удалось проголосовать"), Toast.LENGTH_SHORT).show()
             }
             busy = false
         }
@@ -90,7 +92,7 @@ fun PollMessage(
                         else -> "Открытый опрос"
                     },
                 )
-                if (poll.multiple && !poll.closed) append(" · несколько ответов")
+                if (poll.multiple && !poll.closed) append(tr(" · несколько ответов"))
             },
             style = MaterialTheme.typography.labelMedium,
             color = content.copy(alpha = 0.7f),
@@ -176,7 +178,7 @@ fun PollMessage(
                         busy = true
                         scope.launch {
                             viewModel.stopPoll(messageId).onFailure {
-                                Toast.makeText(context, it.message ?: "Не удалось завершить опрос", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, it.message ?: tr("Не удалось завершить опрос"), Toast.LENGTH_SHORT).show()
                             }
                             busy = false
                         }
@@ -191,14 +193,7 @@ private val IntrinsicWidthPercent = 44.dp
 
 /** «1 голос», «2 голоса», «5 голосов»; для нуля — «Пока нет голосов». */
 private fun voterLabel(count: Int): String {
-    if (count <= 0) return "Пока нет голосов"
-    val mod100 = count % 100
-    val mod10 = count % 10
-    val word = when {
-        mod100 in 11..14 -> "голосов"
-        mod10 == 1 -> "голос"
-        mod10 in 2..4 -> "голоса"
-        else -> "голосов"
-    }
+    if (count <= 0) return tr("Пока нет голосов")
+    val word = Localization.pluralForm(count, tr("голос"), tr("голоса"), tr("голосов"))
     return "$count $word"
 }

@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.telegram
 
+import app.yougram.core.i18n.tr
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -14,7 +15,7 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +54,7 @@ fun TelegramHubScreen(
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: Exception) {
-            Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Не удалось открыть ссылку"), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(state.error) {
@@ -85,11 +86,11 @@ fun TelegramHubScreen(
             text = {
                 Text(
                     buildAnnotatedString {
-                        append("Поддержкой Telegram занимаются волонтёры. Мы стараемся отвечать как можно быстрее, однако иногда приходится немного подождать.\n\nОзнакомьтесь с ")
+                        append(tr("Поддержкой Telegram занимаются волонтёры. Мы стараемся отвечать как можно быстрее, однако иногда приходится немного подождать.\n\nОзнакомьтесь с "))
                         withLink(LinkAnnotation.Url("https://telegram.org/faq", TextLinkStyles(SpanStyle(color = linkColor)))) {
-                            append("частыми вопросами о Telegram")
+                            append(tr("частыми вопросами о Telegram"))
                         }
-                        append(": там есть важные советы по устранению неисправностей и ответы на подробные вопросы.")
+                        append(tr(": там есть важные советы по устранению неисправностей и ответы на подробные вопросы."))
                     },
                 )
             },

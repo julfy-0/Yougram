@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.privacy
 
+import app.yougram.core.i18n.tr
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -15,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,7 +78,7 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
                 )
             }
             IconButton(onClick = onDismiss, modifier = Modifier.statusBarsPadding().padding(8.dp).align(Alignment.TopStart)) {
-                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+                Icon(Icons.Filled.Close, contentDescription = tr("Закрыть"), tint = Color.White)
             }
         }
     }

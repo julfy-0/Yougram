@@ -2,6 +2,7 @@
 
 package app.yougram.feature.settings.component
 
+import app.yougram.core.i18n.tr
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -36,7 +37,7 @@ import kotlin.random.Random
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -76,6 +77,7 @@ import app.yougram.core.ui.glass.plateColor
 import app.yougram.core.ui.rememberDeviceTier
 import kotlin.math.max
 import kotlin.math.min
+import androidx.compose.foundation.shape.CircleShape
 
 class SettingGroupScope {
     internal val items = mutableListOf<@Composable () -> Unit>()
@@ -124,9 +126,11 @@ fun SettingGroup(modifier: Modifier = Modifier, build: SettingGroupScope.() -> U
 @Composable
 fun SectionLabel(text: String) {
     Text(
-        text,
+        tr(text),
         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-        style = MaterialTheme.typography.labelLargeEmphasized,
+        style = MaterialTheme.typography.labelLargeEmphasized.copy(
+            fontFamily = app.yougram.core.ui.theme.RoundedTitleFamily,
+        ),
         color = MaterialTheme.colorScheme.primary,
     )
 }
@@ -183,10 +187,10 @@ fun SettingRow(
             SettingIconTile(shownIcon)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(tr(title), style = MaterialTheme.typography.titleMedium)
                 if (subtitle != null) {
                     Text(
-                        subtitle,
+                        tr(subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -198,7 +202,7 @@ fun SettingRow(
             }
             if (value != null) {
                 Spacer(Modifier.width(8.dp))
-                Text(value, style = MaterialTheme.typography.labelLargeEmphasized, color = MaterialTheme.colorScheme.primary)
+                Text(tr(value), style = MaterialTheme.typography.labelLargeEmphasized, color = MaterialTheme.colorScheme.primary)
             }
             if (trailing != null) {
                 Spacer(Modifier.width(12.dp))
@@ -240,6 +244,7 @@ fun <T> ConnectedChoiceGroup(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val sticky = app.yougram.core.ui.adaptive.rememberIsTwoPane()
     val rows = if (LocalDensity.current.fontScale > 1.3f) options.chunked(2) else listOf(options)
     Column(
         modifier.fillMaxWidth(),
@@ -268,10 +273,15 @@ fun <T> ConnectedChoiceGroup(
                             checked = option == selected,
                             onCheckedChange = { checked -> if (checked) onSelect(option) },
                             modifier = Modifier.weight(1f),
+                            // Телефон: при нажатии скругляется и возвращается к прежней форме.
+                            // Планшет / фолд (две панели): выбранная вкладка остаётся скруглённой («залипает»).
                             shapes = when (index) {
-                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                row.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                0 -> if (sticky) ButtonGroupDefaults.connectedLeadingButtonShapes(pressedShape = CircleShape, checkedShape = CircleShape)
+                                else ButtonGroupDefaults.connectedLeadingButtonShapes(pressedShape = CircleShape)
+                                row.lastIndex -> if (sticky) ButtonGroupDefaults.connectedTrailingButtonShapes(pressedShape = CircleShape, checkedShape = CircleShape)
+                                else ButtonGroupDefaults.connectedTrailingButtonShapes(pressedShape = CircleShape)
+                                else -> if (sticky) ButtonGroupDefaults.connectedMiddleButtonShapes(pressedShape = CircleShape, checkedShape = CircleShape)
+                                else ButtonGroupDefaults.connectedMiddleButtonShapes(pressedShape = CircleShape)
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp),
                             content = buttonContent,
@@ -431,7 +441,7 @@ private val AutoIcons: List<Pair<List<String>, ImageVector>> = listOf(
     listOf("плат", "доставк") to Icons.Filled.CreditCard,
     listOf("черновик") to Icons.Filled.Edit,
     listOf("поиск", "подсказк") to Icons.Filled.Search,
-    listOf("плагин") to Icons.Filled.Extension,
+    listOf("модул", "плагин") to Icons.Filled.Extension,
     listOf("соединен", "фон") to Icons.Filled.Cloud,
     listOf("текст", "размер") to Icons.Filled.TextFields,
     listOf("тема", "цвет", "оформлен") to Icons.Filled.Palette,

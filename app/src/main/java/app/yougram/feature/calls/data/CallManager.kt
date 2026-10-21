@@ -1,5 +1,6 @@
 package app.yougram.feature.calls.data
 
+import app.yougram.core.i18n.tr
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -131,7 +132,7 @@ class CallManager(
     fun startCall(userId: Long, video: Boolean) {
         if (_call.value != null || dialing) return
         if (!hasMic()) {
-            showEnded(userId, false, "Нет доступа к микрофону")
+            showEnded(userId, false, tr("Нет доступа к микрофону"))
             return
         }
         val isVideo = video && engine.supportsVideo
@@ -142,7 +143,7 @@ class CallManager(
                 val result = client.createCall(userId = userId, protocol = protocol, isVideo = isVideo)
                 if (result is TdlResult.Failure) {
                     CallLog.e(TAG, "createCall failed code=${result.code} message=${result.message}")
-                    val text = if (result.code == 403) "Пользователь не принимает звонки" else result.message
+                    val text = if (result.code == 403) tr("Пользователь не принимает звонки") else result.message
                     showEnded(userId, isVideo, text, CallEnd.FAILED)
                 }
                 // Дальше состояние придёт в onCallUpdate.
@@ -163,7 +164,7 @@ class CallManager(
             val result = client.acceptCall(callId = c.id, protocol = protocol)
             if (result is TdlResult.Failure) {
                 CallLog.e(TAG, "acceptCall failed code=${result.code} message=${result.message}")
-                finishLocal(c, "Не удалось принять звонок", discard = false)
+                finishLocal(c, tr("Не удалось принять звонок"), discard = false)
             }
         }
     }
@@ -184,7 +185,7 @@ class CallManager(
         val c = _call.value ?: return
         if (c.phase == CallPhase.ENDED) return
         CallLog.d(TAG, "hangUp id=${c.id} disconnected=$disconnected phase=${c.phase}")
-        finishLocal(c, "Звонок завершён", discard = true, disconnected = disconnected)
+        finishLocal(c, tr("Звонок завершён"), discard = true, disconnected = disconnected)
     }
 
     fun setMuted(muted: Boolean) {
@@ -236,24 +237,24 @@ class CallManager(
                 is CallStatePending -> publish(
                     base.copy(
                         phase = CallPhase.RINGING,
-                        message = if (call.isOutgoing) (if (state.isReceived) "Звонок…" else "Соединение…") else null,
+                        message = if (call.isOutgoing) (if (state.isReceived) tr("Звонок…") else tr("Соединение…")) else null,
                         remoteRinging = call.isOutgoing && state.isReceived,
                     ),
                 )
-                is CallStateExchangingKeys -> publish(base.copy(phase = CallPhase.CONNECTING, message = "Обмен ключами…"))
+                is CallStateExchangingKeys -> publish(base.copy(phase = CallPhase.CONNECTING, message = tr("Обмен ключами…")))
                 is CallStateReady -> onReady(call, state, base)
                 is CallStateHangingUp -> {
                     markFinished(base.id)
                     stopMedia()
                     _call.value = base.copy(
                         phase = CallPhase.ENDED,
-                        message = "Завершение…",
+                        message = tr("Завершение…"),
                         end = if (base.startedAtMillis != null) CallEnd.DONE else null,
                     )
                     clearLater(base.id, 5000)
                 }
                 is CallStateDiscarded -> finish(
-                    base, "Звонок завершён",
+                    base, tr("Звонок завершён"),
                     // Исходящий, который не дошёл до разговора и закрыт собеседником: «занято».
                     when {
                         base.startedAtMillis != null -> CallEnd.DONE
@@ -263,7 +264,7 @@ class CallManager(
                 )
                 is CallStateError -> {
                     CallLog.e(TAG, "call error code=${state.error.code} message=${state.error.message}")
-                    finish(base, state.error.message.ifEmpty { "Ошибка звонка" }, CallEnd.FAILED)
+                    finish(base, state.error.message.ifEmpty { tr("Ошибка звонка") }, CallEnd.FAILED)
                 }
                 else -> Unit
             }
@@ -284,7 +285,7 @@ class CallManager(
         )
         if (first && available && !hasMic()) {
             // Без микрофона собеседник услышал бы тишину: честно завершаем.
-            finishLocal(base, "Нет доступа к микрофону", discard = true)
+            finishLocal(base, tr("Нет доступа к микрофону"), discard = true)
             return
         }
         val linked = base.phase == CallPhase.ACTIVE || !available
@@ -295,9 +296,9 @@ class CallManager(
                 startedAtMillis = if (linked) base.startedAtMillis ?: System.currentTimeMillis() else null,
                 engineAvailable = available,
                 message = when {
-                    !available -> "Медиа-движок не подключён: звука и видео нет"
+                    !available -> tr("Медиа-движок не подключён: звука и видео нет")
                     linked -> base.message
-                    else -> "Соединение…"
+                    else -> tr("Соединение…")
                 },
             ),
         )
@@ -333,14 +334,14 @@ class CallManager(
                     }
                     EngineLink.CONNECTING -> {
                         _call.update { c ->
-                            if (c != null && c.id == id && c.phase == CallPhase.ACTIVE) c.copy(message = "Переподключение…") else c
+                            if (c != null && c.id == id && c.phase == CallPhase.ACTIVE) c.copy(message = tr("Переподключение…")) else c
                         }
                         false
                     }
                     EngineLink.FAILED -> {
                         linkUp = false
                         _call.update { c ->
-                            if (c != null && c.id == id && c.phase != CallPhase.ENDED) c.copy(message = "Нет соединения с собеседником") else c
+                            if (c != null && c.id == id && c.phase != CallPhase.ENDED) c.copy(message = tr("Нет соединения с собеседником")) else c
                         }
                         scheduleLinkDrop(id)
                         false
@@ -364,7 +365,7 @@ class CallManager(
             val c = _call.value
             if (c != null && c.id == id && !linkUp && c.phase != CallPhase.ENDED) {
                 CallLog.e(TAG, "link did not recover, hanging up")
-                finishLocal(c, "Нет соединения с собеседником", discard = true, disconnected = true)
+                finishLocal(c, tr("Нет соединения с собеседником"), discard = true, disconnected = true)
             }
         }
     }
@@ -376,7 +377,7 @@ class CallManager(
             val c = _call.value
             if (c != null && c.id == id && c.phase == CallPhase.CONNECTING) {
                 CallLog.e(TAG, "watchdog: media link not up after ${CONNECT_TIMEOUT_MS / 1000}s")
-                finishLocal(c, "Не удалось соединиться", discard = true, disconnected = true)
+                finishLocal(c, tr("Не удалось соединиться"), discard = true, disconnected = true)
             }
         }
     }

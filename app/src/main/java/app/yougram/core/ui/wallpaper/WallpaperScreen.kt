@@ -1,5 +1,6 @@
 package app.yougram.core.ui.wallpaper
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -35,7 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -72,7 +73,7 @@ fun WallpaperDialog(onDismiss: () -> Unit) {
 fun WallpaperScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад")) }
             Text("Обои чата", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
@@ -94,7 +95,7 @@ fun WallpaperContent() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             runCatching { store.setPhoto(uri) }
-                .onFailure { Toast.makeText(context, "Не удалось загрузить фото", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(context, tr("Не удалось загрузить фото"), Toast.LENGTH_SHORT).show() }
         }
     }
 

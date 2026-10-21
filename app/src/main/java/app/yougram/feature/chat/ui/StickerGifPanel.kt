@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults

@@ -24,7 +24,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -114,22 +114,23 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountMa
         null -> "Ваш день рождения могут видеть выбранные вами пользователи. "
     }
 
+    val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
     SettingsPageColumn(contentPadding) {
         SettingGroup {
             item {
                 SettingRow(
-                    account?.phone?.ifEmpty { "—" } ?: "…",
-                    subtitle = "Нажмите, чтобы изменить номер телефона",
+                    if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else account?.phone?.ifEmpty { "—" } ?: "…",
+                    subtitle = if (hideOwn) "Номер скрыт" else "Нажмите, чтобы изменить номер телефона",
                     icon = Icons.Filled.Phone,
-                    onClick = { if (account != null) dialog = AccountDialog.Phone },
+                    onClick = if (hideOwn) null else ({ if (account != null) dialog = AccountDialog.Phone }),
                 )
             }
             item {
                 SettingRow(
-                    account?.username?.let { "@$it" } ?: "Не задано",
+                    if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else account?.username?.let { "@$it" } ?: "Не задано",
                     subtitle = "Имя пользователя",
                     icon = Icons.Filled.AlternateEmail,
-                    onClick = { if (account != null) dialog = AccountDialog.Username },
+                    onClick = if (hideOwn) null else ({ if (account != null) dialog = AccountDialog.Username }),
                 )
             }
             item {

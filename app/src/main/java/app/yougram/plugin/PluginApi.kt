@@ -1,5 +1,6 @@
 package app.yougram.plugin
 
+import app.yougram.core.i18n.tr
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -77,7 +78,7 @@ private fun stringsOf(arr: JSONArray?): List<String> {
     return List(arr.length()) { arr.getString(it) }
 }
 
-/** Всё, что плагин может попросить у приложения через host->call() (API 2.0, см. yougram_plugin.h). */
+/** Всё, что модуль может попросить у приложения через host->call() (API 2.0, см. yougram_plugin.h). */
 class PluginApi(
     private val context: Context,
     private val telegram: TelegramClient,
@@ -97,15 +98,15 @@ class PluginApi(
     private val _actions = MutableStateFlow<List<PluginAction>>(emptyList())
     val actions: StateFlow<List<PluginAction>> = _actions.asStateFlow()
 
-    /** Точка входа из JNI. Вызывается из потока плагина, поэтому блокирующая. */
+    /** Точка входа из JNI. Вызывается из потока модуля, поэтому блокирующая. */
     fun call(pluginId: String, method: String, argsJson: String): String {
         return try {
-            require(method in PluginMethods.REQUIRED) { "Неизвестный метод: $method" }
+            require(method in PluginMethods.REQUIRED) { tr("Неизвестный метод: {0}", method) }
             val need = PluginMethods.REQUIRED.getValue(method)
-            if (need != null && need !in manager.permissionsOf(pluginId)) error("Нет разрешения $need")
+            if (need != null && need !in manager.permissionsOf(pluginId)) error(tr("Нет разрешения {0}", need))
             if (method in PluginMethods.THROTTLED) {
                 check(limiter.tryAcquire(pluginId)) {
-                    "Слишком часто: не больше $THROTTLE_CALLS вызовов за ${THROTTLE_WINDOW_MS / 1000} с"
+                    tr("Слишком часто: не больше {0} вызовов за {1} с", THROTTLE_CALLS, THROTTLE_WINDOW_MS / 1000)
                 }
             }
             val args = if (argsJson.isBlank()) JSONObject() else JSONObject(argsJson)
@@ -197,7 +198,7 @@ class PluginApi(
             // ---- chat.send ----
             "send_message" -> {
                 val replyTo = a.optLong("reply_to", 0L)
-                // fromPlugin = true: отправка плагина идёт мимо хука before_send, иначе плагин зациклится на себе.
+                // fromPlugin = true: отправка модуля идёт мимо хука before_send, иначе модуль зациклится на себе.
                 chats.sendText(
                     a.getLong("chat_id"),
                     a.getString("text"),
@@ -282,19 +283,19 @@ class PluginApi(
             // ---- ipc ----
             "send_to_plugin" -> {
                 val target = a.getString("plugin_id")
-                require(target != pid) { "Нельзя отправить сообщение самому себе" }
-                require(manager.isEnabled(target)) { "Плагин $target не запущен" }
+                require(target != pid) { tr("Нельзя отправить сообщение самому себе") }
+                require(manager.isEnabled(target)) { tr("Модуль {0} не запущен", target) }
                 val payload: Any = a.opt("payload") ?: JSONObject.NULL
-                require(payload.toString().length <= MAX_IPC_PAYLOAD) { "Сообщение слишком большое" }
+                require(payload.toString().length <= MAX_IPC_PAYLOAD) { tr("Сообщение слишком большое") }
                 manager.emitTo(target, "plugin_message", linkedMapOf<String, Any?>("from" to pid, "payload" to payload))
                 true
             }
-            else -> error("Неизвестный метод: $method")
+            else -> error(tr("Неизвестный метод: {0}", method))
         }
     }
 
     private fun manifestOf(pid: String): PluginManifest =
-        manager.manifestOf(pid) ?: error("Плагин не найден")
+        manager.manifestOf(pid) ?: error(tr("Модуль не найден"))
 
     private fun appInfo(pid: String): Map<String, Any?> = linkedMapOf(
         "api" to PluginApiVersion.CURRENT,
@@ -314,10 +315,10 @@ class PluginApi(
 
     private fun registerCommand(pid: String, a: JSONObject): Boolean {
         val name = normalizeCommand(a.getString("name"))
-        require(COMMAND_NAME.matches(name)) { "Имя команды: a-z, 0-9, _ (до 32 символов)" }
+        require(COMMAND_NAME.matches(name)) { tr("Имя команды: a-z, 0-9, _ (до 32 символов)") }
         val aliases = stringsOf(a.optJSONArray("aliases")).map { normalizeCommand(it) }.distinct().filter { it != name }
-        require(aliases.size <= 8) { "Не больше 8 алиасов" }
-        aliases.forEach { require(COMMAND_NAME.matches(it)) { "Недопустимый алиас: $it" } }
+        require(aliases.size <= 8) { tr("Не больше 8 алиасов") }
+        aliases.forEach { require(COMMAND_NAME.matches(it)) { tr("Недопустимый алиас: {0}", it) } }
         val taken = listOf(name) + aliases
         val command = PluginCommand(
             pluginId = pid,
@@ -329,9 +330,9 @@ class PluginApi(
         synchronized(registryLock) {
             val current = _commands.value
             current.firstOrNull { it.pluginId != pid && (it.name in taken || it.aliases.any { alias -> alias in taken }) }
-                ?.let { error("Команда уже занята плагином ${it.pluginId}") }
+                ?.let { error(tr("Команда уже занята модулем {0}", it.pluginId)) }
             val own = current.filter { it.pluginId == pid && it.name != name }
-            check(own.size < MAX_COMMANDS) { "Слишком много команд" }
+            check(own.size < MAX_COMMANDS) { tr("Слишком много команд") }
             _commands.value = current.filterNot { it.pluginId == pid && it.name == name } + command
         }
         return true
@@ -339,21 +340,21 @@ class PluginApi(
 
     private fun registerAction(pid: String, a: JSONObject): Boolean {
         val id = a.getString("id")
-        require(ACTION_ID.matches(id)) { "Недопустимый id действия" }
+        require(ACTION_ID.matches(id)) { tr("Недопустимый id действия") }
         val title = a.getString("title").trim()
-        require(title.isNotEmpty() && title.length <= 60) { "Название действия: 1–60 символов" }
+        require(title.isNotEmpty() && title.length <= 60) { tr("Название действия: 1–60 символов") }
         val where = a.optString("where", "message_menu")
         require(where in ACTION_PLACES) { "where: ${ACTION_PLACES.joinToString()}" }
         val action = PluginAction(pid, id, title, where, a.optString("icon", "").take(64))
         synchronized(registryLock) {
             val current = _actions.value
-            check(current.count { it.pluginId == pid && it.id != id } < MAX_ACTIONS) { "Слишком много действий" }
+            check(current.count { it.pluginId == pid && it.id != id } < MAX_ACTIONS) { tr("Слишком много действий") }
             _actions.value = current.filterNot { it.pluginId == pid && it.id == id } + action
         }
         return true
     }
 
-    /** Если текст — команда (или алиас) зарегистрированного плагина, возвращает (команда, аргументы). */
+    /** Если текст — команда (или алиас) зарегистрированного модуля, возвращает (команда, аргументы). */
     fun matchCommand(text: String): Pair<PluginCommand, String>? {
         if (!text.startsWith("/")) return null
         val name = text.substring(1).substringBefore(' ').substringBefore('@').lowercase()
@@ -361,7 +362,7 @@ class PluginApi(
         return Pair(cmd, text.substringAfter(' ', "").trim())
     }
 
-    /** UI вызывает это, когда пользователь нажал пункт плагина (например, в меню сообщения). */
+    /** UI вызывает это, когда пользователь нажал пункт модуля (например, в меню сообщения). */
     fun invokeAction(action: PluginAction, chatId: Long, messageId: Long) {
         manager.emitTo(
             action.pluginId,
@@ -370,7 +371,7 @@ class PluginApi(
         )
     }
 
-    /** Плагин выключен/удалён/перезагружается: чистим всё, что он зарегистрировал. */
+    /** Модуль выключен/удалён/перезагружается: чистим всё, что он зарегистрировал. */
     fun onPluginStopped(pluginId: String) {
         val prefix = "$pluginId:"
         timers.keys.filter { it.startsWith(prefix) }.forEach { timers.remove(it)?.cancel() }
@@ -382,7 +383,7 @@ class PluginApi(
         }
     }
 
-    /** Плагин удалён: стираем его хранилище и файлы. Настройки чистит менеджер. */
+    /** Модуль удалён: стираем его хранилище и файлы. Настройки чистит менеджер. */
     fun wipeData(pluginId: String) {
         context.deleteSharedPreferences(PluginPaths.storageName(pluginId))
         PluginPaths.dataDir(context, pluginId).deleteRecursively()
@@ -404,7 +405,7 @@ class PluginApi(
         val prefix = "$pid:"
         val key = prefix + id
         timers.remove(key)?.cancel()
-        check(timers.keys.count { it.startsWith(prefix) } < MAX_TIMERS) { "Слишком много таймеров" }
+        check(timers.keys.count { it.startsWith(prefix) } < MAX_TIMERS) { tr("Слишком много таймеров") }
         val every = if (intervalMs < 1_000L) 1_000L else intervalMs
         timers[key] = scope.launch {
             do {
@@ -415,13 +416,13 @@ class PluginApi(
         }
     }
 
-    /** Запрос в фоне: сразу возвращает request_id, итог приходит плагину событием http_response. */
+    /** Запрос в фоне: сразу возвращает request_id, итог приходит модулю событием http_response. */
     private fun startAsyncRequest(pid: String, a: JSONObject): Map<String, Any?> {
         val prefix = "$pid:"
-        check(requests.keys.count { it.startsWith(prefix) } < MAX_ASYNC_REQUESTS) { "Слишком много запросов одновременно" }
+        check(requests.keys.count { it.startsWith(prefix) } < MAX_ASYNC_REQUESTS) { tr("Слишком много запросов одновременно") }
         val id = a.optString("request_id", "").ifEmpty { UUID.randomUUID().toString() }
         val key = prefix + id
-        check(!requests.containsKey(key)) { "request_id уже используется" }
+        check(!requests.containsKey(key)) { tr("request_id уже используется") }
         val job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val payload = linkedMapOf<String, Any?>("request_id" to id)
             try {
@@ -447,10 +448,10 @@ class PluginApi(
         context.getSharedPreferences(PluginPaths.storageName(pid), Context.MODE_PRIVATE)
 
     private fun storageSet(pid: String, key: String, value: String): Boolean {
-        require(key.isNotEmpty() && key.length <= 128) { "Ключ: 1–128 символов" }
-        require(value.length <= MAX_STORAGE_VALUE) { "Значение слишком большое" }
+        require(key.isNotEmpty() && key.length <= 128) { tr("Ключ: 1–128 символов") }
+        require(value.length <= MAX_STORAGE_VALUE) { tr("Значение слишком большое") }
         val prefs = storage(pid)
-        if (!prefs.contains(key)) check(prefs.all.size < MAX_STORAGE_KEYS) { "Слишком много ключей" }
+        if (!prefs.contains(key)) check(prefs.all.size < MAX_STORAGE_KEYS) { tr("Слишком много ключей") }
         prefs.edit().putString(key, value).apply()
         return true
     }

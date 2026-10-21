@@ -26,12 +26,20 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
+import app.yougram.R
 import app.yougram.core.settings.ThemeMode
 import app.yougram.core.settings.ThemeSettings
+import app.yougram.feature.splash.ui.HalloweenEvent
 import java.io.File
+
+/** Акцент на время хэллоуинского ивента. */
+val HalloweenAccent = Color(0xFFFF8A1F)
 
 /** Готовые акценты для случая, когда системные цвета выключены. */
 data class Accent(val name: String, val color: Color)
@@ -110,25 +118,32 @@ fun isDarkTheme(settings: ThemeSettings): Boolean = when (settings.mode) {
 fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
-    val base = if (settings.dynamic) {
+    // Пока идёт ивент и оформление под ивенты включено, акцент фиксированный (хэллоуинский оранжевый),
+    // а системные цвета не применяются.
+    val event = HalloweenEvent.isActive()
+    val dynamicColors = settings.dynamic && !event
+    val base = if (dynamicColors) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
         accentScheme(
-            if (settings.customAccent != 0) Color(settings.customAccent)
-            else Accents[settings.accent.coerceIn(Accents.indices)].color,
+            when {
+                event -> HalloweenAccent
+                settings.customAccent != 0 -> Color(settings.customAccent)
+                else -> Accents[settings.accent.coerceIn(Accents.indices)].color
+            },
             dark,
         )
     }
     // Порядок важен: сначала фон/текст тёмной темы, затем уровни surfaceContainer*, затем контраст on*-цветов.
-    val schemes = remember(base, dark, settings.dynamic) {
+    val schemes = remember(base, dark, dynamicColors) {
         val withBackground = when {
             dark -> base.withLightText()
-            !settings.dynamic -> base.withLightAccentBackground()
+            !dynamicColors -> base.withLightAccentBackground()
             else -> base
         }
         // В тёмной теме поверхности принудительно #121212, поэтому уровни контейнеров считаем сами.
         // В светлой с динамическими цветами оставляем системные уровни.
-        val withLevels = if (dark || !settings.dynamic) withBackground.withContainerLevels(dark) else withBackground
+        val withLevels = if (dark || !dynamicColors) withBackground.withContainerLevels(dark) else withBackground
         // Фон чата остаётся прежним, остальной фон и подложки затемняются.
         val chat = withLevels.withReadableContent(dark)
         chat.darkenedBackgrounds(AppDarkenAmount).withReadableContent(dark) to chat.background
@@ -160,7 +175,46 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     }
 }
 
-/** Типографика приложения: expressive-иерархия, при необходимости со своим шрифтом из файла. Битый файл — молча остаёмся на системном. */
+private val GoogleFontProvider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
+)
+
+val GoogleSansFlexFamily = FontFamily(
+    // 1. Google Fonts Downloadable Font (Google Sans Flex / Google Sans / Roboto Flex)
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Google Sans Flex"), fontProvider = GoogleFontProvider),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Google Sans"), fontProvider = GoogleFontProvider),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Roboto Flex"), fontProvider = GoogleFontProvider),
+
+    // 2. System font fallbacks (Android 14+ Pixel / OneUI / OxygenOS / HyperOS system fonts)
+    Font(DeviceFontFamilyName("google-sans-flex"), weight = FontWeight.Normal),
+    Font(DeviceFontFamilyName("google-sans-flex"), weight = FontWeight.Medium),
+    Font(DeviceFontFamilyName("google-sans-flex"), weight = FontWeight.SemiBold),
+    Font(DeviceFontFamilyName("google-sans-flex"), weight = FontWeight.Bold),
+    Font(DeviceFontFamilyName("Google Sans Flex"), weight = FontWeight.Normal),
+    Font(DeviceFontFamilyName("Google Sans Flex"), weight = FontWeight.Medium),
+    Font(DeviceFontFamilyName("Google Sans Flex"), weight = FontWeight.SemiBold),
+    Font(DeviceFontFamilyName("Google Sans Flex"), weight = FontWeight.Bold),
+    Font(DeviceFontFamilyName("Google Sans"), weight = FontWeight.Normal),
+    Font(DeviceFontFamilyName("Google Sans"), weight = FontWeight.Medium),
+    Font(DeviceFontFamilyName("Google Sans"), weight = FontWeight.SemiBold),
+    Font(DeviceFontFamilyName("Google Sans"), weight = FontWeight.Bold),
+    Font(DeviceFontFamilyName("sans-serif-flex"), weight = FontWeight.Normal),
+)
+
+/** Закруглённый шрифт для заголовков в настройках: Nunito, запасной — Varela Round, затем системный rounded. */
+val RoundedTitleFamily = FontFamily(
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.Medium),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.SemiBold),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.Bold),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.ExtraBold),
+    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Varela Round"), fontProvider = GoogleFontProvider),
+    Font(DeviceFontFamilyName("sans-serif-rounded"), weight = FontWeight.Normal),
+    Font(DeviceFontFamilyName("google-sans-rounded"), weight = FontWeight.Normal),
+)
+
+/** Типографика приложения: expressive-иерархия с основным шрифтом Google Sans Flex. */
 @Composable
 private fun rememberTypography(fontPath: String?): Typography = remember(fontPath) {
     val family = fontPath?.let { path ->
@@ -170,7 +224,7 @@ private fun rememberTypography(fontPath: String?): Typography = remember(fontPat
             android.graphics.fonts.Font.Builder(file).build()
             FontFamily(Font(file, FontWeight.Normal))
         }.getOrNull()
-    }
+    } ?: GoogleSansFlexFamily
     expressiveTypography(family)
 }
 
@@ -178,11 +232,10 @@ private fun rememberTypography(fontPath: String?): Typography = remember(fontPat
  * Типографика с заметной иерархией: заголовки и title жирнее, emphasized-варианты ещё контрастнее.
  * Размеры остаются стандартными M3 (их задают токены Typography()).
  */
-private fun expressiveTypography(family: FontFamily?): Typography {
+private fun expressiveTypography(family: FontFamily): Typography {
     val t = Typography()
     fun TextStyle.styled(weight: FontWeight? = null): TextStyle {
-        var r = this
-        if (family != null) r = r.copy(fontFamily = family)
+        var r = this.copy(fontFamily = family)
         if (weight != null) r = r.copy(fontWeight = weight)
         return r
     }

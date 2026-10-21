@@ -1,5 +1,7 @@
 package app.yougram.feature.chat.comments.ui
 
+import app.yougram.core.i18n.tr
+import app.yougram.core.i18n.Localization
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,13 +86,6 @@ fun CommentsButton(
 }
 
 private fun commentsLabel(n: Int): String {
-    val mod100 = n % 100
-    val mod10 = n % 10
-    val word = when {
-        mod100 in 11..14 -> "комментариев"
-        mod10 == 1 -> "комментарий"
-        mod10 in 2..4 -> "комментария"
-        else -> "комментариев"
-    }
+    val word = Localization.pluralForm(n, tr("комментарий"), tr("комментария"), tr("комментариев"))
     return "$n $word"
 }

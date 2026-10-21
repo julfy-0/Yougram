@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.appearance
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -48,6 +49,7 @@ import app.yougram.feature.settings.component.ConnectedChoiceGroup
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
 import app.yougram.feature.settings.component.SwitchRow
+import app.yougram.feature.splash.ui.HalloweenEvent
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,7 +79,7 @@ fun ThemeSection(settings: SettingsRepository) {
         if (uri != null) scope.launch {
             val result = withContext(Dispatchers.IO) { importFont(context, uri) }
             if (result == null) {
-                Toast.makeText(context, "Не удалось открыть шрифт: нужен файл .ttf или .otf", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, tr("Не удалось открыть шрифт: нужен файл .ttf или .otf"), Toast.LENGTH_LONG).show()
             } else {
                 val old = theme.fontPath
                 settings.setCustomFont(result.first, result.second)
@@ -114,6 +116,14 @@ fun ThemeSection(settings: SettingsRepository) {
                     checked = theme.dynamic,
                     onChange = settings::setDynamicColor,
                     subtitle = "Акцент берётся из обоев и настроек устройства",
+                )
+            }
+            item {
+                SwitchRow(
+                    title = "Оформление под ивенты",
+                    checked = HalloweenEvent.themingEnabled,
+                    onChange = { HalloweenEvent.setThemingEnabled(context, it) },
+                    subtitle = "Праздничные заставки, частицы и значки. Выключено — обычный Yougram",
                 )
             }
         }

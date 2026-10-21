@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.telegram
 
+import app.yougram.core.i18n.tr
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -44,7 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import app.yougram.core.ui.component.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,7 +80,7 @@ internal fun openUrl(context: android.content.Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: Exception) {
-        Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Не удалось открыть ссылку"), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -206,7 +207,7 @@ fun GiftSheet(repository: ChatRepository, onOpenChat: (Long) -> Unit, onDismiss:
                 onOpenChat(repository.openPrivateChat(userId))
                 onDismiss()
             } catch (e: Exception) {
-                Toast.makeText(context, e.message ?: "Ошибка", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, e.message ?: tr("Ошибка"), Toast.LENGTH_SHORT).show()
             }
         }
     }

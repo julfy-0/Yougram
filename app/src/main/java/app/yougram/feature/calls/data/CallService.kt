@@ -1,5 +1,6 @@
 package app.yougram.feature.calls.data
 
+import app.yougram.core.i18n.tr
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -50,13 +51,13 @@ class CallService : Service() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_INCOMING, "Входящие звонки", NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CHANNEL_INCOMING, tr("Входящие звонки"), NotificationManager.IMPORTANCE_HIGH).apply {
                 setSound(null, null)
                 enableVibration(false)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ONGOING, "Текущий звонок", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL_ONGOING, tr("Текущий звонок"), NotificationManager.IMPORTANCE_LOW),
         )
     }
 
@@ -131,9 +132,9 @@ class CallService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
-        if (call == null) return builder.setContentTitle("Звонок").build()
+        if (call == null) return builder.setContentTitle(tr("Звонок")).build()
 
-        val person = Person.Builder().setName(call.title.ifEmpty { "Звонок" }).setImportant(true).build()
+        val person = Person.Builder().setName(call.title.ifEmpty { tr("Звонок") }).setImportant(true).build()
         if (incoming) {
             // Без доступа к микрофону принять из шторки нельзя: открываем приложение, там запросим разрешение.
             val answer = if (hasMic()) servicePi(ACTION_ACCEPT) else open
@@ -146,7 +147,7 @@ class CallService : Service() {
             if (call.phase == CallPhase.ACTIVE && started != null) {
                 builder.setWhen(started).setShowWhen(true).setUsesChronometer(true)
             } else {
-                builder.setContentText(call.message ?: "Соединение…")
+                builder.setContentText(call.message ?: tr("Соединение…"))
             }
         }
         return builder.build()

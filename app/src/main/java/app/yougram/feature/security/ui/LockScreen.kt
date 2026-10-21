@@ -2,6 +2,7 @@
 
 package app.yougram.feature.security.ui
 
+import app.yougram.core.i18n.tr
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -33,7 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
@@ -66,7 +67,7 @@ import kotlinx.coroutines.launch
  * Содержимое остаётся в композиции (чтобы сохранился стек навигации), но скрыто от касаний и экранных читалок.
  */
 @Composable
-fun LockGate(appLock: AppLock, content: @Composable () -> Unit) {
+fun LockGate(appLock: AppLock, promptEnabled: Boolean = true, content: @Composable () -> Unit) {
     val locked by appLock.locked.collectAsState()
     val focusManager = LocalFocusManager.current
     val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -84,13 +85,13 @@ fun LockGate(appLock: AppLock, content: @Composable () -> Unit) {
             enter = fadeIn(effects) + scaleIn(initialScale = 0.94f, animationSpec = spatial),
             exit = fadeOut(effects) + scaleOut(targetScale = 0.94f, animationSpec = spatial),
         ) {
-            LockScreen(appLock)
+            LockScreen(appLock, promptEnabled)
         }
     }
 }
 
 @Composable
-private fun LockScreen(appLock: AppLock) {
+private fun LockScreen(appLock: AppLock, promptEnabled: Boolean) {
     val settings by appLock.settings.collectAsState()
     val lockedUntil by appLock.lockoutUntil.collectAsState()
     val context = LocalContext.current
@@ -118,9 +119,12 @@ private fun LockScreen(appLock: AppLock) {
         }
     }
 
-    // Отпечаток предлагается один раз при появлении экрана; дальше — кнопкой.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (!autoTried) {
+    // Отпечаток предлагается один раз — когда экран активен и сплеш уже закончился; дальше — кнопкой.
+    var resumed by remember { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumed = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { resumed = false }
+    LaunchedEffect(promptEnabled, resumed) {
+        if (promptEnabled && resumed && !autoTried) {
             autoTried = true
             tryBiometric()
         }
@@ -179,7 +183,7 @@ private fun LockScreen(appLock: AppLock) {
                 Text("Yougram заблокирован", style = MaterialTheme.typography.headlineSmallEmphasized, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
                 val hint = when {
-                    lockedOut -> "Слишком много попыток. Повторите через $remainingSec с"
+                    lockedOut -> tr("Слишком много попыток. Повторите через {0} с", remainingSec)
                     message != null -> message.orEmpty()
                     settings.type == LockType.Pattern -> "Нарисуйте графический ключ"
                     else -> "Введите пин-код"
@@ -234,7 +238,7 @@ private fun LockScreen(appLock: AppLock) {
                         extraKey = if (settings.biometric) {
                             {
                                 IconButton(onClick = { tryBiometric() }) {
-                                    Icon(Icons.Filled.Fingerprint, contentDescription = "Отпечаток или лицо")
+                                    Icon(Icons.Filled.Fingerprint, contentDescription = tr("Отпечаток или лицо"))
                                 }
                             }
                         } else null,

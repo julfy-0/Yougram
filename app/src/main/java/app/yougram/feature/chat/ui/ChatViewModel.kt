@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,6 +12,7 @@ import app.yougram.feature.chat.data.EditRecord
 import app.yougram.feature.chat.data.FileState
 import app.yougram.feature.chat.data.GifItem
 import app.yougram.feature.chat.data.MessageItem
+import app.yougram.feature.chat.data.PinnedItem
 import app.yougram.feature.chat.data.ReplyPreview
 import app.yougram.feature.chat.data.ReplyRef
 import app.yougram.feature.chat.data.SenderInfo
@@ -59,6 +61,8 @@ data class ChatUiState(
     val readAt: Map<Long, Int> = emptyMap(),
     /** Пользователи из чёрного списка — нужны фильтру «скрывать от ЧС». */
     val blockedUserIds: Set<Long> = emptySet(),
+    /** Закреплённые сообщения, от новых к старым. */
+    val pinned: List<PinnedItem> = emptyList(),
 )
 
 /** Состояние поиска внутри чата. */
@@ -158,7 +162,7 @@ class ChatViewModel(
                 throw e
             } catch (e: Exception) {
                 _search.update { it.copy(loading = false) }
-                _state.update { it.copy(error = e.message ?: "Не удалось выполнить поиск") }
+                _state.update { it.copy(error = e.message ?: tr("Не удалось выполнить поиск")) }
             }
         }
     }
@@ -216,17 +220,17 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Не удалось загрузить результаты") }
+                _state.update { it.copy(error = e.message ?: tr("Не удалось загрузить результаты")) }
             }
         }
     }
 
     /** Догружает историю до сообщения [messageId] и просит экран прокрутить к нему. */
-    private fun jumpTo(messageId: Long) {
+    fun jumpTo(messageId: Long) {
         jumpJob?.cancel()
         jumpJob = viewModelScope.launch {
             if (ensureLoaded(messageId)) _jump.value = messageId
-            else _state.update { it.copy(error = "Сообщение слишком далеко в истории") }
+            else _state.update { it.copy(error = tr("Сообщение слишком далеко в истории")) }
         }
     }
 
@@ -262,7 +266,7 @@ class ChatViewModel(
         stickerJob = viewModelScope.launch {
             runCatching { repository.loadStickers(query = query, chatId = chatId) }
                 .onSuccess { _stickers.value = it }
-                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: "Не удалось загрузить стикеры") } }
+                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: tr("Не удалось загрузить стикеры")) } }
         }
     }
 
@@ -280,7 +284,7 @@ class ChatViewModel(
             runCatching { repository.loadStickerSets() }
                 .onSuccess { _stickerSets.value = it }
                 .onFailure { error ->
-                    _state.update { cur -> cur.copy(error = error.message ?: "Не удалось загрузить наборы стикеров") }
+                    _state.update { cur -> cur.copy(error = error.message ?: tr("Не удалось загрузить наборы стикеров")) }
                 }
         }
     }
@@ -292,7 +296,7 @@ class ChatViewModel(
             runCatching {
                 if (setId == 0L) repository.loadRecentStickers() else repository.loadStickerSetStickers(setId)
             }.onSuccess { _stickers.value = it }
-                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: "Не удалось загрузить стикеры") } }
+                .onFailure { _state.update { cur -> cur.copy(error = it.message ?: tr("Не удалось загрузить стикеры")) } }
         }
     }
 
@@ -305,7 +309,7 @@ class ChatViewModel(
             runCatching { repository.loadSavedGifs() }
                 .onSuccess { _gifs.value = it }
                 .onFailure { error ->
-                    _state.update { cur -> cur.copy(error = error.message ?: "Не удалось загрузить GIF") }
+                    _state.update { cur -> cur.copy(error = error.message ?: tr("Не удалось загрузить GIF")) }
                 }
         }
     }
@@ -492,6 +496,19 @@ class ChatViewModel(
                 }
             }
         }
+        refreshPinned()
+        viewModelScope.launch {
+            repository.pinEvents.collect { event ->
+                if (event.chatId == chatId) refreshPinned()
+            }
+        }
+        viewModelScope.launch {
+            repository.deletions.collect { event ->
+                if (event.chatId == chatId && _state.value.pinned.any { it.id in event.removedIds }) {
+                    _state.update { s -> s.copy(pinned = s.pinned.filterNot { it.id in event.removedIds }) }
+                }
+            }
+        }
         viewModelScope.launch {
             repository.readEvents.collect { event ->
                 if (event.chatId != chatId) return@collect
@@ -515,7 +532,7 @@ class ChatViewModel(
                 // с бесконечным спиннером и без заголовка.
                 val history = withTimeoutOrNull(HISTORY_TIMEOUT_MS) { repository.loadHistory(chatId) } // от старых к новым
                     ?: run {
-                        _state.update { it.copy(title = chatInfo.title, loading = false, error = "Не удалось загрузить историю") }
+                        _state.update { it.copy(title = chatInfo.title, loading = false, error = tr("Не удалось загрузить историю")) }
                         return@launch
                     }
                 val snapshot = repository.spySnapshot(chatId)
@@ -548,7 +565,7 @@ class ChatViewModel(
                     _state.update {
                         it.copy(
                             subtitle = details.subtitle,
-                            isOnline = details.subtitle.contains("в сети"),
+                            isOnline = details.subtitle.contains(tr("в сети")),
                         )
                     }
                 }
@@ -572,7 +589,7 @@ class ChatViewModel(
                 block()
                 if (notice != null) _state.update { it.copy(error = notice) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Не удалось выполнить действие") }
+                _state.update { it.copy(error = e.message ?: tr("Не удалось выполнить действие")) }
             }
         }
     }
@@ -597,8 +614,17 @@ class ChatViewModel(
 
     fun pin(messageId: Long) = action("Сообщение закреплено") { repository.pinMessage(chatId, messageId) }
 
+    fun unpin(messageId: Long) = action("Сообщение откреплено") { repository.unpinMessage(chatId, messageId) }
+
+    private fun refreshPinned() {
+        viewModelScope.launch {
+            runCatching { repository.loadPinned(chatId) }
+                .onSuccess { list -> _state.update { it.copy(pinned = list) } }
+        }
+    }
+
     fun forward(messageId: Long, toChatId: Long) =
-        action("Сообщение переслано") { repository.forwardMessage(toChatId, chatId, messageId) }
+        action(tr("Сообщение переслано")) { repository.forwardMessage(toChatId, chatId, messageId) }
 
     /** Участники группы для подсказки упоминания «@». */
     suspend fun searchMentions(query: String) = repository.searchMentions(chatId, query)
@@ -715,7 +741,7 @@ class ChatViewModel(
                     _state.update { it.copy(subtitle = details.subtitle) }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(joining = false, error = e.message ?: "Не удалось подписаться") }
+                _state.update { it.copy(joining = false, error = e.message ?: tr("Не удалось подписаться")) }
             }
         }
     }

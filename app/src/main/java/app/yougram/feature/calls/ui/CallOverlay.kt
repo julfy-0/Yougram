@@ -1,5 +1,6 @@
 package app.yougram.feature.calls.ui
 
+import app.yougram.core.i18n.tr
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -67,7 +68,7 @@ import androidx.compose.material3.toShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -124,7 +125,7 @@ fun CallOverlay(manager: CallManager, chats: ChatRepository, backdrop: BackdropS
             // Без разрешения на камеру принимаем звонок без видео, а не роняем его.
             manager.accept(withVideo = pendingVideo && has(Manifest.permission.CAMERA))
         } else {
-            Toast.makeText(context, "Нужен доступ к микрофону", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
         }
     }
 

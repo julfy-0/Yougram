@@ -14,17 +14,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import app.yougram.core.ui.rememberReduceMotion
+import app.yougram.feature.splash.ui.HalloweenEvent
+import app.yougram.feature.splash.ui.halloweenFall
 
-/** Медленно дрейфующие размытые цветные пятна за стеклянной карточкой входа. */
+/**
+ * Фон за стеклянной карточкой входа. Пока идёт хэллоуинский ивент — тыквенный фон с падающими тыквами,
+ * потом обычные медленно дрейфующие размытые цветные пятна.
+ */
 @Composable
 fun AuthBackground(modifier: Modifier = Modifier) {
+    if (HalloweenEvent.isActive()) {
+        HalloweenAuthBackground(modifier)
+        return
+    }
     val scheme = MaterialTheme.colorScheme
     val alpha = if (scheme.background.luminance() < 0.5f) 0.42f else 0.5f
     // Слабое железо или «Удалить анимации»: статичные градиенты, бесконечный transition даже не создаётся.
@@ -33,6 +42,37 @@ fun AuthBackground(modifier: Modifier = Modifier) {
     } else {
         AnimatedBlobs(modifier, alpha)
     }
+}
+
+/** Хэллоуинский фон: тёмный фиолетовый (тёмная тема) или тёплый кремовый (светлая), оранжевое свечение, падающие тыквы. */
+@Composable
+private fun HalloweenAuthBackground(modifier: Modifier) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val top = if (dark) Color(0xFF1B0A2E) else Color(0xFFFFF3E3)
+    val bottom = if (dark) Color(0xFF09050F) else Color(0xFFFFD9AE)
+    val orange = Color(0xFFFF8A1F)
+    val reduceMotion = rememberReduceMotion()
+
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(top, bottom)))
+            // Свечение рисуется до частиц, поэтому тыквы лежат поверх него.
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val glowAlpha = if (dark) 0.34f else 0.45f
+                fun glow(c: Offset, r: Float, color: Color) = drawCircle(
+                    brush = Brush.radialGradient(listOf(color.copy(alpha = glowAlpha), Color.Transparent), center = c, radius = r),
+                    radius = r,
+                    center = c,
+                )
+                glow(Offset(w * 0.2f, h * 0.12f), w * 0.8f, orange)
+                glow(Offset(w * 0.85f, h * 0.7f), w * 0.7f, Color(0xFF8E3BFF))
+                glow(Offset(w * 0.3f, h * 0.98f), w * 0.65f, orange)
+            }
+            .then(if (reduceMotion) Modifier else Modifier.halloweenFall(speedScale = 1.2f, darkBackground = dark)),
+    )
 }
 
 @Composable
@@ -77,24 +117,18 @@ private fun AnimatedBlobs(modifier: Modifier, alpha: Float) {
         label = "blobC",
     )
     Box(modifier.fillMaxSize().background(scheme.background)) {
-        Canvas(Modifier.fillMaxSize().blur(72.dp)) {
+        // Радиальные градиенты вместо blur(72.dp): выглядит так же, но не гоняет размытие на весь экран каждый кадр.
+        Canvas(Modifier.fillMaxSize()) {
+            fun blob(color: Color, r: Float, c: Offset) = drawCircle(
+                brush = Brush.radialGradient(listOf(color, Color.Transparent), center = c, radius = r * 1.5f),
+                radius = r * 1.5f,
+                center = c,
+            )
             val w = size.width
             val h = size.height
-            drawCircle(
-                color = scheme.primary.copy(alpha = alpha),
-                radius = w * 0.62f,
-                center = Offset(w * (0.1f + 0.5f * a), h * (0.08f + 0.18f * b)),
-            )
-            drawCircle(
-                color = scheme.tertiary.copy(alpha = alpha),
-                radius = w * 0.55f,
-                center = Offset(w * (0.95f - 0.5f * b), h * (0.55f + 0.2f * c)),
-            )
-            drawCircle(
-                color = scheme.secondary.copy(alpha = alpha * 0.8f),
-                radius = w * 0.5f,
-                center = Offset(w * (0.2f + 0.4f * c), h * (0.95f - 0.15f * a)),
-            )
+            blob(scheme.primary.copy(alpha = alpha), w * 0.62f, Offset(w * (0.1f + 0.5f * a), h * (0.08f + 0.18f * b)))
+            blob(scheme.tertiary.copy(alpha = alpha), w * 0.55f, Offset(w * (0.95f - 0.5f * b), h * (0.55f + 0.2f * c)))
+            blob(scheme.secondary.copy(alpha = alpha * 0.8f), w * 0.5f, Offset(w * (0.2f + 0.4f * c), h * (0.95f - 0.15f * a)))
         }
     }
 }

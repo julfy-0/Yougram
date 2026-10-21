@@ -14,10 +14,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.yougram.core.di.AccountViewModelStores
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.yougram.feature.settings.appearance.HalloweenPromo
+import app.yougram.feature.settings.appearance.markHalloweenPromoSeen
+import app.yougram.feature.settings.appearance.shouldShowHalloweenPromo
 import app.yougram.feature.splash.ui.LaunchSplash
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +52,8 @@ import app.yougram.feature.security.ui.LockGate
 import app.yougram.navigation.YougramNavHost
 
 class MainActivity : ComponentActivity() {
-    private val container by lazy { (application as YougramApp).container }
+    /** Текущий контейнер: при смене аккаунта подменяется на лету. */
+    private val container get() = (application as YougramApp).container
 
     private lateinit var notificationPermission: androidx.activity.result.ActivityResultLauncher<String>
 
@@ -81,6 +89,8 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIntent(intent)
 
         setContent {
+            val container by (application as YougramApp).containerState.collectAsState()
+            val accountStores = viewModel<AccountViewModelStores>()
             val theme by container.settings.theme.collectAsState()
             val glass by container.settings.glass.collectAsState()
             val plates by container.plates.plates.collectAsState()
@@ -104,6 +114,10 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.ui.unit.Density(baseDensity.density * uiScale / 100f, baseDensity.fontScale)
             }
             var showSplash by rememberSaveable { mutableStateOf(savedInstanceState == null) }
+            // Экран хеллоуинского ивента: один раз при запуске (при повороте не повторяется).
+            var promoPending by rememberSaveable {
+                mutableStateOf(savedInstanceState == null && shouldShowHalloweenPromo(this@MainActivity))
+            }
 
             // После входа: запрашиваем разрешение на уведомления и поднимаем фоновое соединение.
             LaunchedEffect(authStep == AuthStep.Ready, notifPrefs.backgroundConnection) {
@@ -154,11 +168,24 @@ class MainActivity : ComponentActivity() {
                     LocalBadgeChecker provides container.chatRepository::checkBadge,
                 ) {
                     Box(Modifier.fillMaxSize()) {
-                        LockGate(container.appLock) {
-                            YougramNavHost(container)
+                        LockGate(container.appLock, promptEnabled = !showSplash) {
+                            // Смена аккаунта: новое поколение контейнера сбрасывает навигацию, rememberSaveable и ViewModel.
+                            val storesOwner = remember(container.generation) { accountStores.ownerFor(container.generation) }
+                            CompositionLocalProvider(LocalViewModelStoreOwner provides storesOwner) {
+                                key(container.generation) { YougramNavHost(container) }
+                            }
                         }
                         // Заставка при холодном запуске (при повороте экрана не повторяется).
                         if (showSplash) LaunchSplash(onFinished = { showSplash = false })
+                        // Рассказ про ивент: после заставки и входа в аккаунт, один раз.
+                        if (promoPending && !showSplash && authStep == AuthStep.Ready) {
+                            HalloweenPromo(
+                                onClose = {
+                                    markHalloweenPromoSeen(this@MainActivity)
+                                    promoPending = false
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -202,11 +229,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         container.notificationCenter.appVisible = true
         container.appLock.onForeground()
+        app.yougram.core.ui.OwnContactMask.startWatching(this)
     }
 
     override fun onStop() {
         super.onStop()
         container.notificationCenter.appVisible = false
+        app.yougram.core.ui.OwnContactMask.stopWatching(this)
         // Поворот экрана тоже вызывает onStop, но это не уход из приложения.
         if (!isChangingConfigurations) container.appLock.onBackground()
     }

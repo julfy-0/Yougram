@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,7 +63,7 @@ fun StickerSetSheet(setId: Long, viewModel: ChatViewModel, onDismiss: () -> Unit
                 else -> {
                     Text(current.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
                     Text(
-                        "${current.stickers.size} стикеров",
+                        tr("{0} стикеров", current.stickers.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 4.dp),
@@ -83,7 +84,7 @@ fun StickerSetSheet(setId: Long, viewModel: ChatViewModel, onDismiss: () -> Unit
                             scope.launch {
                                 runCatching { viewModel.setStickerSetInstalled(current.id, !current.installed) }
                                     .onSuccess { set = current.copy(installed = !current.installed) }
-                                    .onFailure { Toast.makeText(context, "Не удалось изменить набор", Toast.LENGTH_SHORT).show() }
+                                    .onFailure { Toast.makeText(context, tr("Не удалось изменить набор"), Toast.LENGTH_SHORT).show() }
                                 busy = false
                             }
                         }

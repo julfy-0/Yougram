@@ -1,5 +1,6 @@
 package app.yougram.plugin
 
+import app.yougram.core.i18n.tr
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -15,13 +16,13 @@ object PluginManifestReader {
     /** То же, но с понятным текстом ошибки — для установки пакета. */
     fun readOrThrow(dir: File): PluginManifest {
         val file = File(dir, "manifest.json")
-        require(file.isFile) { "manifest.json отсутствует" }
+        require(file.isFile) { tr("manifest.json отсутствует") }
         return try {
             parse(JSONObject(file.readText()))
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: Exception) {
-            throw IllegalArgumentException("manifest.json повреждён: ${e.message}")
+            throw IllegalArgumentException(tr("manifest.json повреждён: {0}", e.message))
         }
     }
 
@@ -46,22 +47,22 @@ object PluginManifestReader {
 
     private fun settings(array: JSONArray?): List<PluginSetting> {
         if (array == null) return emptyList()
-        require(array.length() <= MAX_SETTINGS) { "Слишком много настроек (максимум $MAX_SETTINGS)" }
+        require(array.length() <= MAX_SETTINGS) { tr("Слишком много настроек (максимум {0})", MAX_SETTINGS) }
         val out = ArrayList<PluginSetting>(array.length())
         for (i in 0 until array.length()) {
             val item = array.getJSONObject(i)
             val key = item.getString("key")
-            require(SETTING_KEY.matches(key)) { "Недопустимый ключ настройки: $key" }
-            require(out.none { it.key == key }) { "Ключ настройки повторяется: $key" }
+            require(SETTING_KEY.matches(key)) { tr("Недопустимый ключ настройки: {0}", key) }
+            require(out.none { it.key == key }) { tr("Ключ настройки повторяется: {0}", key) }
             val type = when (item.optString("type", "text").lowercase()) {
                 "switch" -> PluginSettingType.SWITCH
                 "text" -> PluginSettingType.TEXT
                 "number" -> PluginSettingType.NUMBER
                 "choice" -> PluginSettingType.CHOICE
-                else -> throw IllegalArgumentException("Неизвестный тип настройки «$key»")
+                else -> throw IllegalArgumentException(tr("Неизвестный тип настройки «{0}»", key))
             }
             val options = options(item.optJSONArray("options"))
-            if (type == PluginSettingType.CHOICE) require(options.isNotEmpty()) { "У настройки «$key» нет options" }
+            if (type == PluginSettingType.CHOICE) require(options.isNotEmpty()) { tr("У настройки «{0}» нет options", key) }
             val default = when {
                 !item.has("default") && type == PluginSettingType.SWITCH -> "false"
                 !item.has("default") && type == PluginSettingType.NUMBER -> "0"

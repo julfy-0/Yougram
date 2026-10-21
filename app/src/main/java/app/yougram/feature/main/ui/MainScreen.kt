@@ -1,5 +1,6 @@
 package app.yougram.feature.main.ui
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -77,7 +78,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -143,10 +144,13 @@ import app.yougram.feature.settings.SettingsPage
 import app.yougram.feature.settings.SettingsPageContent
 import app.yougram.feature.settings.SettingsSearchResults
 import app.yougram.feature.settings.about.UpdateGlassBar
+import app.yougram.feature.splash.ui.halloweenFall
 import app.yougram.feature.stories.data.StoryRef
 import app.yougram.feature.stories.ui.StoriesBar
 import app.yougram.feature.stories.ui.StoriesViewModel
 import kotlin.math.roundToInt
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 
 enum class MainTab(val title: String, val icon: ImageVector) {
     Contacts("Контакты", Icons.Filled.People),
@@ -238,7 +242,7 @@ fun MainScreen(
     LaunchedEffect(badgeOn, ownBanner, ownBadgeStyle) {
         val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn, ownBanner, ownBadgeStyle) }.getOrDefault(false)
         if (!ok && badgeOn) {
-            Toast.makeText(badgeContext, "Не удалось обновить метку или баннер Yougram в профиле (проверьте длину «О себе»)", Toast.LENGTH_LONG).show()
+            Toast.makeText(badgeContext, tr("Не удалось обновить метку или баннер Yougram в профиле (проверьте длину «О себе»)"), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -345,7 +349,7 @@ fun MainScreen(
         if (uri != null && id != null) {
             plateScope.launch {
                 val ok = plateStore.setImage(id, uri)
-                if (!ok) android.widget.Toast.makeText(plateContext, "Не удалось загрузить картинку", android.widget.Toast.LENGTH_SHORT).show()
+                if (!ok) android.widget.Toast.makeText(plateContext, tr("Не удалось загрузить картинку"), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
         chatListViewModel.clearSelection()
@@ -573,8 +577,14 @@ fun MainScreen(
             }
         }
 
+        val topBarBlur by animateDpAsState(
+            targetValue = if (accountSheetOpen && tab == MainTab.Settings) 20.dp else 0.dp,
+            animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f),
+            label = "topbar-blur",
+        )
         GlassTopBar(
             title = if (inSettingsSubpage) settingsPage.title else tab.title,
+            roundedTitle = tab == MainTab.Settings,
             searching = searching,
             searchHint = when (tab) {
                 MainTab.Chats -> "Чаты, контакты, сообщения"
@@ -627,14 +637,18 @@ fun MainScreen(
             glass = glass,
             topInset = topInset,
             progress = { barsProgress.value },
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                // Пока открыт менеджер аккаунтов, верхняя панель размывается.
+                .blur(topBarBlur, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle)
+                .graphicsLayer { alpha = 1f - 0.35f * (topBarBlur.value / 20f) },
         )
 
         if (confirmDelete) {
             AlertDialog(
                 onDismissRequest = { confirmDelete = false },
                 title = { Text("Удалить чаты?") },
-                text = { Text("Будет удалено чатов: ${selection.size}. Из групп и каналов вы выйдете, переписка у вас очистится.") },
+                text = { Text(tr("Будет удалено чатов: {0}. Из групп и каналов вы выйдете, переписка у вас очистится.", selection.size)) },
                 confirmButton = {
                     TextButton(onClick = {
                         confirmDelete = false
@@ -665,6 +679,13 @@ fun MainScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         } else {
+            // Пока открыт менеджер аккаунтов, навбар уезжает вниз за край экрана.
+            val navHidden = accountSheetOpen && tab == MainTab.Settings
+            val navProgress by animateFloatAsState(
+                targetValue = if (navHidden) 0f else 1f,
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
+                label = "navbar-hide",
+            )
             GlassBottomBar(
                 order = navOrder,
                 selected = tab,
@@ -679,7 +700,7 @@ fun MainScreen(
                 backdrop = backdrop,
                 glass = glass,
                 bottomInset = bottomInset,
-                progress = { 1f },
+                progress = { navProgress },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -713,6 +734,7 @@ fun MainScreen(
 @Composable
 private fun GlassTopBar(
     title: String,
+    roundedTitle: Boolean = false,
     searching: Boolean,
     searchHint: String,
     query: String,
@@ -771,7 +793,9 @@ private fun GlassTopBar(
                         (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
                         (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
             )
-            .glass(backdrop, glass, RectangleShape),
+            .glass(backdrop, glass, RectangleShape)
+            // Хэллоуинские частички: только в верхней панели, под её содержимым.
+            .halloweenFall(speedScale = 3f),
     ) {
         Row(
             Modifier
@@ -818,11 +842,11 @@ private fun GlassTopBar(
                             modifier = Modifier.weight(1f).focusRequester(focusRequester),
                         )
                         ExpressiveIconButton(onClick = onCloseSearch) {
-                            Icon(Icons.Filled.Close, contentDescription = "Закрыть поиск")
+                            Icon(Icons.Filled.Close, contentDescription = tr("Закрыть поиск"))
                         }
                     } else if (selectionCount > 0) {
                         ExpressiveIconButton(onClick = onClearSelection) {
-                            Icon(Icons.Filled.Close, contentDescription = "Отменить выбор")
+                            Icon(Icons.Filled.Close, contentDescription = tr("Отменить выбор"))
                         }
                         Text(selectionCount.toString(), style = MaterialTheme.typography.titleLargeEmphasized, modifier = Modifier.padding(start = 8.dp))
                         Spacer(Modifier.weight(1f))
@@ -833,15 +857,15 @@ private fun GlassTopBar(
                             )
                         }
                         ExpressiveIconButton(onClick = onArchiveSelected) {
-                            Icon(Icons.Filled.Archive, contentDescription = "В архив")
+                            Icon(Icons.Filled.Archive, contentDescription = tr("В архив"))
                         }
                         ExpressiveIconButton(onClick = onDeleteSelected) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Удалить")
+                            Icon(Icons.Filled.Delete, contentDescription = tr("Удалить"))
                         }
                         var moreOpen by remember { mutableStateOf(false) }
                         Box {
                             ExpressiveIconButton(onClick = { moreOpen = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "Ещё")
+                                Icon(Icons.Filled.MoreVert, contentDescription = tr("Ещё"))
                             }
                             DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
                                 DropdownMenuItem(
@@ -877,20 +901,25 @@ private fun GlassTopBar(
                                 onClick = onBack,
                                 colors = IconButtonDefaults.filledTonalIconButtonColors(),
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
                             }
                             Spacer(Modifier.width(16.dp))
                         }
-                        Text(title, style = MaterialTheme.typography.titleLargeEmphasized)
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleLargeEmphasized.let {
+                                if (roundedTitle) it.copy(fontFamily = app.yougram.core.ui.theme.RoundedTitleFamily) else it
+                            },
+                        )
                         if (onBack == null && (searchOnTop || canReadAll)) Spacer(Modifier.weight(1f))
                         if (canReadAll && onBack == null) {
                             ExpressiveIconButton(onClick = onReadAll) {
-                                Icon(Icons.Filled.DoneAll, contentDescription = "Прочитать всё")
+                                Icon(Icons.Filled.DoneAll, contentDescription = tr("Прочитать всё"))
                             }
                         }
                         if (searchOnTop && onBack == null) {
                             ExpressiveIconButton(onClick = onSearch) {
-                                Icon(Icons.Filled.Search, contentDescription = "Поиск")
+                                Icon(Icons.Filled.Search, contentDescription = tr("Поиск"))
                             }
                         }
                     }
@@ -950,8 +979,20 @@ private fun FolderTabs(
 private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: () -> Unit) {
     val motion = MaterialTheme.motionScheme
     // Выбранная папка становится «таблеткой», остальные — более квадратными (connected button group).
+    val interaction = remember { MutableInteractionSource() }
+    val rawPressed by interaction.collectIsPressedAsState()
+    // Нажатие «гаснет» само через 300 мс, даже если система не прислала отпускание (планшеты, мышь, стилус).
+    var pressed by remember { mutableStateOf(false) }
+    LaunchedEffect(rawPressed) {
+        pressed = rawPressed
+        if (rawPressed) {
+            kotlinx.coroutines.delay(300)
+            pressed = false
+        }
+    }
+    // При нажатии подложка скругляется до «таблетки».
     val corner by animateIntAsState(
-        targetValue = if (selected) 50 else 28,
+        targetValue = if (selected || pressed) 50 else 28,
         animationSpec = motion.fastSpatialSpec(),
         label = "folderChipShape",
     )
@@ -963,6 +1004,7 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
     )
     Surface(
         onClick = onClick,
+        interactionSource = interaction,
         shape = RoundedCornerShape(corner.coerceIn(0, 50)),
         color = container,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
@@ -1156,7 +1198,7 @@ private fun GlassBottomBar(
                 .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Search, contentDescription = "Поиск", modifier = Modifier.size(20.dp))
+            Icon(Icons.Filled.Search, contentDescription = tr("Поиск"), modifier = Modifier.size(20.dp))
         }
     }
 }

@@ -2,6 +2,7 @@
 
 package app.yougram.feature.calls.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -113,7 +114,7 @@ fun CallsScreen(
             }
         }
         when {
-            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center))
+            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
             calls.isEmpty() -> EmptyCalls(
                 text = state.error ?: if (state.calls.isEmpty()) "Звонков нет" else "Ничего не найдено",
                 isError = state.error != null,
@@ -213,7 +214,7 @@ private fun CallRow(call: CallItem, viewModel: CallsViewModel, onClick: () -> Un
             }
         }
         if (call.isVideo) {
-            Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок", tint = color, modifier = Modifier.size(20.dp))
+            Icon(Icons.Filled.Videocam, contentDescription = tr("Видеозвонок"), tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
         Text(

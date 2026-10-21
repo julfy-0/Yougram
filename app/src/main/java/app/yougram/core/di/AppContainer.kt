@@ -23,32 +23,51 @@ import app.yougram.plugin.NativePluginManager
 import app.yougram.plugin.PluginApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Простой ручной DI-контейнер: один TDLib-клиент на всё приложение. */
-class AppContainer(private val context: Context) {
+/**
+ * Простой ручной DI-контейнер: один TDLib-клиент на активный аккаунт. При смене аккаунта создаётся новый контейнер
+ * ([previous] — старый): общие объекты (настройки, плагины, блокировка, список аккаунтов) переиспользуются.
+ */
+class AppContainer(private val context: Context, previous: AppContainer? = null) {
+
+    /** Номер поколения: растёт при каждой пересборке (смена аккаунта), по нему сбрасывается UI-состояние. */
+    val generation: Int = (previous?.generation ?: 0) + 1
 
     // Без обработчика любое необработанное исключение в корутинах приложения (в т.ч. при разборе потока
     // обновлений TDLib сразу после входа) роняет весь процесс. Логируем и продолжаем работу.
+    private val errorHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        android.util.Log.e("YougramApp", "uncaught coroutine error", e)
+    }
+
+    /** Живёт весь процесс: для общих объектов, переживающих смену аккаунта. */
+    private val processScope: CoroutineScope =
+        previous?.processScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default + errorHandler)
+
+    /** Только для активного аккаунта: отменяется в [shutdown]. */
     private val appScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Default +
-                kotlinx.coroutines.CoroutineExceptionHandler { _, e -> android.util.Log.e("YougramApp", "uncaught coroutine error", e) },
+        SupervisorJob(processScope.coroutineContext[Job]) + Dispatchers.Default + errorHandler,
     )
 
-    val settings = SettingsRepository(context.applicationContext)
-    val plugins = NativePluginManager(context.applicationContext)
-    val plates = PlateRepository(context.applicationContext)
-    val appLock = AppLock(context.applicationContext)
-    val accountManager = AccountManager(context.applicationContext)
+    // Общие для всех аккаунтов объекты.
+    val settings: SettingsRepository = previous?.settings ?: SettingsRepository(context.applicationContext)
+    val plugins: NativePluginManager = previous?.plugins ?: NativePluginManager(context.applicationContext)
+    val plates: PlateRepository = previous?.plates ?: PlateRepository(context.applicationContext)
+    val appLock: AppLock = previous?.appLock ?: AppLock(context.applicationContext)
+    val accountManager: AccountManager = previous?.accountManager ?: AccountManager(context.applicationContext)
+    val spy: SpyStore = previous?.spy ?: SpyStore(context.applicationContext)
+    val updater: AppUpdater = previous?.updater ?: AppUpdater(context.applicationContext, processScope)
+
+    // Всё ниже привязано к аккаунту и пересоздаётся при его смене.
     val telegram = TelegramClient(context.applicationContext, appScope, accountManager.activeAccountId.value)
     val authRepository = AuthRepository(telegram)
-    val spy = SpyStore(context.applicationContext)
-    val updater = AppUpdater(context.applicationContext, appScope)
     val stories = StoriesRepository(telegram, appScope)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
 
@@ -62,6 +81,11 @@ class AppContainer(private val context: Context) {
     val callManager = CallManager(telegram, appScope, chatRepository, context.applicationContext, callAudio)
         .also { it.engine = TgCallsEngine(context.applicationContext) }
 
+    init {
+        // Окно приложения уже на экране: новому центру уведомлений не нужно показывать уведомления поверх него.
+        notificationCenter.appVisible = previous?.notificationCenter?.appVisible ?: false
+    }
+
     /** Чат, который нужно открыть по тапу на уведомление; навигация сбрасывает значение после открытия. */
     val pendingOpenChat = MutableStateFlow<Long?>(null)
 
@@ -70,6 +94,7 @@ class AppContainer(private val context: Context) {
 
     fun start() {
         CallLog.init(context.applicationContext)
+        // loadAll заново выгружает и загружает плагины: так они привязываются к PluginApi нового аккаунта.
         plugins.loadAll()
         telegram.start()
         // Прокси из настроек (в том числе заданный на экране входа) передаём в TDLib при каждом изменении.
@@ -89,5 +114,14 @@ class AppContainer(private val context: Context) {
             // Соединение поднимаем здесь, а не только из Activity: так оно работает и после перезапуска процесса системой.
             if (settings.notifications.value.backgroundConnection) ConnectionService.start(context.applicationContext)
         }
+    }
+
+    /** Останавливает всё, что связано с аккаунтом контейнера: звонок, TDLib-клиент и корутины. Общие объекты не трогает. */
+    suspend fun shutdown() {
+        runCatching { callManager.hangUp() }
+        runCatching { callAudio.stop() }
+        notificationCenter.appVisible = false
+        runCatching { telegram.close() }
+        appScope.cancel()
     }
 }

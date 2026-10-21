@@ -1,5 +1,6 @@
 package app.yougram.navigation
 
+import app.yougram.core.i18n.tr
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -19,7 +20,7 @@ import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -188,8 +189,8 @@ fun YougramNavHost(container: AppContainer) {
                         // Не открываем снаружи: наш же фильтр t.me вернул бы ссылку обратно в приложение.
                         is TgLinkResult.OpenUrl ->
                             if (isWebUrl(url)) navController.navigate("browser/${Uri.encode(url)}")
-                            else Toast.makeText(context, "Эта ссылка пока не поддерживается", Toast.LENGTH_SHORT).show()
-                        TgLinkResult.Failed -> Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+                            else Toast.makeText(context, tr("Эта ссылка пока не поддерживается"), Toast.LENGTH_SHORT).show()
+                        TgLinkResult.Failed -> Toast.makeText(context, tr("Не удалось открыть ссылку"), Toast.LENGTH_SHORT).show()
                     }
                 }
             } else openWeb()
@@ -217,7 +218,7 @@ fun YougramNavHost(container: AppContainer) {
                     scope.launch {
                         val id = runCatching { container.telegram.client.joinByInvite(invite.url) }.getOrNull()
                         if (id != null) openChat(id, 0L)
-                        else Toast.makeText(context, "Не удалось вступить", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(context, tr("Не удалось вступить"), Toast.LENGTH_SHORT).show()
                     }
                 }) { Text("Вступить") }
             },
@@ -232,7 +233,7 @@ fun YougramNavHost(container: AppContainer) {
             scope.launch {
                 val id = runCatching { container.chatRepository.resolveUsername(username) }.getOrNull()
                 if (id == null) {
-                    Toast.makeText(context, "@$username не найден", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("@{0} не найден", username), Toast.LENGTH_SHORT).show()
                 } else if (id < 0) {
                     openChat(id, 0L)
                 } else if (twoPaneNow.value) {
@@ -271,7 +272,7 @@ fun YougramNavHost(container: AppContainer) {
                 composable(ROUTE_SPLASH) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingIndicator()
+                            LoadingIndicator(contained = true)
                         }
                     }
                 }

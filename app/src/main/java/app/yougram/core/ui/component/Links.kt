@@ -1,5 +1,6 @@
 package app.yougram.core.ui.component
 
+import app.yougram.core.i18n.tr
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -83,7 +84,7 @@ fun openExternally(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "Нет приложения для открытия ссылки", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, tr("Нет приложения для открытия ссылки"), Toast.LENGTH_SHORT).show()
     }
 }
 

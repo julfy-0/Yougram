@@ -1,5 +1,6 @@
 package app.yougram.plugin
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import java.io.File
 import java.io.InputStreamReader
@@ -39,7 +40,7 @@ class LuaPluginManager(private val context: Context) {
                 while (entry != null) {
                     val target = File(temp, entry.name)
                     val rootPath = temp.canonicalPath + File.separator
-                    if (!target.canonicalPath.startsWith(rootPath)) error("Недопустимый путь в плагине")
+                    if (!target.canonicalPath.startsWith(rootPath)) error(tr("Недопустимый путь в модуле"))
                     if (entry.isDirectory) target.mkdirs() else {
                         target.parentFile?.mkdirs()
                         target.outputStream().use { out -> zip.copyTo(out) }
@@ -49,14 +50,14 @@ class LuaPluginManager(private val context: Context) {
                 }
             }
             val manifestFile = File(temp, "manifest.json")
-            require(manifestFile.isFile) { "В плагине отсутствует manifest.json" }
+            require(manifestFile.isFile) { tr("В модуле отсутствует manifest.json") }
             val manifest = JSONObject(manifestFile.readText())
             val id = manifest.getString("id")
             val entry = manifest.optString("entry", "main.lua")
-            require(File(temp, entry).isFile) { "В плагине отсутствует $entry" }
+            require(File(temp, entry).isFile) { tr("В модуле отсутствует {0}", entry) }
             val target = File(root, id.replace(Regex("[^A-Za-z0-9._-]"), "_"))
             if (target.exists()) target.deleteRecursively()
-            check(temp.renameTo(target)) { "Не удалось установить плагин" }
+            check(temp.renameTo(target)) { tr("Не удалось установить модуль") }
             load(target)
             manifest.optString("name", id)
         } finally {

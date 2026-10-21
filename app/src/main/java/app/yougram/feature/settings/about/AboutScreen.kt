@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.about
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QuestionMark
@@ -39,7 +42,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,7 +89,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SOURCE_URL = "https://github.com/julfy-0/yougram"
-private const val CHANNEL_URL = "https://t.me/yougram" // TODO: ссылка на официальный канал
+private const val CHANNEL_URL = "https://t.me/yougramclient" // TODO: ссылка на официальный канал
+private const val DISCORD_URL = "https://discord.gg/xzd2mpJWU" // TODO: ссылка-приглашение на Discord-сервер
+private const val TIKTOK_URL = "https://www.tiktok.com/@julfiy0" // TODO: ссылка на аккаунт TikTok
 
 private data class Credit(val name: String, val role: String, val userId: Long)
 
@@ -128,7 +133,7 @@ fun AboutScreen(
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: Exception) {
-            Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Не удалось открыть ссылку"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -155,7 +160,7 @@ fun AboutScreen(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Yougram v${BuildConfig.VERSION_NAME} · на базе TDLib $tdlibVersion",
+                text = tr("Yougram v{0} · на базе TDLib {1}", BuildConfig.VERSION_NAME, tdlibVersion),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -189,7 +194,7 @@ fun AboutScreen(
             item {
                 SettingRow(
                     title = "Сборка",
-                    subtitle = "Код версии: ${BuildConfig.VERSION_CODE}",
+                    subtitle = tr("Код версии: {0}", BuildConfig.VERSION_CODE),
                     value = "v${BuildConfig.VERSION_NAME}",
                     icon = Icons.Filled.Build,
                     onClick = {
@@ -237,9 +242,25 @@ fun AboutScreen(
             item {
                 SettingRow(
                     title = "Официальный канал",
-                    subtitle = "Новости, опросы и бета-тесты",
+                    subtitle = "Новости, опросы и релизы",
                     icon = Icons.Filled.Campaign,
                     onClick = { openUrl(CHANNEL_URL) },
+                )
+            }
+            item {
+                SettingRow(
+                    title = "Discord",
+                    subtitle = "Сообщество и поддержка",
+                    icon = Icons.Filled.Forum,
+                    onClick = { openUrl(DISCORD_URL) },
+                )
+            }
+            item {
+                SettingRow(
+                    title = "TikTok",
+                    subtitle = "Видео и новости проекта",
+                    icon = Icons.Filled.MusicNote,
+                    onClick = { openUrl(TIKTOK_URL) },
                 )
             }
         }
@@ -289,7 +310,7 @@ fun AboutScreen(
                         scope.launch {
                             val uri = exportLogs(context, tdlibVersion)
                             if (uri == null) {
-                                Toast.makeText(context, "Не удалось собрать логи", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Не удалось собрать логи"), Toast.LENGTH_SHORT).show()
                             } else {
                                 val send = Intent(Intent.ACTION_SEND)
                                     .setType("text/plain")

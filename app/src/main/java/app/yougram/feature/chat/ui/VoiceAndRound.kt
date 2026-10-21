@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.runtime.mutableFloatStateOf
 import android.graphics.BitmapFactory
@@ -35,7 +36,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -150,9 +151,9 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
             Crossfade(targetState = state, animationSpec = iconFadeSpec, label = "voiceIcon") { st ->
                 when (st) {
                     0 -> LoadingIndicator(Modifier.size(28.dp), color = tint)
-                    1 -> Icon(Icons.Filled.Download, "Скачать", tint = tint)
-                    2 -> Icon(Icons.Filled.Pause, "Пауза", tint = tint)
-                    else -> Icon(Icons.Filled.PlayArrow, "Воспроизвести", tint = tint)
+                    1 -> Icon(Icons.Filled.Download, tr("Скачать"), tint = tint)
+                    2 -> Icon(Icons.Filled.Pause, tr("Пауза"), tint = tint)
+                    else -> Icon(Icons.Filled.PlayArrow, tr("Воспроизвести"), tint = tint)
                 }
             }
         }

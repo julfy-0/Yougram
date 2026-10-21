@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,7 +89,7 @@ fun GlobalSearchScreen(
             item(key = "status") {
                 Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
                     when {
-                        loading -> LoadingIndicator()
+                        loading -> LoadingIndicator(contained = true)
                         state.error != null -> Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error)
                         else -> Text("Ничего не найдено", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

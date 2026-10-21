@@ -1,5 +1,6 @@
 package app.yougram.feature.chatlist.ui
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import app.yougram.core.settings.SwipeAction
@@ -46,7 +47,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.toShape
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import app.yougram.core.settings.DraftStore
 import androidx.compose.ui.text.SpanStyle
@@ -330,7 +331,7 @@ private fun ChatRow(
                     modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Check, contentDescription = "Выбрано", modifier = Modifier.size(14.dp))
+                        Icon(Icons.Filled.Check, contentDescription = tr("Выбрано"), modifier = Modifier.size(14.dp))
                     }
                 }
             }
@@ -351,7 +352,7 @@ private fun ChatRow(
                     if (chat.muted) {
                         Icon(
                             Icons.Filled.NotificationsOff,
-                            contentDescription = "Без звука",
+                            contentDescription = tr("Без звука"),
                             tint = secondary,
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )
@@ -388,7 +389,7 @@ private fun ChatRow(
             }
             Row(verticalAlignment = Alignment.Top) {
                 val previewText = if (draft.isNotEmpty()) buildAnnotatedString {
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) { append("Черновик: ") }
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) { append(tr("Черновик: ")) }
                     append(draft)
                 } else androidx.compose.ui.text.AnnotatedString(chat.lastMessage)
                 Text(
@@ -417,7 +418,7 @@ private fun ChatRow(
                 } else if (pinned) {
                     Icon(
                         Icons.Filled.PushPin,
-                        contentDescription = "Закреплён",
+                        contentDescription = tr("Закреплён"),
                         tint = secondary,
                         modifier = Modifier.padding(start = 8.dp).size(16.dp),
                     )

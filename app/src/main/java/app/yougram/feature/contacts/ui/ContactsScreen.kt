@@ -19,7 +19,7 @@ import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import java.util.Locale
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,7 +64,7 @@ fun ContactsScreen(
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     Box(Modifier.fillMaxSize()) {
         when {
-            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center))
+            state.loading -> LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
             contacts.isEmpty() -> Text(
                 state.error ?: if (state.contacts.isEmpty()) "Контактов нет" else "Ничего не найдено",
                 Modifier.align(Alignment.Center).padding(contentPadding),

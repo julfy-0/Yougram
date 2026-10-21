@@ -1,5 +1,6 @@
 package app.yougram.feature.stories.ui
 
+import app.yougram.core.i18n.tr
 import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
@@ -51,7 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -160,7 +161,7 @@ private fun StoryTile(
                         .background(scheme.primary).border(1.5.dp, scheme.surface, CircleShape)
                         .clickable(onClick = onAdd),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Default.Add, "Опубликовать историю", tint = scheme.onPrimary, modifier = Modifier.size(14.dp)) }
+                ) { Icon(Icons.Default.Add, tr("Опубликовать историю"), tint = scheme.onPrimary, modifier = Modifier.size(14.dp)) }
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -178,9 +179,9 @@ private fun ago(date: Int): String {
     val d = (System.currentTimeMillis() / 1000 - date).coerceAtLeast(0)
     return when {
         d < 60 -> "только что"
-        d < 3600 -> "${d / 60} мин. назад"
-        d < 86400 -> "${d / 3600} ч. назад"
-        else -> "${d / 86400} дн. назад"
+        d < 3600 -> tr("{0} мин. назад", d / 60)
+        d < 86400 -> tr("{0} ч. назад", d / 3600)
+        else -> tr("{0} дн. назад", d / 86400)
     }
 }
 
@@ -354,14 +355,14 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                     if (item != null) {
                         val sub = buildString {
                             append(if (item.pending) "публикуется…" else ago(item.date))
-                            if (item.closeFriends) append(" · близкие друзья")
+                            if (item.closeFriends) append(tr(" · близкие друзья"))
                         }
                         Text(sub, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium)
                     }
                 }
                 if (item?.canDelete == true) {
                     Box {
-                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню", tint = Color.White) }
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, tr("Меню"), tint = Color.White) }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
                                 text = { Text("Удалить") },
@@ -371,7 +372,7 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                         }
                     }
                 }
-                IconButton(onClick = close) { Icon(Icons.Default.Close, "Закрыть", tint = Color.White) }
+                IconButton(onClick = close) { Icon(Icons.Default.Close, tr("Закрыть"), tint = Color.White) }
             }
         }
 
@@ -456,11 +457,11 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                                     if (ok) {
                                         reply = ""
                                         focus.clearFocus()
-                                        Toast.makeText(context, "Ответ отправлен", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, tr("Ответ отправлен"), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
-                        ) { Icon(Icons.AutoMirrored.Filled.Send, "Отправить", tint = Color.White) }
+                        ) { Icon(Icons.AutoMirrored.Filled.Send, tr("Отправить"), tint = Color.White) }
                     } else {
                         IconButton(onClick = { viewModel.react("❤️") }) {
                             val liked = item.myReaction != null
@@ -502,7 +503,7 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                 )
                 when {
                     viewers.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        LoadingIndicator()
+                        LoadingIndicator(contained = true)
                     }
                     viewers.error != null -> Text(viewers.error!!, modifier = Modifier.padding(20.dp))
                     viewers.list.isEmpty() -> Text("Пока никто не посмотрел", modifier = Modifier.padding(20.dp))

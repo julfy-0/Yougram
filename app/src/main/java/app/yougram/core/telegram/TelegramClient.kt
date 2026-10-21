@@ -10,6 +10,7 @@ import app.yougram.core.settings.DataPrefs
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.TdlResult
 import dev.g000sha256.tdl.dto.AuthorizationState
+import dev.g000sha256.tdl.dto.AuthorizationStateClosed
 import dev.g000sha256.tdl.dto.AuthorizationStateWaitTdlibParameters
 import dev.g000sha256.tdl.dto.NetworkType
 import dev.g000sha256.tdl.dto.NetworkTypeMobile
@@ -25,12 +26,16 @@ import dev.g000sha256.tdl.dto.ProxyTypeSocks5
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Единственная точка контакта с TDLib. Всё остальное приложение работает через
@@ -55,13 +60,15 @@ class TelegramClient(
      * TDLib сам не видит смену сети на Android: без setNetworkType после перехода Wi-Fi/моб. сеть или выхода из
      * режима сна соединение может «зависнуть», и новые сообщения (а с ними и уведомления) не приходят.
      */
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
     private fun registerNetworkMonitor() {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
         fun push(type: NetworkType) {
             scope.launch { runCatching { client.setNetworkType(type = type) } }
         }
         runCatching {
-            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                     push(
                         when {
@@ -78,7 +85,29 @@ class TelegramClient(
                 override fun onLost(network: Network) {
                     push(NetworkTypeNone())
                 }
-            })
+            }
+            networkCallback = callback
+            cm.registerDefaultNetworkCallback(callback)
+        }
+    }
+
+    private fun unregisterNetworkMonitor() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        runCatching { context.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(callback) }
+    }
+
+    /** Закрывает TDLib-клиент (при смене аккаунта) и ждёт, пока он освободит базу. */
+    suspend fun close() {
+        unregisterNetworkMonitor()
+        if (_authState.value is AuthorizationStateClosed) return
+        coroutineScope {
+            val closed = async(start = CoroutineStart.UNDISPATCHED) {
+                client.authorizationStateUpdates.first { it.authorizationState is AuthorizationStateClosed }
+            }
+            runCatching { client.close() }
+            withTimeoutOrNull(5_000) { closed.await() }
+            closed.cancel()
         }
     }
 

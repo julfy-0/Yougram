@@ -1,5 +1,6 @@
 package app.yougram.plugin
 
+import app.yougram.core.i18n.tr
 import android.util.Base64
 import java.io.File
 import java.io.InputStream
@@ -35,7 +36,7 @@ object PluginHttp {
     /** Скачивает в `<dir>/downloads/<name>`; наружу отдаёт абсолютный путь, который можно передать в send_photo/send_document. */
     fun download(a: JSONObject, dir: File, maxTimeoutMs: Int): Map<String, Any?> {
         val name = a.getString("name")
-        require(FILE_NAME.matches(name)) { "Недопустимое имя файла" }
+        require(FILE_NAME.matches(name)) { tr("Недопустимое имя файла") }
         val folder = File(dir, "downloads").apply { mkdirs() }
         val target = File(folder, name)
         val part = File(folder, "$name.part")
@@ -52,13 +53,13 @@ object PluginHttp {
                             val n = input.read(buf)
                             if (n < 0) break
                             total += n
-                            require(total <= MAX_DOWNLOAD) { "Файл слишком большой" }
+                            require(total <= MAX_DOWNLOAD) { tr("Файл слишком большой") }
                             out.write(buf, 0, n)
                         }
                     }
                 }
                 target.delete()
-                check(part.renameTo(target)) { "Не удалось сохранить файл" }
+                check(part.renameTo(target)) { tr("Не удалось сохранить файл") }
             } catch (t: Throwable) {
                 part.delete()
                 throw t
@@ -71,7 +72,7 @@ object PluginHttp {
 
     private fun open(a: JSONObject, maxTimeoutMs: Int): HttpURLConnection {
         val url = URL(a.getString("url"))
-        require(url.protocol == "https" || url.protocol == "http") { "Только http/https" }
+        require(url.protocol == "https" || url.protocol == "http") { tr("Только http/https") }
         val conn = url.openConnection() as HttpURLConnection
         val timeout = a.optInt("timeout_ms", 20_000).coerceIn(1_000, maxTimeoutMs)
         conn.requestMethod = a.optString("method", "GET").uppercase()
@@ -91,7 +92,7 @@ object PluginHttp {
             else -> null
         }
         if (body != null) {
-            require(body.size <= HARD_MAX_BODY) { "Тело запроса слишком большое" }
+            require(body.size <= HARD_MAX_BODY) { tr("Тело запроса слишком большое") }
             conn.doOutput = true
             conn.outputStream.use { it.write(body) }
         }
@@ -113,7 +114,7 @@ object PluginHttp {
             val n = input.read(buf)
             if (n < 0) break
             out.write(buf, 0, n)
-            require(out.size() <= maxBytes) { "Ответ слишком большой" }
+            require(out.size() <= maxBytes) { tr("Ответ слишком большой") }
         }
         return out.toByteArray()
     }

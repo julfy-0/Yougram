@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.util.Rational
@@ -38,7 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -131,7 +132,7 @@ fun VideoNoteRecorderDialog(
                 zoom = 0f
                 videoCapture = capture
             }.onFailure {
-                android.widget.Toast.makeText(context, "Не удалось включить камеру", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, tr("Не удалось включить камеру"), android.widget.Toast.LENGTH_SHORT).show()
             }
         }, executor)
     }
@@ -181,7 +182,7 @@ fun VideoNoteRecorderDialog(
                 onDismiss()
             } else {
                 out.delete()
-                android.widget.Toast.makeText(context, "Не удалось склеить запись", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, tr("Не удалось склеить запись"), android.widget.Toast.LENGTH_SHORT).show()
                 onDismiss()
             }
         }
@@ -300,13 +301,13 @@ fun VideoNoteRecorderDialog(
                     horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RoundButton(Icons.Filled.Close, "Отмена", Color.White.copy(alpha = 0.18f)) {
+                    RoundButton(Icons.Filled.Close, tr("Отмена"), Color.White.copy(alpha = 0.18f)) {
                         handle.finish(send = false)
                         onDismiss()
                     }
                     if (recordingState) {
                         RoundButton(
-                            Icons.AutoMirrored.Filled.Send, "Отправить",
+                            Icons.AutoMirrored.Filled.Send, tr("Отправить"),
                             MaterialTheme.colorScheme.primary, size = 72,
                         ) {
                             handle.finish(send = true)
@@ -314,12 +315,12 @@ fun VideoNoteRecorderDialog(
                         }
                     } else {
                         RoundButton(
-                            Icons.Filled.FiberManualRecord, "Запись",
+                            Icons.Filled.FiberManualRecord, tr("Запись"),
                             MaterialTheme.colorScheme.error, size = 72,
                         ) { start() }
                     }
                     RoundButton(
-                        Icons.Filled.FlipCameraAndroid, "Сменить камеру",
+                        Icons.Filled.FlipCameraAndroid, tr("Сменить камеру"),
                         Color.White.copy(alpha = 0.18f),
                     ) {
                         if (recordingState) {

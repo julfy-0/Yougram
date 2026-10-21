@@ -116,12 +116,26 @@ fun WavyCircleRing(
     }
 }
 
+/**
+ * Общий индикатор загрузки приложения: морфящаяся фигура M3 Expressive.
+ * [contained] = true — фигура в круглом контейнере (для одиноких индикаторов по центру экрана),
+ * false — просто фигура (для кнопок, строк, плиток).
+ */
 @Composable
 fun LoadingIndicator(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
+    contained: Boolean = false,
 ) {
-    CircularProgressIndicator(modifier = modifier, color = color, strokeWidth = 3.dp)
+    if (contained) {
+        androidx.compose.material3.ContainedLoadingIndicator(
+            modifier = modifier,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            indicatorColor = color,
+        )
+    } else {
+        androidx.compose.material3.LoadingIndicator(modifier = modifier, color = color)
+    }
 }
 
 /**

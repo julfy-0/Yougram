@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.appearance
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -7,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,7 @@ fun GlassPreview(blurRadius: Float, opacity: Float, modifier: Modifier = Modifie
             .background(scheme.surfaceContainerLowest)
             .clearAndSetSemantics {
                 contentDescription =
-                    "Предпросмотр панели: размытие ${blurRadius.roundToInt()}, плотность ${(opacity * 100).roundToInt()} процентов"
+                    tr("Предпросмотр панели: размытие {0}, плотность {1} процентов", blurRadius.roundToInt(), (opacity * 100).roundToInt())
             },
     ) {
         PreviewBackdrop(Modifier.matchParentSize())

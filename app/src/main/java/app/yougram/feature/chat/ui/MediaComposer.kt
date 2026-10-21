@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -36,7 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -133,23 +134,23 @@ fun MediaComposerDialog(
             // Верхняя панель.
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onDismiss, enabled = !busy) {
-                    Icon(Icons.Filled.Close, "Закрыть", tint = Color.White)
+                    Icon(Icons.Filled.Close, tr("Закрыть"), tint = Color.White)
                 }
                 Spacer(Modifier.weight(1f))
                 if (editable) {
                     IconButton(onClick = { turns = (turns + 1) % 4; crop = FullCrop }, enabled = !busy) {
-                        Icon(Icons.Filled.RotateRight, "Повернуть", tint = Color.White)
+                        Icon(Icons.Filled.RotateRight, tr("Повернуть"), tint = Color.White)
                     }
                     IconButton(onClick = { cropMode = !cropMode }, enabled = !busy) {
                         Icon(
-                            Icons.Filled.Crop, "Обрезать",
+                            Icons.Filled.Crop, tr("Обрезать"),
                             tint = if (cropMode) MaterialTheme.colorScheme.primary else Color.White,
                         )
                     }
                     IconButton(
                         onClick = { turns = 0; crop = FullCrop; ratioLock = null },
                         enabled = !busy && (turns != 0 || crop != FullCrop),
-                    ) { Icon(Icons.Filled.Refresh, "Сбросить", tint = Color.White) }
+                    ) { Icon(Icons.Filled.Refresh, tr("Сбросить"), tint = Color.White) }
                 }
             }
 
@@ -240,7 +241,7 @@ fun MediaComposerDialog(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, "Отправить", tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(Icons.AutoMirrored.Filled.Send, tr("Отправить"), tint = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }

@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.data
 
+import app.yougram.core.i18n.tr
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -236,7 +237,7 @@ class SpyStore(context: Context) {
                 val header = ByteArray(16)
                 val read = tmp.inputStream().use { it.read(header) }
                 require(read == 16 && String(header, Charsets.ISO_8859_1).startsWith("SQLite format 3")) {
-                    "Это не файл базы данных"
+                    tr("Это не файл базы данных")
                 }
                 helper.close()
                 tmp.copyTo(dbFile(), overwrite = true)

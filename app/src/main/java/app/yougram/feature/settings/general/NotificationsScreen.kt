@@ -1,5 +1,6 @@
 package app.yougram.feature.settings.general
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
@@ -28,9 +29,9 @@ private val RepeatOptions = listOf(0, 5, 10, 30, 60, 120, 240)
 
 private fun repeatLabel(minutes: Int): String = when {
     minutes == 0 -> "Никогда"
-    minutes < 60 -> "$minutes мин"
+    minutes < 60 -> tr("{0} мин", minutes)
     minutes == 60 -> "1 час"
-    else -> "${minutes / 60} ч"
+    else -> tr("{0} ч", minutes / 60)
 }
 
 private fun enabledLabel(enabled: Boolean) = if (enabled) "Включены" else "Отключены"

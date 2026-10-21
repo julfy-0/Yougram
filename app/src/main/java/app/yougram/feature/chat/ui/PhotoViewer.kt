@@ -1,5 +1,6 @@
 package app.yougram.feature.chat.ui
 
+import app.yougram.core.i18n.tr
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -29,7 +30,7 @@ import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -123,7 +124,7 @@ fun PhotoViewer(
                         .glass(backdrop, ViewerGlass, CircleShape, Color.Black),
                 ) {
                     Text(
-                        "${pagerState.currentPage + 1} из ${items.size}",
+                        tr("{0} из {1}", pagerState.currentPage + 1, items.size),
                         color = Color.White,
                         style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -139,7 +140,7 @@ fun PhotoViewer(
                     .clickable(onClick = onDismiss),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+                Icon(Icons.Filled.Close, contentDescription = tr("Закрыть"), tint = Color.White)
             }
             if (allowSave) {
                 Box(
@@ -154,16 +155,16 @@ fun PhotoViewer(
                                 val path = fileState(media.fileId).first().path
                                 if (path == null) {
                                     download(media.fileId, 32)
-                                    Toast.makeText(context, "Фото ещё загружается, попробуйте позже", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, tr("Фото ещё загружается, попробуйте позже"), Toast.LENGTH_SHORT).show()
                                 } else {
                                     val ok = saveToGallery(context, path, media.name, media.mimeType, media.kind)
-                                    Toast.makeText(context, if (ok) "Сохранено в галерею" else "Не удалось сохранить", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, if (ok) tr("Сохранено в галерею") else tr("Не удалось сохранить"), Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Download, contentDescription = "Скачать", tint = Color.White)
+                    Icon(Icons.Filled.Download, contentDescription = tr("Скачать"), tint = Color.White)
                 }
             }
         }
