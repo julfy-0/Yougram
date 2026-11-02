@@ -21,7 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import app.yougram.core.i18n.Text
-import androidx.compose.material3.TextButton
+import app.yougram.core.ui.component.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +60,9 @@ import app.yougram.core.ui.adaptive.decodeDetail
 import app.yougram.core.ui.adaptive.encodeDetail
 import app.yougram.core.ui.adaptive.rememberIsTwoPane
 import app.yougram.core.ui.component.LocalOpenLink
+import app.yougram.feature.miniapp.ui.LocalOpenMiniApp
+import app.yougram.feature.miniapp.ui.MiniAppHost
+import app.yougram.feature.miniapp.ui.MiniAppRequest
 import app.yougram.core.ui.component.LocalOpenUsername
 import app.yougram.core.ui.component.isTelegramUrl
 import app.yougram.core.ui.component.isWebUrl
@@ -171,6 +174,9 @@ fun YougramNavHost(container: AppContainer) {
     val inAppBrowser by container.settings.inAppBrowser.collectAsState()
     val scope = rememberCoroutineScope()
     var joinPrompt by remember { mutableStateOf<TgLinkResult.JoinInvite?>(null) }
+    // Мини-приложение (Telegram Web App), открытое поверх любого экрана.
+    var miniApp by remember { mutableStateOf<MiniAppRequest?>(null) }
+    val openMiniApp: (MiniAppRequest) -> Unit = remember { { r -> miniApp = r } }
     val linkHandler = remember(container) { TgLinkHandler(container.telegram.client) }
 
     // Ссылки t.me / tg:// разбираем через TDLib и открываем прямо в клиенте; обычные — в браузере.
@@ -186,6 +192,14 @@ fun YougramNavHost(container: AppContainer) {
                     when (val r = runCatching { linkHandler.resolve(url) }.getOrDefault(TgLinkResult.Failed)) {
                         is TgLinkResult.OpenChat -> openChat(r.chatId, r.messageId)
                         is TgLinkResult.JoinInvite -> joinPrompt = r
+                        is TgLinkResult.MiniApp -> miniApp = MiniAppRequest(
+                            chatId = r.chatId,
+                            botUserId = r.botUserId,
+                            botName = r.botName,
+                            shortName = r.shortName,
+                            startParameter = r.startParameter,
+                            fromLink = true,
+                        )
                         // Не открываем снаружи: наш же фильтр t.me вернул бы ссылку обратно в приложение.
                         is TgLinkResult.OpenUrl ->
                             if (isWebUrl(url)) navController.navigate("browser/${Uri.encode(url)}")
@@ -245,7 +259,11 @@ fun YougramNavHost(container: AppContainer) {
         }
     }
 
-    CompositionLocalProvider(LocalOpenLink provides openLink, LocalOpenUsername provides openUsername) {
+    CompositionLocalProvider(
+        LocalOpenLink provides openLink,
+        LocalOpenUsername provides openUsername,
+        LocalOpenMiniApp provides openMiniApp,
+    ) {
         val callBackdrop = rememberBackdropState()
         // Пружинное движение Expressive (spatial для сдвигов, effects для прозрачности); на слабых устройствах — прежние tween.
         val motion = MaterialTheme.motionScheme
@@ -429,6 +447,12 @@ fun YougramNavHost(container: AppContainer) {
                 }
             }
             CallOverlay(container.callManager, container.chatRepository, callBackdrop)
+            MiniAppHost(
+                request = miniApp,
+                repository = container.chatRepository,
+                openLink = openLink,
+                onClose = { miniApp = null },
+            )
         }
     }
 }

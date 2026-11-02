@@ -104,7 +104,7 @@ fun VoiceNoteRow(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
     val active = isCurrent && playing
 
     LaunchedEffect(media.fileId) {
-        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8)
+        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8, media.size)
     }
     LaunchedEffect(active) {
         while (active) {
@@ -192,7 +192,7 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
         media.previewFileId?.let { viewModel.download(it, 16) }
     }
     LaunchedEffect(media.fileId) {
-        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8)
+        if (media.size in 1..AutoDownloadLimit) viewModel.autoDownload(media.fileId, 8, media.size)
     }
     val mini = remember(media.miniThumb) {
         media.miniThumb?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
@@ -224,8 +224,7 @@ fun VideoNoteView(media: MediaItem, viewModel: ChatViewModel, full: FileState) {
                 modifier = Modifier.size(214.dp),
                 color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 4.dp,
-                amplitude = 2.dp,
-                waves = 16,
+                wavelength = 40.dp,
             )
         }
         Box(

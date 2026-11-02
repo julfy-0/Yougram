@@ -241,6 +241,7 @@ fun ProfileScreen(
                     .filter { it.fileId != pinnedTrack?.fileId }
             }
             val links = remember(state.shared) { state.shared.filter { UrlRegex.containsMatchIn(it.text) } }
+            val pluginHidden = app.yougram.plugin.rememberPluginHiddenSet()
 
             LazyColumn(
                 Modifier.fillMaxSize(),
@@ -254,7 +255,9 @@ fun ProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value, onAvatarClick = { if (state.avatars.isNotEmpty()) showAvatars = true }) } }
-                item { Appear(1, entered.value) { ActionsGroup(actions) } }
+                if (app.yougram.plugin.PluginUi.PROFILE_ACTIONS !in pluginHidden) {
+                    item { Appear(1, entered.value) { ActionsGroup(actions) } }
+                }
                 if (pinnedTrack != null) {
                     item(key = "pinned-music") {
                         Appear(1, entered.value) {
@@ -262,52 +265,65 @@ fun ProfileScreen(
                         }
                     }
                 }
-                item {
-                    Appear(2, entered.value) {
-                        InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
+                if (app.yougram.plugin.PluginUi.PROFILE_INFO !in pluginHidden) {
+                    item {
+                        Appear(2, entered.value) {
+                            InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
+                        }
                     }
                 }
-                item { Appear(3, entered.value) { TabSwitcher(tab) { tab = it } } }
-                when {
-                    state.sharedLoading && tab != ProfileTab.DELETED -> item(key = "loading") {
-                        Box(Modifier.animateItem().fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            LoadingIndicator(Modifier.size(28.dp))
-                        }
-                    }
-                    tab == ProfileTab.MEDIA -> {
-                        if (media.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        items3(media) { row ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                row.forEach { message ->
-                                    val item = message.media!!
-                                    MediaThumb(
-                                        item,
-                                        viewModel,
-                                        Modifier.weight(1f).aspectRatio(1f),
-                                        onClick = { if (item.kind == MediaKind.PHOTO) photoViewer = item else videoViewer = item },
-                                    )
-                                }
-                                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                item(key = "plugin-slot") {
+                    app.yougram.plugin.PluginSlot(
+                        app.yougram.plugin.PluginUi.PROFILE,
+                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        layout = app.yougram.plugin.PluginSlotLayout.Column,
+                    )
+                }
+                if (app.yougram.plugin.PluginUi.PROFILE_TABS !in pluginHidden) {
+                    item { Appear(3, entered.value) { TabSwitcher(tab) { tab = it } } }
+                }
+                if (app.yougram.plugin.PluginUi.PROFILE_TABS !in pluginHidden) {
+                    when {
+                        state.sharedLoading && tab != ProfileTab.DELETED -> item(key = "loading") {
+                            Box(Modifier.animateItem().fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                LoadingIndicator(Modifier.size(28.dp))
                             }
                         }
-                    }
-                    tab == ProfileTab.FILES -> {
-                        if (files.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context, viewModel) } } }
-                    }
-                    tab == ProfileTab.MUSIC -> {
-                        if (music.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        music.forEach { track ->
-                            item(key = "m${track.fileId}") { Box(Modifier.animateItem()) { MusicRow(track, viewModel) } }
+                        tab == ProfileTab.MEDIA -> {
+                            if (media.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                            items3(media) { row ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    row.forEach { message ->
+                                        val item = message.media!!
+                                        MediaThumb(
+                                            item,
+                                            viewModel,
+                                            Modifier.weight(1f).aspectRatio(1f),
+                                            onClick = { if (item.kind == MediaKind.PHOTO) photoViewer = item else videoViewer = item },
+                                        )
+                                    }
+                                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
                         }
-                    }
-                    tab == ProfileTab.LINKS -> {
-                        if (links.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        links.forEach { message -> item(key = "l${message.id}") { Box(Modifier.animateItem()) { LinkRow(message, context) } } }
-                    }
-                    else -> {
-                        if (state.deleted.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
-                        else item(key = "deleted") { Box(Modifier.animateItem()) { DeletedGroup(state.deleted) } }
+                        tab == ProfileTab.FILES -> {
+                            if (files.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                            files.forEach { message -> item(key = "f${message.id}") { Box(Modifier.animateItem()) { FileRow(message.media!!, context, viewModel) } } }
+                        }
+                        tab == ProfileTab.MUSIC -> {
+                            if (music.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                            music.forEach { track ->
+                                item(key = "m${track.fileId}") { Box(Modifier.animateItem()) { MusicRow(track, viewModel) } }
+                            }
+                        }
+                        tab == ProfileTab.LINKS -> {
+                            if (links.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                            links.forEach { message -> item(key = "l${message.id}") { Box(Modifier.animateItem()) { LinkRow(message, context) } } }
+                        }
+                        else -> {
+                            if (state.deleted.isEmpty()) item(key = "empty") { EmptyHint(Modifier.animateItem()) }
+                            else item(key = "deleted") { Box(Modifier.animateItem()) { DeletedGroup(state.deleted) } }
+                        }
                     }
                 }
             }
@@ -451,28 +467,23 @@ private fun ProfileHeader(
                 Box(
                     Modifier
                         .padding(top = 90.dp)
-                        .popIn(entered)
-                        .clip(CircleShape)
-                        .clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(4.dp),
+                        .popIn(entered),
                 ) {
                     FileAvatar(
                         title = details.title,
                         fileId = details.avatarFileId,
                         fileState = viewModel::fileState,
-                        size = 100.dp,
+                        modifier = Modifier.clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
+                        size = 108.dp,
+                        borderWidth = 4.dp,
+                        borderColor = MaterialTheme.colorScheme.surface,
                     )
                 }
             }
         } else {
             // Без баннера: аватар в «цветочном» ореоле контейнера primary.
             Box(
-                Modifier
-                    .popIn(entered)
-                    .size(132.dp)
-                    .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
+                Modifier.popIn(entered),
                 contentAlignment = Alignment.Center,
             ) {
                 // Аватар целиком заполняет «звезду», без ореола вокруг.
@@ -480,6 +491,7 @@ private fun ProfileHeader(
                     title = details.title,
                     fileId = details.avatarFileId,
                     fileState = viewModel::fileState,
+                    modifier = Modifier.clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
                     size = 132.dp,
                     shape = MaterialShapes.Cookie9Sided.toShape(),
                 )

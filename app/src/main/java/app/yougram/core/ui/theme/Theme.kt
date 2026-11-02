@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
@@ -70,15 +72,15 @@ val Accents = listOf(
  * extraSmall…extraLarge сохранены близкими к прежним значениям, чтобы экраны не «поехали»;
  * добавлены largeIncreased / extraLargeIncreased / extraExtraLarge для новых компонентов.
  */
-private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
-    largeIncreased = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(32.dp),
-    extraLargeIncreased = RoundedCornerShape(40.dp),
-    extraExtraLarge = RoundedCornerShape(48.dp),
+private fun scaledShapes(s: Float) = Shapes(
+    extraSmall = RoundedCornerShape((8 * s).dp),
+    small = RoundedCornerShape((12 * s).dp),
+    medium = RoundedCornerShape((16 * s).dp),
+    large = RoundedCornerShape((24 * s).dp),
+    largeIncreased = RoundedCornerShape((28 * s).dp),
+    extraLarge = RoundedCornerShape((32 * s).dp),
+    extraLargeIncreased = RoundedCornerShape((40 * s).dp),
+    extraExtraLarge = RoundedCornerShape((48 * s).dp),
 )
 
 /** Цвет фона экрана чата: не затемняется вместе с остальным фоном приложения. */
@@ -150,11 +152,33 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
     }
     val colorScheme = schemes.first
     val chatBackground = schemes.second
-    val typography = rememberTypography(settings.fontPath)
+    FontStore.attach(context)
+    val fontsInUse = remember(settings.googleFont, settings.roleFonts) {
+        (listOfNotNull(settings.googleFont) + settings.roleFonts.values.mapNotNull { it.googleFont })
+            .filter { it.isNotBlank() && !it.equals("Google Sans Flex", ignoreCase = true) }
+    }
+    androidx.compose.runtime.LaunchedEffect(fontsInUse) {
+        fontsInUse.forEach { FontStore.ensure(context, it) }
+    }
+    val fontRevision = FontStore.revision
+    val typography = rememberTypography(
+        settings.fontPath, settings.googleFont, settings.fontWeightShift, settings.fontItalic, settings.roleFonts,
+        settings.fontRoundness,
+    )
+    val familyCache = remember(fontRevision) { HashMap<String, FontFamily>() }
+    val roleResolver = remember(settings.roleFonts, settings.fontWeightShift, settings.fontRoundness, settings.googleFont, settings.fontPath, familyCache) {
+        val familyFor = { name: String, round: Int -> familyCache.getOrPut("$name|$round") { googleFontFamily(name, round) } }
+        val baseFont = if (settings.fontPath != null) null else settings.googleFont?.takeIf { it.isNotBlank() }
+        val resolver: (FontRole, TextStyle) -> TextStyle = { role, style ->
+            style.applyRoleFont(settings.roleFonts[role], settings.fontWeightShift, baseFont, settings.fontRoundness, familyFor)
+        }
+        resolver
+    }
+    val shapes = remember(settings.cornerScale) { scaledShapes(settings.cornerScale) }
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         motionScheme = MotionScheme.expressive(),
-        shapes = ExpressiveShapes,
+        shapes = shapes,
         typography = typography,
     ) {
         Surface(
@@ -168,18 +192,14 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
             CompositionLocalProvider(
                 LocalContentColor provides colorScheme.onBackground,
                 LocalChatBackground provides chatBackground,
+                LocalRoleFontResolver provides roleResolver,
+                LocalTextStyle provides LocalTextStyle.current.merge(TextStyle(fontFamily = typography.bodyLarge.fontFamily)),
                 androidx.compose.foundation.LocalIndication provides hapticIndication,
                 content = content,
             )
         }
     }
 }
-
-private val GoogleFontProvider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
-)
 
 val GoogleSansFlexFamily = FontFamily(
     // 1. Google Fonts Downloadable Font (Google Sans Flex / Google Sans / Roboto Flex)
@@ -203,40 +223,83 @@ val GoogleSansFlexFamily = FontFamily(
     Font(DeviceFontFamilyName("sans-serif-flex"), weight = FontWeight.Normal),
 )
 
-/** Закруглённый шрифт для заголовков в настройках: Nunito, запасной — Varela Round, затем системный rounded. */
-val RoundedTitleFamily = FontFamily(
-    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.Medium),
-    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.SemiBold),
-    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.Bold),
-    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Nunito"), fontProvider = GoogleFontProvider, weight = FontWeight.ExtraBold),
-    androidx.compose.ui.text.googlefonts.Font(googleFont = GoogleFont("Varela Round"), fontProvider = GoogleFontProvider),
-    Font(DeviceFontFamilyName("sans-serif-rounded"), weight = FontWeight.Normal),
-    Font(DeviceFontFamilyName("google-sans-rounded"), weight = FontWeight.Normal),
-)
-
-/** Типографика приложения: expressive-иерархия с основным шрифтом Google Sans Flex. */
+/** Типографика приложения: expressive-иерархия с основным шрифтом ArtegraSoft. */
 @Composable
-private fun rememberTypography(fontPath: String?): Typography = remember(fontPath) {
+private fun rememberTypography(
+    fontPath: String?,
+    googleFont: String?,
+    weightShift: Int,
+    italic: Boolean,
+    roleFonts: Map<FontRole, RoleFont>,
+    roundness: Int,
+): Typography = remember(fontPath, googleFont, weightShift, italic, roleFonts, roundness, FontStore.revision) {
     val family = fontPath?.let { path ->
         runCatching {
             val file = File(path)
             // Проверяем, что файл — настоящий шрифт: иначе Compose упадёт при первой отрисовке текста.
             android.graphics.fonts.Font.Builder(file).build()
-            FontFamily(Font(file, FontWeight.Normal))
+            if (roundness > 0) {
+                FontFamily(
+                    Font(
+                        file, FontWeight.Normal,
+                        variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
+                            androidx.compose.ui.text.font.FontVariation.Setting("ROND", roundness.toFloat()),
+                        ),
+                    ),
+                )
+            } else {
+                FontFamily(Font(file, FontWeight.Normal))
+            }
         }.getOrNull()
-    } ?: GoogleSansFlexFamily
-    expressiveTypography(family)
+    } ?: googleFont?.takeIf { it.isNotBlank() }?.let { googleFontFamily(it, roundness) }
+        ?: AppSansFamily
+    val cache = HashMap<String, FontFamily>()
+    val baseFont = if (fontPath != null) null else googleFont?.takeIf { it.isNotBlank() }
+    // Свой файл шрифта или шрифт Google Fonts уважаем: скруглённую иерархию ставим только на шрифт по умолчанию.
+    val customFont = fontPath != null || !googleFont.isNullOrBlank()
+    expressiveTypography(family, weightShift, italic)
+        .let { if (customFont) it else it.withRoundedHierarchy(weightShift) }
+        .withRoles(roleFonts, weightShift, baseFont, roundness) { name, round ->
+            cache.getOrPut("$name|$round") { googleFontFamily(name, round) }
+        }
+}
+
+/**
+ * Заголовки (display/headline/title) — скруглённые и жирные, подтекст (bodyMedium/bodySmall) — скруглённый и тонкий.
+ * Семейство — основной шрифт приложения ([AppSansFamily]).
+ */
+private fun Typography.withRoundedHierarchy(shift: Int): Typography {
+    fun TextStyle.rounded(w: Int) = copy(
+        fontFamily = AppSansFamily,
+        fontWeight = FontWeight((w + shift).coerceIn(1, 1000)),
+    )
+    return copy(
+        displayLarge = displayLarge.rounded(700), displayMedium = displayMedium.rounded(700), displaySmall = displaySmall.rounded(700),
+        headlineLarge = headlineLarge.rounded(700), headlineMedium = headlineMedium.rounded(700), headlineSmall = headlineSmall.rounded(700),
+        titleLarge = titleLarge.rounded(700), titleMedium = titleMedium.rounded(700), titleSmall = titleSmall.rounded(700),
+        displayLargeEmphasized = displayLargeEmphasized.rounded(800), displayMediumEmphasized = displayMediumEmphasized.rounded(800),
+        displaySmallEmphasized = displaySmallEmphasized.rounded(800),
+        headlineLargeEmphasized = headlineLargeEmphasized.rounded(800), headlineMediumEmphasized = headlineMediumEmphasized.rounded(800),
+        headlineSmallEmphasized = headlineSmallEmphasized.rounded(800),
+        titleLargeEmphasized = titleLargeEmphasized.rounded(800), titleMediumEmphasized = titleMediumEmphasized.rounded(800),
+        titleSmallEmphasized = titleSmallEmphasized.rounded(800),
+        bodyMedium = bodyMedium.rounded(300), bodySmall = bodySmall.rounded(300),
+    )
 }
 
 /**
  * Типографика с заметной иерархией: заголовки и title жирнее, emphasized-варианты ещё контрастнее.
  * Размеры остаются стандартными M3 (их задают токены Typography()).
  */
-private fun expressiveTypography(family: FontFamily): Typography {
+private fun expressiveTypography(family: FontFamily, weightShift: Int, italic: Boolean): Typography {
     val t = Typography()
     fun TextStyle.styled(weight: FontWeight? = null): TextStyle {
-        var r = this.copy(fontFamily = family)
-        if (weight != null) r = r.copy(fontWeight = weight)
+        val base = weight ?: this.fontWeight ?: FontWeight.Normal
+        var r = this.copy(
+            fontFamily = family,
+            fontWeight = FontWeight((base.weight + weightShift).coerceIn(1, 1000)),
+        )
+        if (italic) r = r.copy(fontStyle = FontStyle.Italic)
         return r
     }
     return t.copy(

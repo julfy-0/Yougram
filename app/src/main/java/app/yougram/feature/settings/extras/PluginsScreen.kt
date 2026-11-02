@@ -1,19 +1,37 @@
 package app.yougram.feature.settings.extras
 
 import app.yougram.core.i18n.tr
+import app.yougram.core.ui.glass.plateColor
+import app.yougram.core.settings.PlateArea
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.runtime.key
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -43,12 +61,13 @@ import app.yougram.feature.settings.component.SettingsFootnote
 import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.plugin.InstalledPlugin
 import app.yougram.plugin.NativePluginManager
+import app.yougram.plugin.SuspiciousPluginException
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Вкладка «Модули»: нативные (C++) модули — список, включение, установка из .ygplugin. */
+/** Вкладка «Плагины»: нативные (C++) плагины — список, включение, установка из .ygplugin. */
 @Composable
 fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
     val context = LocalContext.current
@@ -58,24 +77,28 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
     var confirmInstall by remember { mutableStateOf(false) }
     var settingsFor by remember { mutableStateOf<InstalledPlugin?>(null) }
 
+    var pending by remember { mutableStateOf<PendingPlugin?>(null) }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
+            val temp = File(context.cacheDir, "plugin-import-${System.nanoTime()}.ygplugin")
             val result = withContext(Dispatchers.IO) {
-                val temp = File(context.cacheDir, "plugin-import-${System.nanoTime()}.ygplugin")
-                try {
-                    runCatching {
-                        context.contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { input.copyTo(it) } }
-                            ?: error("Не удалось прочитать файл")
-                        manager.installFromZip(temp)
-                    }
-                } finally {
-                    temp.delete()
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { input.copyTo(it) } }
+                        ?: error("Не удалось прочитать файл")
+                    manager.installFromZip(temp)
                 }
             }
+            val err = result.exceptionOrNull()
+            if (err is SuspiciousPluginException) {
+                pending = PendingPlugin(temp, err.report) // файл оставляем до решения пользователя
+                return@launch
+            }
+            withContext(Dispatchers.IO) { temp.delete() }
             result
-                .onSuccess { Toast.makeText(context, tr("Модуль «{0}» установлен", it.manifest.name), Toast.LENGTH_SHORT).show() }
-                .onFailure { Toast.makeText(context, tr("Ошибка модуля: {0}", it.message), Toast.LENGTH_LONG).show() }
+                .onSuccess { Toast.makeText(context, tr("Плагин «{0}» установлен", it.manifest.name), Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(context, tr("Ошибка плагина: {0}", it.message), Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -83,8 +106,8 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         SettingGroup {
             item {
                 SettingRow(
-                    title = "Модули на C++",
-                    subtitle = tr("Нативные модули (.so) через JNI · API {0} · {1}", NativePluginManager.API_VERSION, Build.SUPPORTED_ABIS.first()),
+                    title = "Плагины на C++",
+                    subtitle = tr("Нативные плагины (.so) через JNI · API {0} · {1}", NativePluginManager.API_VERSION, Build.SUPPORTED_ABIS.first()),
                     icon = Icons.Filled.Code,
                     value = if (NativePluginManager.hostAvailable) "хост активен" else "хост недоступен",
                 )
@@ -92,30 +115,15 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         }
 
         SectionLabel("Установленные")
-        SettingGroup {
-            if (plugins.isEmpty()) {
-                item { SettingRow(title = "Пока нет модулей", subtitle = "Установите .ygplugin с библиотекой на C++") }
-            }
-            plugins.forEach { plugin ->
-                item {
-                    SettingRow(
-                        title = plugin.manifest.name,
-                        subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · API ${plugin.manifest.api} · C++",
-                        icon = Icons.Filled.Extension,
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { settingsFor = plugin }) {
-                                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки модуля"))
-                                }
-                                CheckSwitch(plugin.enabled) { manager.setEnabled(plugin.manifest.id, it) }
-                                IconButton(onClick = { pendingDelete = plugin }) {
-                                    Icon(Icons.Filled.DeleteOutline, contentDescription = tr("Удалить"))
-                                }
-                            }
-                        },
-                        below = if (plugin.hasDetails()) ({ PluginDetails(plugin) }) else null,
-                    )
-                }
+        if (plugins.isEmpty()) EmptyPluginsCard()
+        plugins.forEach { plugin ->
+            key(plugin.manifest.id) {
+                PluginCard(
+                    plugin = plugin,
+                    onToggle = { manager.setEnabled(plugin.manifest.id, it) },
+                    onSettings = { settingsFor = plugin },
+                    onDelete = { pendingDelete = plugin },
+                )
             }
         }
 
@@ -131,7 +139,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             }
             item {
                 SettingRow(
-                    title = "Перезагрузить модули",
+                    title = "Перезагрузить плагины",
                     icon = Icons.Filled.Refresh,
                     onClick = { manager.loadAll() },
                 )
@@ -139,18 +147,18 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         }
         SettingsFootnote(
             tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
-                tr("Ставьте только модули, которым доверяете."),
+                tr("Ставьте только плагины, которым доверяете."),
         )
-        SettingsFootnote("SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+        SettingsFootnote("SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
     }
 
     if (confirmInstall) {
         AlertDialog(
             onDismissRequest = { confirmInstall = false },
-            title = { Text("Установить модуль?") },
+            title = { Text("Установить плагин?") },
             text = {
                 Text(
-                    tr("Модуль — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ") +
+                    tr("Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ") +
                         tr("Устанавливайте только из источников, которым доверяете."),
                 )
             },
@@ -164,6 +172,23 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         )
     }
 
+    pending?.let { p ->
+        PluginScanDialog(
+            p,
+            onInstall = {
+                pending = null
+                scope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        runCatching { manager.installFromZip(p.file, allowSuspicious = true) }.also { p.file.delete() }
+                    }
+                    r.onSuccess { Toast.makeText(context, tr("Плагин «{0}» установлен", it.manifest.name), Toast.LENGTH_SHORT).show() }
+                        .onFailure { Toast.makeText(context, tr("Ошибка плагина: {0}", it.message), Toast.LENGTH_LONG).show() }
+                }
+            },
+            onCancel = { pending = null; p.file.delete() },
+        )
+    }
+
     settingsFor?.let { plugin ->
         PluginSettingsDialog(plugin, manager) { settingsFor = null }
     }
@@ -171,7 +196,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
     pendingDelete?.let { plugin ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Удалить модуль?") },
+            title = { Text("Удалить плагин?") },
             text = { Text(plugin.manifest.name) },
             confirmButton = {
                 TextButton(onClick = {
@@ -184,28 +209,125 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
     }
 }
 
-private fun InstalledPlugin.hasDetails() =
-    manifest.description.isNotBlank() || error != null
+/** Иконка плагина из его пакета (manifest.json -> "icon"); null, если её нет или файл некорректен. */
+@Composable
+private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.graphics.ImageBitmap? =
+    androidx.compose.runtime.remember(plugin.directory, plugin.manifest.icon) {
+        val name = plugin.manifest.icon
+        if (name.isBlank()) return@remember null
+        runCatching {
+            val dir = plugin.directory.canonicalFile
+            val f = java.io.File(dir, name).canonicalFile
+            if (!f.path.startsWith(dir.path + java.io.File.separator) || !f.isFile || f.length() > 512 * 1024) null
+            else android.graphics.BitmapFactory.decodeFile(f.path)?.asImageBitmap()
+        }.getOrNull()
+    }
+
+private val CardShape = RoundedCornerShape(28.dp)
+
+/** Карточка установленного плагина: иконка, имя, версия и автор, описание, ошибка, переключатель и действия. */
+@Composable
+private fun PluginCard(
+    plugin: InstalledPlugin,
+    onToggle: (Boolean) -> Unit,
+    onSettings: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val m = plugin.manifest
+    val icon = rememberPluginIcon(plugin)
+    // Выключенный плагин без ошибки выглядит приглушённо; переключатель и кнопки остаются яркими.
+    val dim = if (plugin.enabled || plugin.error != null) 1f else 0.6f
+    Surface(
+        onClick = onSettings,
+        shape = CardShape,
+        color = plateColor(PlateArea.Settings),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PluginCardIcon(m.name, icon, Modifier.alpha(dim))
+                Column(Modifier.weight(1f).padding(start = 14.dp, end = 8.dp).alpha(dim)) {
+                    Text(m.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "v${m.version} · ${m.author}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Box(Modifier.padding(end = 8.dp)) { CheckSwitch(plugin.enabled, onToggle) }
+            }
+            if (m.description.isNotBlank()) {
+                Text(
+                    m.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 12.dp, end = 8.dp).alpha(dim),
+                )
+            }
+            plugin.error?.let {
+                Text(
+                    tr("Ошибка: {0}", it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp, end = 8.dp),
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                PluginChip("API ${m.api}")
+                Spacer(Modifier.width(6.dp))
+                PluginChip("C++")
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки плагина"))
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Filled.DeleteOutline, contentDescription = tr("Удалить"))
+                }
+            }
+        }
+    }
+}
 
 @Composable
-private fun PluginDetails(plugin: InstalledPlugin) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (plugin.manifest.description.isNotBlank()) {
-            // В списке — только короткая строка; полное описание и разрешения — в настройках модуля.
+private fun PluginCardIcon(name: String, bitmap: ImageBitmap?, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
             Text(
-                plugin.manifest.description,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                name.take(1).uppercase(),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
-        plugin.error?.let {
+    }
+}
+
+@Composable
+private fun PluginChip(text: String) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+        Text(text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun EmptyPluginsCard() {
+    Surface(shape = CardShape, color = plateColor(PlateArea.Settings), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp)) {
+            Text("Пока нет плагинов", style = MaterialTheme.typography.titleMedium)
             Text(
-                tr("Ошибка: {0}", it),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                "Установите .ygplugin с библиотекой на C++",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

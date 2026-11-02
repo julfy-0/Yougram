@@ -2,29 +2,27 @@ package app.yougram.core.ui.glass
 
 import android.graphics.RenderEffect as PlatformRenderEffect
 import android.graphics.RuntimeShader
-import android.graphics.Shader
 import android.os.Build
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import app.yougram.core.settings.BlurType
+import kotlin.math.sqrt
 
 /**
  * Собирает [RenderEffect] нужного типа размытия. [radiusPx] — «сила» размытия в тех же единицах, что у
  * гауссова размытия (σ), поэтому при переключении типа общий вид панели остаётся сопоставимым.
  * [maxX], [maxY] — границы изображения: выборка за ними зажимается, края не темнеют.
  *
- * Не-гауссовы типы считаются AGSL-шейдерами (Android 13+); на Android 12 возвращается гауссово размытие.
+ * Kawase считается AGSL-шейдерами (Android 13+); на Android 12 возвращается гауссово размытие.
  */
 fun blurRenderEffect(type: BlurType, radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
     val gaussian = BlurEffect(radiusPx, radiusPx, TileMode.Clamp)
     if (type == BlurType.Gaussian || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return gaussian
     return runCatching {
         when (type) {
-            BlurType.Box -> box(radiusPx, maxX, maxY)
             BlurType.Kawase -> kawase(radiusPx, maxX, maxY)
-            BlurType.Bokeh -> bokeh(radiusPx, maxX, maxY)
             BlurType.Gaussian -> gaussian
         }
     }.getOrDefault(gaussian)
@@ -32,53 +30,21 @@ fun blurRenderEffect(type: BlurType, radiusPx: Float, maxX: Float, maxY: Float):
 
 // ------------------------------------------------------------------------------------------------ Шейдеры
 
-/** Box: усреднение по отрезку; два раздельных прохода (по X и по Y), оба повторены дважды, чтобы убрать «призраков» от разреженных выборок. */
-private const val BOX_AGSL = """
-uniform shader content;
-uniform float2 dir;
-uniform float2 maxXY;
-half4 main(float2 c) {
-    half4 sum = half4(0.0);
-    for (int i = -6; i <= 6; i++) {
-        sum += content.eval(clamp(c + dir * float(i), float2(0.0), maxXY));
-    }
-    return sum / 13.0;
-}
-"""
-
-/** Kawase: четыре диагональные выборки на расстоянии [off]; несколько проходов с удвоением шага. */
+/**
+ * Kawase (по urp-kawase-blur): центр + четыре диагонали на расстоянии [off] пикселей, среднее из 5 выборок.
+ * Несколько проходов подряд с растущим смещением.
+ */
 private const val KAWASE_AGSL = """
 uniform shader content;
 uniform float off;
 uniform float2 maxXY;
 half4 main(float2 c) {
-    half4 s = content.eval(clamp(c + float2( off,  off), float2(0.0), maxXY));
-    s += content.eval(clamp(c + float2(-off,  off), float2(0.0), maxXY));
-    s += content.eval(clamp(c + float2( off, -off), float2(0.0), maxXY));
-    s += content.eval(clamp(c + float2(-off, -off), float2(0.0), maxXY));
-    return s * 0.25;
-}
-"""
-
-/** Боке: выборки по спирали Фогеля внутри круга; яркие точки весят больше и дают блики. */
-private const val BOKEH_AGSL = """
-uniform shader content;
-uniform float radius;
-uniform float2 maxXY;
-half4 main(float2 c) {
-    half4 sum = half4(0.0);
-    float total = 0.0;
-    for (int i = 0; i < 24; i++) {
-        float t = (float(i) + 0.5) / 24.0;
-        float r = sqrt(t) * radius;
-        float a = float(i) * 2.39996323;
-        half4 s = content.eval(clamp(c + r * float2(cos(a), sin(a)), float2(0.0), maxXY));
-        float lum = dot(s.rgb, half3(0.299, 0.587, 0.114));
-        float w = 1.0 + lum * lum * 3.0;
-        sum += s * w;
-        total += w;
-    }
-    return sum / total;
+    half4 col = content.eval(clamp(c, float2(0.0), maxXY));
+    col += content.eval(clamp(c + float2( off,  off), float2(0.0), maxXY));
+    col += content.eval(clamp(c + float2( off, -off), float2(0.0), maxXY));
+    col += content.eval(clamp(c + float2(-off,  off), float2(0.0), maxXY));
+    col += content.eval(clamp(c + float2(-off, -off), float2(0.0), maxXY));
+    return col / 5.0;
 }
 """
 
@@ -93,30 +59,30 @@ private fun pass(agsl: String, maxX: Float, maxY: Float, setup: RuntimeShader.()
 private fun chain(prev: PlatformRenderEffect?, next: PlatformRenderEffect): PlatformRenderEffect =
     if (prev == null) next else PlatformRenderEffect.createChainEffect(next, prev)
 
-private fun box(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    val half = radiusPx * 1.732f / 1.414f
-    val step = half / 6f
-    var e: PlatformRenderEffect? = null
-    repeat(2) {
-        e = chain(e, pass(BOX_AGSL, maxX, maxY) { setFloatUniform("dir", step, 0f) })
-        e = chain(e, pass(BOX_AGSL, maxX, maxY) { setFloatUniform("dir", 0f, step) })
+private const val KAWASE_MIN_PASSES = 2
+private const val KAWASE_MAX_PASSES = 15
+
+/** Смещения проходов как в KawaseBlur.cs: 1.5, затем 0.5 + i, последний — 0.5 + passes - 1. */
+private fun kawaseOffsets(passes: Int): List<Float> = buildList {
+    add(1.5f)
+    for (i in 1 until passes - 1) add(0.5f + i)
+    add(0.5f + passes - 1f)
+}
+
+/** Подбирает число проходов так, чтобы σ получившегося размытия была не меньше [radiusPx]. */
+private fun kawasePasses(radiusPx: Float): Int {
+    for (n in KAWASE_MIN_PASSES..KAWASE_MAX_PASSES) {
+        // Дисперсия по оси: диагональные выборки (4 из 5) дают off² каждая.
+        val variance = kawaseOffsets(n).sumOf { (it * it).toDouble() } * 0.8
+        if (sqrt(variance) >= radiusPx) return n
     }
-    return e!!.asComposeRenderEffect()
+    return KAWASE_MAX_PASSES
 }
 
 private fun kawase(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    val s = radiusPx / 18.47f
     var e: PlatformRenderEffect? = null
-    var off = s
-    repeat(4) {
-        val o = off
+    for (o in kawaseOffsets(kawasePasses(radiusPx))) {
         e = chain(e, pass(KAWASE_AGSL, maxX, maxY) { setFloatUniform("off", o) })
-        off *= 2f
     }
     return e!!.asComposeRenderEffect()
-}
-
-private fun bokeh(radiusPx: Float, maxX: Float, maxY: Float): RenderEffect {
-    val r = radiusPx * 1.7f
-    return pass(BOKEH_AGSL, maxX, maxY) { setFloatUniform("radius", r) }.asComposeRenderEffect()
 }

@@ -4,19 +4,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,25 +22,16 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toBitmap
-import app.yougram.R
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -98,13 +84,9 @@ fun LaunchSplash(onFinished: () -> Unit) {
     if (HalloweenEvent.isActive()) HalloweenSplash(onFinished) else ClassicSplash(onFinished)
 }
 
-/** Обычная заставка: иконка приложения и морфящаяся фигура (M3 ContainedLoadingIndicator), показывается 2 секунды. */
+/** Обычная заставка: морфящаяся фигура (M3 ContainedLoadingIndicator) по центру, показывается 2 секунды. */
 @Composable
 private fun ClassicSplash(onFinished: () -> Unit) {
-    val context = LocalContext.current
-    val icon = remember {
-        ContextCompat.getDrawable(context, R.mipmap.ic_launcher)?.toBitmap(512, 512)?.asImageBitmap()
-    }
     val progress = remember { Animatable(0f) }
     val alpha = remember { Animatable(1f) }
 
@@ -123,25 +105,15 @@ private fun ClassicSplash(onFinished: () -> Unit) {
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (icon != null) {
-                Image(
-                    bitmap = icon,
-                    contentDescription = "Yougram",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(144.dp).clip(CircleShape),
-                )
-            }
-            // Официальный M3 Expressive индикатор: морфящаяся фигура в круглом контейнере.
-            ContainedLoadingIndicator(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                indicatorColor = MaterialTheme.colorScheme.primary,
-            )
-        }
+        // Официальный M3 Expressive индикатор: морфящаяся фигура в круглом контейнере, по центру экрана.
+        ContainedLoadingIndicator(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            indicatorColor = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
-/** Заставка в тематике Хэллоуина: иконка-бейдж, падающие тыквы и паутинки, волнистая полоска прогресса. */
+/** Заставка в тематике Хэллоуина: падающие тыквы и паутинки и индикатор загрузки по центру. */
 @Composable
 private fun HalloweenSplash(onFinished: () -> Unit) {
     val progress = remember { Animatable(0f) }
@@ -202,18 +174,10 @@ private fun HalloweenSplash(onFinished: () -> Unit) {
             }
         }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Image(
-                painter = painterResource(R.drawable.ic_badge_halloween),
-                contentDescription = "Yougram",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(144.dp).clip(CircleShape),
-            )
-            ContainedLoadingIndicator(
-                containerColor = HalloweenOrange.copy(alpha = 0.22f),
-                indicatorColor = HalloweenOrange,
-            )
-        }
+        ContainedLoadingIndicator(
+            containerColor = HalloweenOrange.copy(alpha = 0.22f),
+            indicatorColor = HalloweenOrange,
+        )
     }
 }
 

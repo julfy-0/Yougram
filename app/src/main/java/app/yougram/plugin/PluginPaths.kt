@@ -4,7 +4,7 @@ import app.yougram.core.i18n.tr
 import android.content.Context
 import java.io.File
 
-/** Где модуль хранит свои данные. Всё лежит в приватных каталогах приложения. */
+/** Где плагин хранит свои данные. Всё лежит в приватных каталогах приложения. */
 object PluginPaths {
     private val UNSAFE = Regex("[^A-Za-z0-9._-]")
 
@@ -17,10 +17,10 @@ object PluginPaths {
     fun dataDir(context: Context, id: String): File =
         File(context.filesDir, "plugin_data/" + safe(id)).apply { mkdirs() }
 
-    /** Файл по пути из модуля; допускается только внутри каталога данных этого модуля. */
+    /** Файл по пути из плагина; допускается только внутри каталога данных этого плагина. */
     fun inside(dir: File, path: String): File {
         val file = File(path).let { if (it.isAbsolute) it else File(dir, path) }
-        require(file.canonicalPath.startsWith(dir.canonicalPath + File.separator)) { tr("Путь вне каталога модуля") }
+        require(file.canonicalPath.startsWith(dir.canonicalPath + File.separator)) { tr("Путь вне каталога плагина") }
         require(file.isFile) { tr("Файл не найден") }
         return file
     }

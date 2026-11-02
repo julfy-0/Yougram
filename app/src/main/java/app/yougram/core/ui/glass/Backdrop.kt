@@ -84,12 +84,24 @@ fun Modifier.glass(
     state: BackdropState,
     settings: GlassSettings,
     shape: Shape,
-    tint: Color = MaterialTheme.colorScheme.surface,
+    tint: Color = Color.Unspecified,
 ): Modifier {
+    // Панели на всю ширину (верхняя панель, навбар, поле ввода) по умолчанию на пару тонов светлее поверхности.
+    val surface = MaterialTheme.colorScheme.surface
+    val tint = when {
+        tint != Color.Unspecified -> tint
+        shape == androidx.compose.ui.graphics.RectangleShape -> androidx.compose.ui.graphics.lerp(surface, Color.White, BAR_LIGHTEN)
+        else -> surface
+    }
     val density = LocalDensity.current
     // На слабом железе размытие не рисуем вовсе: только подкраска (чуть плотнее, чтобы текст читался).
     val lowTier = rememberDeviceTier() == DeviceTier.Low
     var myOffset by remember { mutableStateOf(Offset.Zero) }
+    // Тип размытия берётся из общих настроек: панели с жёстко заданными настройками
+    // (плеер, просмотр фото, звонок, вход) тоже используют выбранный пользователем алгоритм.
+    val blurType = LocalGlass.current.blurType
+    // Размытие 0 — сплошная панель.
+    val blurOff = settings.blurRadius <= 0.5f
 
     val metrics = LocalContext.current.resources.displayMetrics
     SideEffect {
@@ -97,7 +109,7 @@ fun Modifier.glass(
         val enabled = !lowTier && radiusPx > 0.5f
         val smallW = ceil(metrics.widthPixels / BLUR_DOWNSCALE).toInt()
         val smallH = ceil(metrics.heightPixels / BLUR_DOWNSCALE).toInt()
-        val key = if (enabled) BlurKey(settings.blurType, radiusPx, smallW, smallH) else null
+        val key = if (enabled) BlurKey(blurType, radiusPx, smallW, smallH) else null
         if (key != state.appliedKey) {
             state.appliedKey = key
             state.small.renderEffect =
@@ -110,7 +122,7 @@ fun Modifier.glass(
         .clip(shape)
         .drawBehind {
             // При почти сплошной подкраске размытая копия всё равно не видна — не тратим на неё GPU.
-            if (!lowTier && settings.opacity < OPAQUE_THRESHOLD) {
+            if (!lowTier && !blurOff && settings.opacity < OPAQUE_THRESHOLD) {
                 val layer = state.small
                 // Слой могли ещё не записать (первый кадр после входа на экран) или уже освободить:
                 // рисование такого слоя может уронить приложение, поэтому пропускаем.
@@ -123,7 +135,13 @@ fun Modifier.glass(
                     }
                 }
             }
-            drawRect(tint.copy(alpha = if (lowTier) maxOf(settings.opacity, LOW_TIER_MIN_ALPHA) else settings.opacity))
+            // Блюр выключен — панель сплошная, как в оригинальном MD3E (прозрачность без размытия нечитаема).
+            val alpha = when {
+                blurOff -> 1f
+                lowTier -> maxOf(settings.opacity, LOW_TIER_MIN_ALPHA)
+                else -> settings.opacity
+            }
+            drawRect(tint.copy(alpha = alpha))
         }
 }
 
@@ -131,5 +149,7 @@ private data class BlurKey(val type: app.yougram.core.settings.BlurType, val rad
 
 /** Во сколько раз уменьшаем копию экрана перед размытием. */
 private const val BLUR_DOWNSCALE = 4f
+/** Насколько светлее поверхности панели на всю ширину (0 — как поверхность, 1 — белый). */
+private const val BAR_LIGHTEN = 0.10f
 private const val OPAQUE_THRESHOLD = 0.98f
 private const val LOW_TIER_MIN_ALPHA = 0.85f

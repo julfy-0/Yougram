@@ -26,6 +26,7 @@ import app.yougram.core.settings.SettingsRepository
 import app.yougram.core.ui.wallpaper.WallpaperContent
 import app.yougram.feature.settings.SettingsDetailsViewModel
 import app.yougram.feature.settings.appearance.BannerScreen
+import app.yougram.feature.settings.appearance.FontsSection
 import app.yougram.feature.settings.appearance.ThemePresetsScreen
 import app.yougram.feature.settings.SettingsPage
 import app.yougram.feature.settings.SettingsScreen
@@ -34,7 +35,7 @@ import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.general.ChatSettingsScreen
 import app.yougram.feature.settings.general.FoldersScreen
 
-private val AppearanceTabs = listOf("Тема", "Панели", "Сообщения", "Список чатов", "Прочее", "Обои", "Баннер и значок", "Папки", "Темы")
+private val AppearanceTabs = listOf("Тема", "Шрифты", "Панели", "Сообщения", "Список чатов", "Прочее", "Обои", "Баннер и значок", "Папки", "Темы")
 
 /** Страница «Внешний вид и чаты»: настройки разложены по вкладкам-чипам вместо одной длинной ленты. */
 @Composable
@@ -52,7 +53,18 @@ fun AppearanceChatsScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AppearanceTabs.forEachIndexed { i, title ->
-                FilterChip(selected = tab == i, onClick = { tab = i }, label = { Text(title) })
+                FilterChip(
+                    selected = tab == i,
+                    onClick = { tab = i },
+                    label = {
+                        Text(
+                            title,
+                            fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(app.yougram.core.i18n.tr(title)),
+                            fontWeight = if (tab == i) androidx.compose.ui.text.font.FontWeight.ExtraBold
+                            else androidx.compose.ui.text.font.FontWeight.Medium,
+                        )
+                    },
+                )
             }
         }
         CompositionLocalProvider(LocalEmbeddedPage provides true) {
@@ -61,7 +73,8 @@ fun AppearanceChatsScreen(
                     SettingsScreen(settings, plates, PaddingValues(), part = 0)
                     ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 0) // масштаб интерфейса
                 }
-                1 -> {
+                1 -> FontsSection(settings)
+                2 -> {
                     SettingsScreen(settings, plates, PaddingValues(), part = 1)
                     SectionLabel("Главная страница настроек")
                     SettingGroup {
@@ -75,12 +88,12 @@ fun AppearanceChatsScreen(
                         }
                     }
                 }
-                2 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 2)
-                3 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 3)
-                4 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 4)
-                5 -> WallpaperContent()
-                6 -> BannerScreen(settings, PaddingValues())
-                7 -> FoldersScreen(details, PaddingValues())
+                3 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 2)
+                4 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 3)
+                5 -> ChatSettingsScreen(settings, PaddingValues(), onNavigate, part = 4)
+                6 -> WallpaperContent()
+                7 -> BannerScreen(settings, PaddingValues())
+                8 -> FoldersScreen(details, PaddingValues())
                 else -> ThemePresetsScreen(settings, plates, PaddingValues())
             }
         }

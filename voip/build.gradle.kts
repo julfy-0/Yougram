@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "app.yougram.cpp"
+    namespace = "app.yougram.voip"
     compileSdk = 37
 
     defaultConfig {

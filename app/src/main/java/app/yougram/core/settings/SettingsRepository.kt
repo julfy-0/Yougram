@@ -16,9 +16,7 @@ import org.json.JSONObject
  */
 enum class BlurType(val key: String, val title: String, val hint: String) {
     Gaussian("gaussian", "Гаусс", "Мягкое естественное размытие, системная реализация"),
-    Box("box", "Box", "Блочное: усреднение по квадрату, самое простое и лёгкое"),
-    Kawase("kawase", "Kawase", "Несколько быстрых проходов с растущим шагом, хорош для мобильных GPU"),
-    Bokeh("bokeh", "Боке", "Круглые блики, как у объектива; самое тяжёлое");
+    Kawase("kawase", "Kawase", "Несколько быстрых проходов по 5 выборкам с растущим смещением, хорош для мобильных GPU");
 
     companion object {
         /** Тип по умолчанию. */
@@ -58,6 +56,18 @@ data class ThemeSettings(
     val fontPath: String? = null,
     /** Имя файла шрифта для показа в настройках. */
     val fontName: String? = null,
+    /** Название шрифта из Google Fonts; null — не выбран. Исключает [fontPath]. */
+    val googleFont: String? = null,
+    /** Сдвиг жирности шрифта относительно стандартной (−200…+200). */
+    val fontWeightShift: Int = 0,
+    /** Курсив для всего текста. */
+    val fontItalic: Boolean = false,
+    /** Множитель скругления углов интерфейса (0…1.5), 1 — как раньше. */
+    val cornerScale: Float = 1f,
+    /** Скругление шрифта 0…100 (ось ROND у вариативных шрифтов, например Google Sans Flex). */
+    val fontRoundness: Int = 0,
+    /** Отдельные шрифты элементов экрана; отсутствующий ключ — как у всего приложения. */
+    val roleFonts: Map<app.yougram.core.ui.theme.FontRole, app.yougram.core.ui.theme.RoleFont> = emptyMap(),
 )
 
 /** Локальные настройки уведомлений (применятся, когда появятся push-уведомления). */
@@ -324,6 +334,12 @@ class SettingsRepository(private val context: Context) {
             customAccent = prefs.getInt(KEY_CUSTOM_ACCENT, 0),
             fontPath = prefs.getString(KEY_FONT_PATH, null)?.takeIf { java.io.File(it).exists() },
             fontName = prefs.getString(KEY_FONT_NAME, null),
+            googleFont = prefs.getString(KEY_GOOGLE_FONT, null)?.takeIf { it.isNotBlank() },
+            fontWeightShift = prefs.getInt(KEY_FONT_WEIGHT_SHIFT, 0),
+            fontItalic = prefs.getBoolean(KEY_FONT_ITALIC, false),
+            cornerScale = prefs.getFloat(KEY_CORNER_SCALE, 1f),
+            fontRoundness = prefs.getInt(KEY_FONT_ROUNDNESS, 0),
+            roleFonts = parseRoleFonts(prefs.getString(KEY_ROLE_FONTS, null)),
         )
     )
     val theme: StateFlow<ThemeSettings> = _theme.asStateFlow()
@@ -353,8 +369,97 @@ class SettingsRepository(private val context: Context) {
 
     /** Свой шрифт для всего приложения; [path] = null возвращает системный. */
     fun setCustomFont(path: String?, name: String?) {
-        _theme.update { it.copy(fontPath = path, fontName = if (path == null) null else name) }
-        prefs.edit().putString(KEY_FONT_PATH, path).putString(KEY_FONT_NAME, if (path == null) null else name).apply()
+        _theme.update {
+            it.copy(
+                fontPath = path,
+                fontName = if (path == null) null else name,
+                googleFont = if (path != null) null else it.googleFont,
+            )
+        }
+        val editor = prefs.edit()
+            .putString(KEY_FONT_PATH, path)
+            .putString(KEY_FONT_NAME, if (path == null) null else name)
+        if (path != null) editor.remove(KEY_GOOGLE_FONT)
+        editor.apply()
+    }
+
+    /** Шрифт из Google Fonts для всего приложения; [name] = null снимает его. Выбор заменяет шрифт из файла. */
+    fun setGoogleFont(name: String?) {
+        val value = name?.trim()?.takeIf { it.isNotEmpty() }
+        _theme.update {
+            if (value == null) it.copy(googleFont = null)
+            else it.copy(googleFont = value, fontPath = null, fontName = null)
+        }
+        val editor = prefs.edit()
+        if (value == null) {
+            editor.remove(KEY_GOOGLE_FONT)
+        } else {
+            editor.putString(KEY_GOOGLE_FONT, value).remove(KEY_FONT_PATH).remove(KEY_FONT_NAME)
+        }
+        editor.apply()
+    }
+
+    /** Шрифт отдельного элемента экрана; пустой [RoleFont] возвращает «как у приложения». */
+    fun setRoleFont(role: app.yougram.core.ui.theme.FontRole, font: app.yougram.core.ui.theme.RoleFont) {
+        _theme.update {
+            val next = it.roleFonts.toMutableMap()
+            if (font.isDefault) next.remove(role) else next[role] = font
+            it.copy(roleFonts = next)
+        }
+        prefs.edit().putString(KEY_ROLE_FONTS, serializeRoleFonts(_theme.value.roleFonts)).apply()
+    }
+
+    private fun serializeRoleFonts(map: Map<app.yougram.core.ui.theme.FontRole, app.yougram.core.ui.theme.RoleFont>): String {
+        val root = org.json.JSONObject()
+        map.forEach { (role, f) ->
+            root.put(role.key, org.json.JSONObject().apply {
+                f.googleFont?.let { put("font", it) }
+                f.weightShift?.let { put("weight", it) }
+                f.italic?.let { put("italic", it) }
+                f.roundness?.let { put("round", it) }
+            })
+        }
+        return root.toString()
+    }
+
+    private fun parseRoleFonts(raw: String?): Map<app.yougram.core.ui.theme.FontRole, app.yougram.core.ui.theme.RoleFont> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val root = org.json.JSONObject(raw)
+            app.yougram.core.ui.theme.FontRole.entries.mapNotNull { role ->
+                val o = root.optJSONObject(role.key) ?: return@mapNotNull null
+                val f = app.yougram.core.ui.theme.RoleFont(
+                    googleFont = o.optString("font").takeIf { it.isNotBlank() },
+                    weightShift = if (o.has("weight")) o.optInt("weight") else null,
+                    italic = if (o.has("italic")) o.optBoolean("italic") else null,
+                    roundness = if (o.has("round")) o.optInt("round") else null,
+                )
+                if (f.isDefault) null else role to f
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setFontWeightShift(shift: Int) {
+        val v = shift.coerceIn(-200, 200)
+        _theme.update { it.copy(fontWeightShift = v) }
+        prefs.edit().putInt(KEY_FONT_WEIGHT_SHIFT, v).apply()
+    }
+
+    fun setFontRoundness(value: Int) {
+        val v = value.coerceIn(0, 100)
+        _theme.update { it.copy(fontRoundness = v) }
+        prefs.edit().putInt(KEY_FONT_ROUNDNESS, v).apply()
+    }
+
+    fun setFontItalic(value: Boolean) {
+        _theme.update { it.copy(fontItalic = value) }
+        prefs.edit().putBoolean(KEY_FONT_ITALIC, value).apply()
+    }
+
+    fun setCornerScale(scale: Float) {
+        val v = scale.coerceIn(0f, 1.5f)
+        _theme.update { it.copy(cornerScale = v) }
+        prefs.edit().putFloat(KEY_CORNER_SCALE, v).apply()
     }
 
     /** Раскладка вкладок главного экрана настроек (JSON, см. HomeLayout); null — по умолчанию. */
@@ -922,6 +1027,12 @@ class SettingsRepository(private val context: Context) {
         const val KEY_CUSTOM_ACCENT = "theme_custom_accent"
         const val KEY_FONT_PATH = "theme_font_path"
         const val KEY_FONT_NAME = "theme_font_name"
+        const val KEY_GOOGLE_FONT = "theme_google_font"
+        const val KEY_FONT_WEIGHT_SHIFT = "theme_font_weight_shift"
+        const val KEY_FONT_ITALIC = "theme_font_italic"
+        const val KEY_CORNER_SCALE = "theme_corner_scale"
+        const val KEY_FONT_ROUNDNESS = "theme_font_roundness"
+        const val KEY_ROLE_FONTS = "theme_role_fonts"
         const val KEY_POWER = "power_saving"
         const val KEY_ENHANCED_UI = "enhanced_ui"
         const val KEY_CHAT_GUARD = "chat_guard"

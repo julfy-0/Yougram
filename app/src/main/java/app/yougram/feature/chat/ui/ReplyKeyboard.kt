@@ -104,8 +104,8 @@ private fun ReplyKeyCell(
     Surface(
         modifier = modifier.heightIn(min = 52.dp),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.75f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
         interactionSource = interaction,
         onClick = onClick,
     ) {

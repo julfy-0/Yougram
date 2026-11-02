@@ -1,39 +1,49 @@
 package app.yougram.feature.settings.appearance
 
-import app.yougram.core.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
-import app.yougram.core.ui.DeviceTier
-import app.yougram.core.ui.rememberDeviceTier
+import app.yougram.core.i18n.Text
+import app.yougram.core.i18n.tr
+import app.yougram.core.settings.GlassSettings
+import app.yougram.core.ui.glass.LocalGlass
+import app.yougram.core.ui.glass.backdropSource
+import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.rememberBackdropState
 import kotlin.math.roundToInt
 
 /**
- * Предпросмотр панели: цветные фигуры, нижняя половина которых показана «через стекло» с выбранным радиусом
- * размытия и плотностью. Показывает размытие по Гауссу; на слабых устройствах размытие в предпросмотре отключено.
+ * Предпросмотр панели: рисуется тем же [glass], что и настоящие панели, поэтому тип размытия
+ * (Гаусс / Kawase), его радиус и плотность выглядят ровно так же, как в приложении.
  */
 @Composable
 fun GlassPreview(blurRadius: Float, opacity: Float, modifier: Modifier = Modifier) {
-    val low = rememberDeviceTier() == DeviceTier.Low
     val scheme = MaterialTheme.colorScheme
+    val user = LocalGlass.current
+    val backdrop = rememberBackdropState()
+    val panel = remember(blurRadius, opacity, user.blurType) {
+        GlassSettings(
+            blurRadius = blurRadius,
+            opacity = opacity,
+            blurType = user.blurType,
+        )
+    }
     Box(
         modifier
             .fillMaxWidth()
@@ -45,21 +55,14 @@ fun GlassPreview(blurRadius: Float, opacity: Float, modifier: Modifier = Modifie
                     tr("Предпросмотр панели: размытие {0}, плотность {1} процентов", blurRadius.roundToInt(), (opacity * 100).roundToInt())
             },
     ) {
-        PreviewBackdrop(Modifier.matchParentSize())
-        if (!low && blurRadius > 0f) {
-            PreviewBackdrop(
-                Modifier
-                    .matchParentSize()
-                    .drawWithContent { clipRect(top = size.height * 0.5f) { this@drawWithContent.drawContent() } }
-                    .blur(blurRadius.dp),
-            )
-        }
+        PreviewBackdrop(Modifier.matchParentSize().backdropSource(backdrop))
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
+                .padding(12.dp)
                 .fillMaxWidth()
-                .fillMaxHeight(0.5f)
-                .background(scheme.surface.copy(alpha = opacity.coerceIn(0f, 1f))),
+                .height(64.dp)
+                .glass(backdrop, panel, RoundedCornerShape(24.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text("Так выглядит панель", style = MaterialTheme.typography.labelLargeEmphasized, color = scheme.onSurface)

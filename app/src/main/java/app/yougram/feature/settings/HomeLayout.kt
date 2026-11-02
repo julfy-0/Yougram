@@ -9,7 +9,7 @@ data class HomeSection(val title: String, val entries: List<String>)
 /** Раскладка вкладок главного экрана настроек: хранение в JSON и операции редактирования. */
 object HomeLayout {
     val Default = listOf(
-        HomeSection("Yougram", listOf("appearance", "client", "plugins")),
+        HomeSection("Yougram", listOf("appearance", "client")),
         HomeSection("Аккаунт и защита", listOf("account", "security", "devices")),
         HomeSection("Чаты", listOf("create", "archive", "notifications")),
         HomeSection("Система", listOf("system")),

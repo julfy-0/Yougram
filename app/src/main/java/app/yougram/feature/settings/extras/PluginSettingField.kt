@@ -20,7 +20,7 @@ import app.yougram.feature.settings.component.CheckSwitch
 import app.yougram.plugin.PluginSetting
 import app.yougram.plugin.PluginSettingType
 
-/** Одно поле настройки модуля; тип поля берётся из схемы manifest.json. Значение — в строковом виде, как его хранит PluginSettingsStore. */
+/** Одно поле настройки плагина; тип поля берётся из схемы manifest.json. Значение — в строковом виде, как его хранит PluginSettingsStore. */
 @Composable
 fun PluginSettingField(setting: PluginSetting, value: String, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -28,12 +28,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
+import app.yougram.core.ui.component.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import app.yougram.core.ui.component.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import app.yougram.core.i18n.Text
@@ -90,7 +92,7 @@ fun WallpaperContent() {
     val store = remember { WallpaperStore.get(context) }
     val config by store.config.collectAsState()
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableIntStateOf(if (config.kind == WallpaperKind.Pattern) 1 else if (config.kind == WallpaperKind.Photo) 2 else 0) }
+    var tab by remember { mutableIntStateOf(if (config.kind == WallpaperKind.Pattern) 1 else if (config.kind == WallpaperKind.Photo) 2 else if (config.presetId == CustomPresetId) 3 else 0) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
@@ -103,7 +105,7 @@ fun WallpaperContent() {
         Preview(config)
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Цвета", "Узоры", "Фото").forEachIndexed { i, title ->
+            listOf("Цвета", "Узоры", "Фото", "Свой").forEachIndexed { i, title ->
                 FilterChip(selected = tab == i, onClick = { tab = i }, label = { Text(title) })
             }
         }
@@ -111,6 +113,7 @@ fun WallpaperContent() {
         when (tab) {
             0 -> PresetsTab(config, store)
             1 -> PatternsTab(config, store)
+            3 -> CustomTab(config, store)
             else -> PhotoTab(config, store, onPick = {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             })
@@ -182,7 +185,7 @@ private fun PatternsTab(config: WallpaperConfig, store: WallpaperStore) {
     Text("Подложка", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(8.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        WallpaperPresets.forEach { p ->
+        (listOf(config.resolveCustomPreset()) + WallpaperPresets).forEach { p ->
             val selected = config.presetId == p.id
             Box(
                 Modifier
@@ -214,6 +217,9 @@ private fun PatternsTab(config: WallpaperConfig, store: WallpaperStore) {
                             presetId = config.presetId,
                             pattern = pattern,
                             patternIntensity = config.patternIntensity.coerceAtLeast(0.14f),
+                            customColors = config.customColors,
+                            gradientType = config.gradientType,
+                            gradientAngle = config.gradientAngle,
                         ),
                         Modifier.fillMaxSize(),
                         patternScale = 0.6f,
@@ -311,4 +317,82 @@ fun WallpaperSettingsRow(modifier: Modifier = Modifier) {
         )
     }
     if (open) WallpaperDialog(onDismiss = { open = false })
+}
+
+private fun WallpaperConfig.resolveCustomPreset(): WallpaperPreset =
+    WallpaperPreset(CustomPresetId, "Свой", customColors.map { Color(it) }.ifEmpty { listOf(Color.Black) })
+
+/** Редактор своего фона: до 5 цветовых точек (HSV-ползунки), тип градиента и угол. */
+@Composable
+private fun CustomTab(config: WallpaperConfig, store: WallpaperStore) {
+    var selected by remember { mutableIntStateOf(0) }
+    val colors = config.customColors
+    val index = selected.coerceIn(0, colors.lastIndex)
+    // Любая правка включает «свой» фон; узор, если он выбран, остаётся.
+    fun apply(transform: (WallpaperConfig) -> WallpaperConfig) = store.update {
+        transform(it).copy(
+            kind = if (it.kind == WallpaperKind.Pattern) WallpaperKind.Pattern else WallpaperKind.Preset,
+            presetId = CustomPresetId,
+        )
+    }
+
+    Text("Цвета (до 5)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        colors.forEachIndexed { i, c ->
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(c))
+                    .border(
+                        BorderStroke(if (i == index) 3.dp else 1.dp, if (i == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                        CircleShape,
+                    )
+                    .clickable { selected = i },
+            )
+        }
+        if (colors.size < 5) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
+                    apply { it.copy(customColors = it.customColors + it.customColors.last()) }
+                    selected = colors.size
+                },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Add, contentDescription = tr("Добавить цвет"), modifier = Modifier.size(20.dp)) }
+        }
+        if (colors.size > 1) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
+                    apply { it.copy(customColors = it.customColors.filterIndexed { i, _ -> i != index }) }
+                    selected = 0
+                },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Close, contentDescription = tr("Удалить цвет"), modifier = Modifier.size(20.dp)) }
+        }
+    }
+
+    val hsv = remember(colors[index]) {
+        FloatArray(3).also { android.graphics.Color.colorToHSV(colors[index], it) }
+    }
+    fun setHsv(h: Float = hsv[0], sat: Float = hsv[1], v: Float = hsv[2]) {
+        val argb = android.graphics.Color.HSVToColor(floatArrayOf(h.coerceIn(0f, 360f), sat.coerceIn(0f, 1f), v.coerceIn(0f, 1f)))
+        apply { it.copy(customColors = it.customColors.toMutableList().also { l -> l[index] = argb }) }
+    }
+    LabeledSlider("Оттенок", hsv[0], 0f..360f) { setHsv(h = it) }
+    LabeledSlider("Насыщенность", hsv[1], 0f..1f) { setHsv(sat = it) }
+    LabeledSlider("Яркость", hsv[2], 0f..1f) { setHsv(v = it) }
+
+    if (colors.size > 1) {
+        Spacer(Modifier.height(8.dp))
+        Text("Градиент", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GradientType.entries.forEach { t ->
+                FilterChip(selected = config.gradientType == t, onClick = { apply { it.copy(gradientType = t) } }, label = { Text(t.title) })
+            }
+        }
+        if (config.gradientType != GradientType.Radial) {
+            LabeledSlider("Угол", config.gradientAngle, 0f..360f) { v -> apply { it.copy(gradientAngle = v) } }
+        }
+    }
 }

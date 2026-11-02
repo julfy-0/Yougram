@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Yougram" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Yougram" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">@font/artegrasoft_bold</item>
+    </style>
 </resources>

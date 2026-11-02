@@ -1,0 +1,77 @@
+--- /tmp/ChatScreen.orig.kt	2026-10-29 17:21:50.738020916 +0000
++++ ChatScreen.kt	2026-10-29 17:24:40.063867105 +0000
+@@ -1304,16 +1304,22 @@
+                             },
+                         verticalAlignment = Alignment.Bottom,
+                     ) {
+-                        // Поле ввода-«таблетка».
+-                        val pillShape = RoundedCornerShape(28.dp)
++                        // Поле ввода и кнопка справа — связанная группа (M3 Expressive connected button group):
++                        // внешние углы крупные, внутренние (там, где элементы стыкуются) маленькие, зазор 2dp.
++                        val groupOuter = 28.dp
++                        val groupInner = 4.dp
++                        val pillShape = RoundedCornerShape(
++                            topStart = groupOuter, bottomStart = groupOuter,
++                            topEnd = groupInner, bottomEnd = groupInner,
++                        )
+                         Surface(
+                             modifier = Modifier
+                                 .weight(1f)
+                                 .heightIn(min = 56.dp),
+                             shape = pillShape,
+                             // M3 Expressive: плоское поле-таблетка surfaceContainerHigh на размытой панели.
+-                            color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF1B2130)
+-                            else MaterialTheme.colorScheme.surfaceContainerHigh,
++                            // Чёрное поле ввода: 25% непрозрачности (75% прозрачности), alpha = 0.25.
++                            color = Color.Black.copy(alpha = 0.25f),
+                             border = null,
+                         ) {
+                             Row(
+@@ -1428,7 +1434,7 @@
+                                                 Text(
+                                                     "Сообщение",
+                                                     style = MaterialTheme.typography.bodyLarge,
+-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                                    color = Color.White.copy(alpha = 0.6f),
+                                                 )
+                                                 if (state.paidMessageStars > 0) {
+                                                     // Сообщения в этом чате платные: показываем цену одного сообщения.
+@@ -1456,7 +1462,7 @@
+                                                 },
+                                             ),
+                                             textStyle = MaterialTheme.typography.bodyLarge.copy(
+-                                                color = MaterialTheme.colorScheme.onSurface,
++                                                color = Color.White,
+                                             ),
+                                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                         )
+@@ -1477,14 +1483,14 @@
+                                 }
+                             }
+                         }
+-                        Spacer(Modifier.width(8.dp))
+-                        // Круглая кнопка: отправка (есть текст) / микрофон / камера для кружка.
++                        Spacer(Modifier.width(2.dp))
++                        // Кнопка справа (часть группы с полем ввода): отправка (есть текст) / микрофон / камера для кружка.
+                         // Тап — переключение «голосовое ↔ кружок» (если нет текста), зажатие — запись:
+                         // отпустить — отправить, свайп вверх — закрепить (можно отпустить), свайп влево — отмена.
+                         val canSend = input.isNotBlank()
+                         val sendActive = canSend || recording
+                         // Морфинг: «квадрат со скруглением» (микрофон/камера) становится кругом (отправка).
+-                        val sendCorner = 28.dp
++                        val sendCorner = groupOuter
+                         val darkInput = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                         val sendContainer = MaterialTheme.colorScheme.primary
+                         val sendContent = MaterialTheme.colorScheme.onPrimary
+@@ -1609,7 +1615,10 @@
+                                         if (!locked && !cancelled) releaseHold(video)
+                                     }
+                                 },
+-                            shape = RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)),
++                            shape = RoundedCornerShape(
++                                topStart = groupInner, bottomStart = groupInner,
++                                topEnd = sendCorner.coerceAtLeast(0.dp), bottomEnd = sendCorner.coerceAtLeast(0.dp),
++                            ),
+                             color = sendContainer,
+                             contentColor = sendContent,
+                         ) {

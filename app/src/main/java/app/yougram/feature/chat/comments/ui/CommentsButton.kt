@@ -33,6 +33,11 @@ import androidx.compose.ui.unit.dp
  * Кнопка «Комментарии» под постом канала.
  * [attached] = true — полоса внутри пузыря поста, вплотную к нему (углы обрезает пузырь);
  * false — отдельная таблетка под сообщением (для постов без пузыря).
+ *
+ * [mine] и [customBubbleBg] используются для синхронизации цвета кнопки с акцентом темы:
+ *   - своё сообщение (attached + mine): инверсия пузыря — onPrimaryContainer-фон, primaryContainer-текст
+ *   - чужое сообщение / отдельная таблетка: primary-фон, onPrimary-текст
+ *   - кастомный фон пузыря: контрастный цвет поверх него
  */
 @Composable
 fun CommentsButton(
@@ -40,10 +45,19 @@ fun CommentsButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     attached: Boolean = true,
+    mine: Boolean = false,
+    customBubbleBg: androidx.compose.ui.graphics.Color? = null,
 ) {
-    // Полупрозрачная кнопка: сквозь неё виден пузырь поста.
-    val container = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-    val content = MaterialTheme.colorScheme.onSecondaryContainer
+    val scheme = MaterialTheme.colorScheme
+    // Цвет кнопки синхронизирован с акцентом и адаптирован к фону пузыря.
+    val (container, content) = when {
+        customBubbleBg != null -> {
+            val fg = app.yougram.core.ui.theme.ensureContrast(scheme.primary, customBubbleBg, 4.5f)
+            fg to app.yougram.core.ui.theme.ensureContrast(scheme.onPrimary, fg, 4.5f)
+        }
+        attached && mine -> scheme.onPrimaryContainer to scheme.primaryContainer
+        else -> scheme.primary to scheme.onPrimary
+    }
     val label = if (count > 0) commentsLabel(count) else "Оставить комментарий"
 
     // Внутри пузыря кнопка «парит» с небольшим отступом от текста и краёв пузыря.

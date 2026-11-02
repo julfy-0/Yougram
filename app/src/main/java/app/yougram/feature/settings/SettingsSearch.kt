@@ -70,7 +70,7 @@ private class SearchEntry(
 /** Все страницы настроек, по которым ищет кнопка поиска, когда открыта вкладка «Настройки». */
 private val searchEntries = listOf(
     SearchEntry("Внешний вид и чаты", "Тема, панели, чаты, обои, баннер и значок, папки", Icons.Filled.Tune, SettingsPage.Appearance,
-        "внешний вид тема цвет акцент размытие блюр плотность панели стекло плашки иконка значок лаунчер неон классическая голубая зелёная чаты размер текста анимации пузыри обои баннер профиля значок бейдж бейджик метка хеллоуин тыква поиск сверху папки"),
+        "внешний вид шрифт шрифты жирность курсив навбар заголовки тема цвет акцент размытие блюр плотность панели стекло плашки иконка значок лаунчер неон классическая голубая зелёная чаты размер текста анимации пузыри обои баннер профиля значок бейдж бейджик метка хеллоуин тыква поиск сверху папки"),
     SearchEntry("Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, SettingsPage.Extras,
         "режим призрака шпион удалённые сообщения архив клиент фильтры"),
     SearchEntry(SettingsPage.Ghost.title, null, Icons.Filled.VisibilityOff, SettingsPage.Ghost, "призрак скрытность"),
@@ -78,7 +78,7 @@ private val searchEntries = listOf(
     SearchEntry(SettingsPage.MessageFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.MessageFilters, "фильтр сообщений"),
     SearchEntry(SettingsPage.SharedFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.SharedFilters, "фильтр общие"),
     SearchEntry(SettingsPage.ShadowBan.title, null, Icons.Filled.VisibilityOff, SettingsPage.ShadowBan, "бан теневой"),
-    SearchEntry("Модули", "Модули на C++", Icons.Filled.Extension, SettingsPage.Plugins, "модуль плагин расширение ygplugin"),
+    SearchEntry("Плагины", "Плагины на C++", Icons.Filled.Extension, SettingsPage.Plugins, "плагин модуль расширение ygplugin"),
     SearchEntry("Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, SettingsPage.PowerSaving, "батарея заряд"),
     SearchEntry("Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, SettingsPage.Account, "телефон имя username профиль аватар"),
     SearchEntry("Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, SettingsPage.Privacy, "приватность видимость номер пароль пин код биометрия отпечаток двухфакторная безопасность конфиденциальность"),

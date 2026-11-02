@@ -32,6 +32,8 @@ data class PluginManifest(
     /** Порядок в цепочке хуков: больше — раньше. */
     val priority: Int = 0,
     val settings: List<PluginSetting> = emptyList(),
+    /** Путь к иконке внутри пакета (png/webp/jpg), например "icon.png". Пусто — иконки нет. */
+    val icon: String = "",
 )
 
 data class InstalledPlugin(

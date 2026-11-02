@@ -32,8 +32,8 @@ android {
         minSdk = 31
         targetSdk = 36
 
-        versionCode = 34
-        versionName = "1.3.1"
+        versionCode = 36
+        versionName = "1.3.3"
 
         buildConfigField(
             "int",
@@ -55,6 +55,29 @@ android {
             "String",
             "UPDATE_URL",
             "\"${localProps.getProperty("UPDATE_URL") ?: ""}\""
+        )
+
+        // Шаблон чата локальной ИИ-модели: gemma | chatml (должен совпадать с файлом модели).
+        // Меняется в local.properties без правки кода; по умолчанию gemma.
+        val aiTemplate = (localProps.getProperty("AI_MODEL_TEMPLATE") ?: "gemma").trim().lowercase()
+        require(aiTemplate == "gemma" || aiTemplate == "chatml") {
+            "AI_MODEL_TEMPLATE в local.properties: допустимо gemma или chatml, получено '$aiTemplate'"
+        }
+        buildConfigField("String", "AI_MODEL_TEMPLATE", "\"$aiTemplate\"")
+
+        // Прямая ссылка на файл модели (.task) на нашем хостинге и его точный размер в байтах (проверка целостности).
+        fun prop(name: String): String? = localProps.getProperty(name)
+        buildConfigField("String", "AI_URL_QWEN", "\"${prop("AI_URL_QWEN") ?: prop("AI_MODEL_URL") ?: ""}\"")
+        buildConfigField("long", "AI_SIZE_QWEN", "${prop("AI_SIZE_QWEN") ?: prop("AI_MODEL_SIZE") ?: "0"}L")
+        buildConfigField("String", "AI_URL_GEMMA", "\"${prop("AI_URL_GEMMA") ?: ""}\"")
+        buildConfigField("long", "AI_SIZE_GEMMA", "${prop("AI_SIZE_GEMMA") ?: "0"}L")
+        buildConfigField("String", "AI_URL_DEEPSEEK", "\"${prop("AI_URL_DEEPSEEK") ?: ""}\"")
+        buildConfigField("long", "AI_SIZE_DEEPSEEK", "${prop("AI_SIZE_DEEPSEEK") ?: "0"}L")
+
+        buildConfigField(
+            "String",
+            "GOOGLE_FONTS_API_KEY",
+            "\"${localProps.getProperty("GOOGLE_FONTS_API_KEY") ?: ""}\""
         )
     }
 
@@ -108,7 +131,8 @@ kotlin {
 
 dependencies {
     // Нативный код (плагины, tgcalls/libyougram_voip) вынесен в модуль :cpp
-    implementation(project(":cpp"))
+    implementation(project(":plugin-host"))
+    implementation(project(":voip"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -145,9 +169,10 @@ dependencies {
 
     implementation("com.airbnb.android:lottie-compose:6.6.7")
 
-    // Lua-плагины (LuaPluginManager, PluginManager).
-    implementation("org.luaj:luaj-jse:3.0.1")
     implementation("androidx.graphics:graphics-shapes:1.1.0")
+
+    // Локальная ИИ-модель (.task). Только для запуска на устройстве.
+    implementation("com.google.mediapipe:tasks-genai:0.10.24")
 }
 // Видео-рендерер из Telegram (org.webrtc.TextureViewRenderer) тянет их UI-классы LiteMode и VoIPService.
 // Видеозвонков в Yougram нет, поэтому файл не компилируем; сам исходник остаётся на месте и переживает повторное копирование.

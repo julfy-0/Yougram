@@ -431,7 +431,7 @@ fun StoriesScreen(viewModel: StoryViewerViewModel, onBack: () -> Unit) {
                     BasicTextField(
                         value = reply,
                         onValueChange = { reply = it },
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = androidx.compose.material3.MaterialTheme.typography.bodyLarge.fontFamily),
                         cursorBrush = SolidColor(Color.White),
                         maxLines = 4,
                         modifier = Modifier.weight(1f).onFocusChanged { replyFocused = it.isFocused },

@@ -28,6 +28,7 @@ object ThemeSnapshot {
             put("customAccent", t.customAccent)
             put("fontPath", t.fontPath ?: JSONObject.NULL)
             put("fontName", t.fontName ?: JSONObject.NULL)
+            put("googleFont", t.googleFont ?: JSONObject.NULL)
             put("glass", JSONObject().apply {
                 put("blur", g.blurRadius.toDouble())
                 put("opacity", g.opacity.toDouble())
@@ -68,6 +69,11 @@ object ThemeSnapshot {
             val path = if (json.isNull("fontPath")) null else json.optString("fontPath")
             if (path == null) settings.setCustomFont(null, null)
             else if (File(path).exists()) settings.setCustomFont(path, json.optString("fontName").ifEmpty { File(path).name })
+        }
+        if (json.has("googleFont")) {
+            settings.setGoogleFont(if (json.isNull("googleFont")) null else json.optString("googleFont"))
+        } else if (json.has("fontPath")) {
+            settings.setGoogleFont(null)
         }
         json.optJSONObject("glass")?.let { g ->
             if (g.has("blur")) settings.setBlur(g.optDouble("blur").toFloat().coerceIn(0f, GlassSettings.MAX_BLUR))

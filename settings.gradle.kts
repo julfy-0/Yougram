@@ -16,4 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Yougram"
 include(":app")
-include(":cpp")
+include(":plugin-host")
+include(":voip")

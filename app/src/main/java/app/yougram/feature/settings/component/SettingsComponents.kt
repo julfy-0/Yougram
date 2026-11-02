@@ -3,7 +3,14 @@
 package app.yougram.feature.settings.component
 
 import app.yougram.core.i18n.tr
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -104,19 +111,39 @@ private val LocalSegmentIndex = compositionLocalOf { 0 }
 @Composable
 fun SettingGroup(modifier: Modifier = Modifier, build: SettingGroupScope.() -> Unit) {
     val items = SettingGroupScope().apply(build).items
+    var groupReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { groupReady = true }
     Column(
         modifier
             .fillMaxWidth()
             .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        // Ключ сегмента — класс его лямбды (он свой у каждого вызова item { }) и номер среди таких же:
+        // так новый сегмент в середине группы получает собственное состояние и плавно появляется,
+        // а не подменяет состояние соседа.
+        val seen = HashMap<Class<*>, Int>()
         items.forEachIndexed { index, content ->
-            Surface(
-                Modifier.fillMaxWidth(),
-                shape = segmentShape(index, items.size),
-                color = plateColor(PlateArea.Settings),
-            ) {
-                CompositionLocalProvider(LocalSegmentIndex provides index, content = content)
+            val n = (seen[content.javaClass] ?: 0) + 1
+            seen[content.javaClass] = n
+            key(content.javaClass.name to n) {
+                // Сегмент, добавленный уже после показа группы (например, по переключателю выше), плавно
+                // проявляется, чуть вырастает и раскрывается по высоте; при первом показе страницы всё стоит сразу.
+                val visibleState = remember { MutableTransitionState(!groupReady).apply { targetState = true } }
+                AnimatedVisibility(
+                    visibleState = visibleState,
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                            scaleIn(MaterialTheme.motionScheme.defaultSpatialSpec(), initialScale = 0.92f) +
+                            expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                ) {
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        shape = segmentShape(index, items.size),
+                        color = plateColor(PlateArea.Settings),
+                    ) {
+                        CompositionLocalProvider(LocalSegmentIndex provides index, content = content)
+                    }
+                }
             }
         }
     }
@@ -129,7 +156,7 @@ fun SectionLabel(text: String) {
         tr(text),
         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
         style = MaterialTheme.typography.labelLargeEmphasized.copy(
-            fontFamily = app.yougram.core.ui.theme.RoundedTitleFamily,
+            fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(tr(text)),
         ),
         color = MaterialTheme.colorScheme.primary,
     )
@@ -169,6 +196,7 @@ fun SettingRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     icon: ImageVector? = null,
+    iconImage: androidx.compose.ui.graphics.ImageBitmap? = null,
     value: String? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -179,12 +207,21 @@ fun SettingRow(
     Column(
         modifier
             .fillMaxWidth()
+            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>())
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .heightIn(min = 56.dp)
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingIconTile(shownIcon)
+            if (iconImage != null) {
+                androidx.compose.foundation.Image(
+                    iconImage, null,
+                    Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            } else {
+                SettingIconTile(shownIcon)
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(tr(title), style = MaterialTheme.typography.titleMedium)
@@ -257,7 +294,12 @@ fun <T> ConnectedChoiceGroup(
             ) {
                 row.forEachIndexed { index, option ->
                     val buttonContent: @Composable RowScope.() -> Unit = {
-                        Text(label(option), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            label(option),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontFamily = if (option == selected) app.yougram.core.ui.theme.roundedFamilyFor(tr(label(option))) else null,
+                        )
                     }
                     // Единственный вариант в ряду — стандартные формы кнопки (без ToggleButtonDefaults.shapes(),
                     // его нет в некоторых версиях material3).

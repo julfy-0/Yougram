@@ -49,6 +49,34 @@ data class PluginAction(
     val icon: String = "",
 )
 
+/**
+ * Элемент интерфейса, который плагин встраивает в одну из точек [PluginUi.SLOTS].
+ * Рисует его приложение (в своей теме и «стекле»), плагин только описывает и получает события «ui_event».
+ */
+data class PluginUiItem(
+    val pluginId: String,
+    val id: String,
+    val slot: String,
+    /** button | icon_button | switch | text | badge */
+    val kind: String,
+    val title: String,
+    val subtitle: String = "",
+    val icon: String = "",
+    val checked: Boolean = false,
+    val visible: Boolean = true,
+    val enabled: Boolean = true,
+    /** Порядок внутри точки: меньше — левее/выше. */
+    val order: Int = 0,
+)
+
+/** Скрытие встроенного элемента интерфейса: [target] из [PluginUi.TARGETS], запросил плагин [pluginId]. */
+data class PluginHide(
+    val pluginId: String,
+    val target: String,
+)
+
+private const val MAX_UI_ITEMS = 32
+private const val MAX_HIDES = 64
 private const val MAX_STORAGE_VALUE = 64 * 1024
 private const val MAX_STORAGE_KEYS = 1000
 private const val MAX_TIMERS = 16
@@ -78,7 +106,7 @@ private fun stringsOf(arr: JSONArray?): List<String> {
     return List(arr.length()) { arr.getString(it) }
 }
 
-/** Всё, что модуль может попросить у приложения через host->call() (API 2.0, см. yougram_plugin.h). */
+/** Всё, что плагин может попросить у приложения через host->call() (API 2.0, см. yougram_plugin.h). */
 class PluginApi(
     private val context: Context,
     private val telegram: TelegramClient,
@@ -98,7 +126,13 @@ class PluginApi(
     private val _actions = MutableStateFlow<List<PluginAction>>(emptyList())
     val actions: StateFlow<List<PluginAction>> = _actions.asStateFlow()
 
-    /** Точка входа из JNI. Вызывается из потока модуля, поэтому блокирующая. */
+    private val _uiItems = MutableStateFlow<List<PluginUiItem>>(emptyList())
+    val uiItems: StateFlow<List<PluginUiItem>> = _uiItems.asStateFlow()
+
+    private val _hides = MutableStateFlow<List<PluginHide>>(emptyList())
+    val hides: StateFlow<List<PluginHide>> = _hides.asStateFlow()
+
+    /** Точка входа из JNI. Вызывается из потока плагина, поэтому блокирующая. */
     fun call(pluginId: String, method: String, argsJson: String): String {
         return try {
             require(method in PluginMethods.REQUIRED) { tr("Неизвестный метод: {0}", method) }
@@ -198,7 +232,7 @@ class PluginApi(
             // ---- chat.send ----
             "send_message" -> {
                 val replyTo = a.optLong("reply_to", 0L)
-                // fromPlugin = true: отправка модуля идёт мимо хука before_send, иначе модуль зациклится на себе.
+                // fromPlugin = true: отправка плагина идёт мимо хука before_send, иначе плагин зациклится на себе.
                 chats.sendText(
                     a.getLong("chat_id"),
                     a.getString("text"),
@@ -264,6 +298,15 @@ class PluginApi(
                 }
                 true
             }
+            "register_ui" -> registerUi(pid, a)
+            "update_ui" -> updateUi(pid, a)
+            "unregister_ui" -> {
+                val id = a.getString("id")
+                synchronized(registryLock) {
+                    _uiItems.update { list -> list.filterNot { it.pluginId == pid && it.id == id } }
+                }
+                true
+            }
             "toast" -> {
                 val text = listOf(a.optString("title"), a.optString("message"))
                     .filter { it.isNotEmpty() }
@@ -284,7 +327,7 @@ class PluginApi(
             "send_to_plugin" -> {
                 val target = a.getString("plugin_id")
                 require(target != pid) { tr("Нельзя отправить сообщение самому себе") }
-                require(manager.isEnabled(target)) { tr("Модуль {0} не запущен", target) }
+                require(manager.isEnabled(target)) { tr("Плагин {0} не запущен", target) }
                 val payload: Any = a.opt("payload") ?: JSONObject.NULL
                 require(payload.toString().length <= MAX_IPC_PAYLOAD) { tr("Сообщение слишком большое") }
                 manager.emitTo(target, "plugin_message", linkedMapOf<String, Any?>("from" to pid, "payload" to payload))
@@ -295,7 +338,7 @@ class PluginApi(
     }
 
     private fun manifestOf(pid: String): PluginManifest =
-        manager.manifestOf(pid) ?: error(tr("Модуль не найден"))
+        manager.manifestOf(pid) ?: error(tr("Плагин не найден"))
 
     private fun appInfo(pid: String): Map<String, Any?> = linkedMapOf(
         "api" to PluginApiVersion.CURRENT,
@@ -330,7 +373,7 @@ class PluginApi(
         synchronized(registryLock) {
             val current = _commands.value
             current.firstOrNull { it.pluginId != pid && (it.name in taken || it.aliases.any { alias -> alias in taken }) }
-                ?.let { error(tr("Команда уже занята модулем {0}", it.pluginId)) }
+                ?.let { error(tr("Команда уже занята плагином {0}", it.pluginId)) }
             val own = current.filter { it.pluginId == pid && it.name != name }
             check(own.size < MAX_COMMANDS) { tr("Слишком много команд") }
             _commands.value = current.filterNot { it.pluginId == pid && it.name == name } + command
@@ -354,7 +397,104 @@ class PluginApi(
         return true
     }
 
-    /** Если текст — команда (или алиас) зарегистрированного модуля, возвращает (команда, аргументы). */
+    private fun parseUi(pid: String, a: JSONObject, base: PluginUiItem?): PluginUiItem {
+        val id = a.getString("id")
+        require(ACTION_ID.matches(id)) { tr("Недопустимый id элемента") }
+        val slot = a.optString("slot", base?.slot ?: "")
+        require(slot in PluginUi.SLOTS) { "slot: ${PluginUi.SLOTS.joinToString()}" }
+        val kind = a.optString("kind", base?.kind ?: "button")
+        require(kind in PluginUi.KINDS) { "kind: ${PluginUi.KINDS.joinToString()}" }
+        val title = a.optString("title", base?.title ?: "").trim()
+        require(title.length <= 60) { tr("Название элемента: до 60 символов") }
+        require(title.isNotEmpty() || kind == "icon_button") { tr("Название элемента: 1–60 символов") }
+        return PluginUiItem(
+            pluginId = pid,
+            id = id,
+            slot = slot,
+            kind = kind,
+            title = title,
+            subtitle = a.optString("subtitle", base?.subtitle ?: "").take(120),
+            icon = a.optString("icon", base?.icon ?: "").take(64),
+            checked = a.optBoolean("checked", base?.checked ?: false),
+            visible = a.optBoolean("visible", base?.visible ?: true),
+            enabled = a.optBoolean("enabled", base?.enabled ?: true),
+            order = a.optInt("order", base?.order ?: 0),
+        )
+    }
+
+    private fun registerUi(pid: String, a: JSONObject): Boolean {
+        val item = parseUi(pid, a, null)
+        synchronized(registryLock) {
+            val current = _uiItems.value
+            check(current.count { it.pluginId == pid && it.id != item.id } < MAX_UI_ITEMS) { tr("Слишком много элементов интерфейса") }
+            _uiItems.value = current.filterNot { it.pluginId == pid && it.id == item.id } + item
+        }
+        return true
+    }
+
+    /** Меняет только переданные поля уже зарегистрированного элемента (текст, значок, галочку, видимость). */
+    private fun updateUi(pid: String, a: JSONObject): Boolean {
+        val id = a.getString("id")
+        synchronized(registryLock) {
+            val base = _uiItems.value.firstOrNull { it.pluginId == pid && it.id == id } ?: error(tr("Элемент не найден"))
+            val item = parseUi(pid, a, base)
+            _uiItems.value = _uiItems.value.map { if (it.pluginId == pid && it.id == id) item else it }
+        }
+        return true
+    }
+
+    /**
+     * Не подключено к API 2.1 (методов hide_ui/show_ui в PluginMethods нет): задел на будущую версию.
+     * Скрывает встроенный элемент приложения. [a] = {"target": "..."} или {"targets": ["...", ...]}.
+     * Скрытие снимается show_ui, а также при выключении, удалении или перезагрузке плагина.
+     */
+    @Suppress("unused")
+    private fun hideUi(pid: String, a: JSONObject): Boolean {
+        val targets = targetsOf(a)
+        synchronized(registryLock) {
+            val current = _hides.value
+            val mine = current.filter { it.pluginId == pid }.map { it.target }.toSet()
+            check((mine + targets).size <= MAX_HIDES) { tr("Слишком много скрытых элементов") }
+            _hides.value = current + targets.filter { it !in mine }.map { PluginHide(pid, it) }
+        }
+        return true
+    }
+
+    @Suppress("unused")
+    private fun showUi(pid: String, a: JSONObject): Boolean {
+        val all = a.optBoolean("all", false)
+        val targets = if (all) emptySet() else targetsOf(a)
+        synchronized(registryLock) {
+            _hides.update { list -> list.filterNot { it.pluginId == pid && (all || it.target in targets) } }
+        }
+        return true
+    }
+
+    private fun targetsOf(a: JSONObject): Set<String> {
+        val raw = LinkedHashSet<String>()
+        a.optString("target", "").takeIf { it.isNotEmpty() }?.let { raw.add(it) }
+        stringsOf(a.optJSONArray("targets")).forEach { raw.add(it) }
+        require(raw.isNotEmpty()) { tr("Не указан target") }
+        raw.forEach { t ->
+            require(t !in PluginUi.PROTECTED) { tr("Этот элемент нельзя скрыть: {0}", t) }
+            require(t in PluginUi.TARGETS) { "target: ${PluginUi.TARGETS.sorted().joinToString()}" }
+        }
+        return raw
+    }
+
+    /** UI вызывает это, когда пользователь нажал элемент плагина или переключил его. */
+    fun invokeUi(item: PluginUiItem, value: Boolean? = null, chatId: Long = 0L, messageId: Long = 0L) {
+        val payload = linkedMapOf<String, Any?>(
+            "id" to item.id,
+            "slot" to item.slot,
+            "chat_id" to chatId,
+            "message_id" to messageId,
+        )
+        if (value != null) payload["value"] = value
+        manager.emitTo(item.pluginId, "ui_event", payload)
+    }
+
+    /** Если текст — команда (или алиас) зарегистрированного плагина, возвращает (команда, аргументы). */
     fun matchCommand(text: String): Pair<PluginCommand, String>? {
         if (!text.startsWith("/")) return null
         val name = text.substring(1).substringBefore(' ').substringBefore('@').lowercase()
@@ -362,7 +502,7 @@ class PluginApi(
         return Pair(cmd, text.substringAfter(' ', "").trim())
     }
 
-    /** UI вызывает это, когда пользователь нажал пункт модуля (например, в меню сообщения). */
+    /** UI вызывает это, когда пользователь нажал пункт плагина (например, в меню сообщения). */
     fun invokeAction(action: PluginAction, chatId: Long, messageId: Long) {
         manager.emitTo(
             action.pluginId,
@@ -371,7 +511,7 @@ class PluginApi(
         )
     }
 
-    /** Модуль выключен/удалён/перезагружается: чистим всё, что он зарегистрировал. */
+    /** Плагин выключен/удалён/перезагружается: чистим всё, что он зарегистрировал. */
     fun onPluginStopped(pluginId: String) {
         val prefix = "$pluginId:"
         timers.keys.filter { it.startsWith(prefix) }.forEach { timers.remove(it)?.cancel() }
@@ -380,10 +520,12 @@ class PluginApi(
         synchronized(registryLock) {
             _commands.update { list -> list.filter { it.pluginId != pluginId } }
             _actions.update { list -> list.filter { it.pluginId != pluginId } }
+            _uiItems.update { list -> list.filter { it.pluginId != pluginId } }
+            _hides.update { list -> list.filter { it.pluginId != pluginId } }
         }
     }
 
-    /** Модуль удалён: стираем его хранилище и файлы. Настройки чистит менеджер. */
+    /** Плагин удалён: стираем его хранилище и файлы. Настройки чистит менеджер. */
     fun wipeData(pluginId: String) {
         context.deleteSharedPreferences(PluginPaths.storageName(pluginId))
         PluginPaths.dataDir(context, pluginId).deleteRecursively()
@@ -398,6 +540,8 @@ class PluginApi(
         synchronized(registryLock) {
             _commands.value = emptyList()
             _actions.value = emptyList()
+            _uiItems.value = emptyList()
+            _hides.value = emptyList()
         }
     }
 
@@ -416,7 +560,7 @@ class PluginApi(
         }
     }
 
-    /** Запрос в фоне: сразу возвращает request_id, итог приходит модулю событием http_response. */
+    /** Запрос в фоне: сразу возвращает request_id, итог приходит плагину событием http_response. */
     private fun startAsyncRequest(pid: String, a: JSONObject): Map<String, Any?> {
         val prefix = "$pid:"
         check(requests.keys.count { it.startsWith(prefix) } < MAX_ASYNC_REQUESTS) { tr("Слишком много запросов одновременно") }

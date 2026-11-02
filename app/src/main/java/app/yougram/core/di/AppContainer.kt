@@ -64,6 +64,8 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
     val accountManager: AccountManager = previous?.accountManager ?: AccountManager(context.applicationContext)
     val spy: SpyStore = previous?.spy ?: SpyStore(context.applicationContext)
     val updater: AppUpdater = previous?.updater ?: AppUpdater(context.applicationContext, processScope)
+    val assistant: app.yougram.feature.assistant.data.AiAssistant =
+        previous?.assistant ?: app.yougram.feature.assistant.data.AiAssistant(context.applicationContext, processScope, settings)
 
     // Всё ниже привязано к аккаунту и пересоздаётся при его смене.
     val telegram = TelegramClient(context.applicationContext, appScope, accountManager.activeAccountId.value)

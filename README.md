@@ -853,6 +853,7 @@ cpp/
 ```text
 myplugin.ygplugin
 ├── manifest.json
+├── icon.png
 └── lib/
     └── arm64-v8a/
         └── libmyplugin.so
@@ -877,13 +878,17 @@ lib/
   "id": "com.example.myplugin",
   "name": "My Plugin",
   "version": "1.0.0",
-  "api": "1.0",
+  "api": "2.2",
   "author": "Developer",
   "description": "Example plugin",
   "entry": "libmyplugin.so",
+  "icon": "icon.png",
   "permissions": []
 }
 ```
+
+- `api`: принимаются только `2.1` и `2.2`. Плагины `1.x` и `2.0`, а также манифесты без `api`, не устанавливаются.
+- `icon` (необязательно): путь к png/webp/jpg внутри пакета, до 512 КБ, лучше квадрат 256×256. SVG не поддерживается.
 
 ## Entry point
 

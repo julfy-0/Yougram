@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,6 +123,8 @@ fun MessageMenu(
     onDelete: () -> Unit,
     onShadowBan: () -> Unit,
     onToggleTypingWatch: () -> Unit,
+    /** Чат сообщения: передаётся пунктам плагинов в событии action. */
+    chatId: Long = 0L,
 ) {
     val mine = message.reactions.filter { it.chosen }.map { it.emoji }.toSet()
     val lowTier = rememberDeviceTier() == DeviceTier.Low
@@ -130,14 +133,17 @@ fun MessageMenu(
     val scaleSpec: FiniteAnimationSpec<Float> = if (lowTier) tween(150) else motion.defaultSpatialSpec()
     val appear = remember { MutableTransitionState(false).apply { targetState = true } }
 
+    val pluginApi = app.yougram.plugin.LocalPluginApi.current
+    val pluginActions = pluginApi?.actions?.collectAsState()?.value.orEmpty().filter { it.where == "message_menu" }
+    val hidden = app.yougram.plugin.rememberPluginHiddenSet()
     val actions = buildList {
-        add(MenuAction(Icons.AutoMirrored.Filled.Reply, tr("Ответить")) { onReply() })
-        if (canSave) add(MenuAction(Icons.Filled.Download, tr("Сохранить в галерею")) { onSave() })
-        if (canSave && onExport != null) add(MenuAction(Icons.Filled.FolderOpen, tr("Сохранить в файлы")) { onExport() })
-        add(MenuAction(Icons.AutoMirrored.Filled.Send, tr("Переслать")) { onForward() })
-        add(MenuAction(Icons.Filled.PushPin, if (isPinned) "Открепить" else "Закрепить") { onPin() })
-        if (canEdit) add(MenuAction(Icons.Filled.Edit, tr("Изменить")) { onEdit() })
-        if (canWatchTyping) {
+        if (app.yougram.plugin.PluginUi.MENU_REPLY !in hidden) add(MenuAction(Icons.AutoMirrored.Filled.Reply, tr("Ответить")) { onReply() })
+        if (canSave && app.yougram.plugin.PluginUi.MENU_SAVE !in hidden) add(MenuAction(Icons.Filled.Download, tr("Сохранить в галерею")) { onSave() })
+        if (canSave && onExport != null && app.yougram.plugin.PluginUi.MENU_EXPORT !in hidden) add(MenuAction(Icons.Filled.FolderOpen, tr("Сохранить в файлы")) { onExport() })
+        if (app.yougram.plugin.PluginUi.MENU_FORWARD !in hidden) add(MenuAction(Icons.AutoMirrored.Filled.Send, tr("Переслать")) { onForward() })
+        if (app.yougram.plugin.PluginUi.MENU_PIN !in hidden) add(MenuAction(Icons.Filled.PushPin, if (isPinned) "Открепить" else "Закрепить") { onPin() })
+        if (canEdit && app.yougram.plugin.PluginUi.MENU_EDIT !in hidden) add(MenuAction(Icons.Filled.Edit, tr("Изменить")) { onEdit() })
+        if (canWatchTyping && app.yougram.plugin.PluginUi.MENU_TYPING_WATCH !in hidden) {
             add(
                 MenuAction(
                     Icons.Filled.Visibility,
@@ -145,8 +151,12 @@ fun MessageMenu(
                 ) { onToggleTypingWatch() },
             )
         }
-        if (canShadowBan) add(MenuAction(Icons.Filled.VisibilityOff, tr("Теневой бан автора")) { onShadowBan() })
-        add(MenuAction(Icons.Filled.Delete, tr("Удалить"), danger = true) { onDelete() })
+        if (canShadowBan && app.yougram.plugin.PluginUi.MENU_SHADOW_BAN !in hidden) add(MenuAction(Icons.Filled.VisibilityOff, tr("Теневой бан автора")) { onShadowBan() })
+        // Пункты плагинов (register_action, where = message_menu).
+        pluginActions.forEach { a ->
+            add(MenuAction(app.yougram.plugin.PluginUi.icon(a.icon), a.title) { pluginApi?.invokeAction(a, chatId, message.id) })
+        }
+        if (app.yougram.plugin.PluginUi.MENU_DELETE !in hidden) add(MenuAction(Icons.Filled.Delete, tr("Удалить"), danger = true) { onDelete() })
     }
 
     // Окно на весь экран: всё, что за ним (чат, панели, шапка), размывается; тап мимо меню закрывает его.

@@ -109,23 +109,25 @@ fun ChatOrTopics(
         )
 
         else -> {
-            val vm: ChatViewModel = viewModel(
-                key = "chat-$chatId-$messageId-$topicId",
-                factory = ChatViewModel.factory(container.chatRepository, chatId, container.settings, messageId, topicId),
+            val vm: ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "chat-$chatId-$topicId",
+                factory = ChatViewModel.factory(
+                    repository = container.chatRepository,
+                    chatId = chatId,
+                    settings = container.settings,
+                    initialMessageId = messageId,
+                    topicId = topicId,
+                ),
             )
-            val topicName by produceState("", chatId, topicId) {
-                if (topicId != 0) value = container.chatRepository.forumTopicName(chatId, topicId)
-            }
             ChatScreen(
+                container = container,
                 viewModel = vm,
-                settings = container.settings,
                 onBack = onBack,
-                showBack = showBack,
                 onOpenChatProfile = onOpenChatProfile,
                 onOpenProfile = onOpenProfile,
                 onCall = onCall,
                 onOpenComments = onOpenComments,
-                titleOverride = topicName.takeIf { topicId != 0 },
+                showBack = showBack,
             )
         }
     }

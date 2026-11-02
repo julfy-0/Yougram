@@ -45,12 +45,14 @@ data class DetailsState(
     /** Код для смены номера отправлен, ждём ввод. */
     val phoneCodeSent: Boolean = false,
     val error: String? = null,
+    /** Короткое сообщение об успехе (показывается тостом и сбрасывается). */
+    val notice: String? = null,
 )
 
 /** Состояние подэкранов настроек, которым нужен TDLib: аккаунт, устройства, конфиденциальность, память. */
 class SettingsDetailsViewModel(
     private val account: AccountRepository,
-    chats: ChatRepository,
+    private val chats: ChatRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DetailsState())
@@ -71,6 +73,14 @@ class SettingsDetailsViewModel(
     }
 
     fun dismissError() = _state.update { it.copy(error = null) }
+
+    private fun sizeText(bytes: Long): String = when {
+        bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
+        bytes >= 1L shl 20 -> "%.1f MB".format(bytes / (1L shl 20).toDouble())
+        else -> "%d KB".format(bytes / 1024)
+    }
+
+    fun dismissNotice() = _state.update { it.copy(notice = null) }
 
     fun loadAccount() = launchCatching {
         val info = account.loadAccount()
@@ -254,8 +264,14 @@ class SettingsDetailsViewModel(
     }
 
     fun clearCache() = launchCatching {
-        account.clearCache()
-        _state.update { it.copy(storage = account.loadStorage()) }
+        // Через ChatRepository: заодно сбрасывает предупреждение о заполненной памяти и чистит кэш самого приложения.
+        val freed = chats.clearCache()
+        _state.update {
+            it.copy(
+                storage = account.loadStorage(),
+                notice = app.yougram.core.i18n.tr("Кэш очищен, освобождено {0}", sizeText(freed)),
+            )
+        }
     }
 
     companion object {

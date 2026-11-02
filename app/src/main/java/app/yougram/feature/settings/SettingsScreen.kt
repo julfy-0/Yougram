@@ -69,7 +69,10 @@ fun SettingsScreen(
         }
         if (part == -1 || part == 1) {
         SectionLabel("Панели")
-        GlassPreview(glass.blurRadius, glass.opacity)
+        GlassPreview(
+            glass.blurRadius,
+            if (glass.blurRadius <= 0.5f) 1f else glass.opacity,
+        )
         SettingGroup {
             item {
                 SettingRow(

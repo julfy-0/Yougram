@@ -35,9 +35,32 @@ class AuthViewModel(
     private val _ui = MutableStateFlow(Ui())
     val ui: StateFlow<Ui> = _ui.asStateFlow()
 
-    fun submitPhone(phone: String) = run { repository.sendPhone(phone) }
+    /** true — пользователь нажал «Изменить номер» / «Войти по номеру» и видит поле телефона поверх шага кода или QR. */
+    private val _editPhone = MutableStateFlow(false)
+    val editPhone: StateFlow<Boolean> = _editPhone.asStateFlow()
+
+    fun submitPhone(phone: String) = run(onDone = { _editPhone.value = false }) { repository.sendPhone(phone) }
     fun submitCode(code: String) = run { repository.sendCode(code) }
+    fun resendCode() = run { repository.resendCode() }
     fun submitPassword(password: String) = run { repository.sendPassword(password) }
+
+    fun startQr() {
+        // QR уже запрошен (мы лишь «заглянули» на экран номера из QR) — просто возвращаемся к нему.
+        if (step.value is AuthStep.QrLogin) {
+            _ui.update { Ui() }
+            _editPhone.value = false
+            return
+        }
+        run(onDone = { _editPhone.value = false }) { repository.requestQr() }
+    }
+    fun startEditPhone() {
+        _ui.update { Ui() }
+        _editPhone.value = true
+    }
+    fun cancelEditPhone() {
+        _ui.update { Ui() }
+        _editPhone.value = false
+    }
 
     /** Активный прокси в TDLib применяется автоматически (см. AppContainer.start). */
     fun saveProxy(entry: ProxyEntry) = settings.saveProxy(entry)
@@ -49,12 +72,13 @@ class AuthViewModel(
         _ui.update { if (it.error != null) it.copy(error = null) else it }
     }
 
-    private fun run(block: suspend () -> Unit) {
+    private fun run(onDone: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {
             _ui.update { Ui(busy = true) }
             try {
                 block()
                 _ui.update { Ui() }
+                onDone()
             } catch (e: Exception) {
                 _ui.update { Ui(error = humanize(e.message)) }
             }

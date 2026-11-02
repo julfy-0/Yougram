@@ -93,7 +93,9 @@ fun ContactsScreen(
                             Text(
                                 letter,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelLargeEmphasized,
+                                style = MaterialTheme.typography.labelLargeEmphasized.copy(
+                                    fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(letter),
+                                ),
                             )
                         }
                     }

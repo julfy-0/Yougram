@@ -50,7 +50,7 @@ sealed interface UpdateState {
 /**
  * Обновление изнутри клиента. Источник правды — последний релиз на GitHub:
  *  - тег релиза (v1.1.0) = версия, сравнивается с BuildConfig.VERSION_NAME;
- *  - первый файл *.apk из релиза = то, что скачивается;
+ *  - из релиза скачивается app-debug.apk (если его нет — yougram.apk, затем любой *.apk);
  *  - описание релиза = «что нового».
  */
 class AppUpdater(context: Context, private val scope: CoroutineScope) {
@@ -147,11 +147,17 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
             val tag = json.getString("tag_name")
             val assets = json.getJSONArray("assets")
             var asset: JSONObject? = null
+            // Приоритет: app-debug.apk → yougram.apk → любой другой .apk.
+            fun rank(name: String) = when {
+                name.equals("app-debug.apk", ignoreCase = true) -> 2
+                name.equals("yougram.apk", ignoreCase = true) -> 1
+                else -> 0
+            }
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.getString("name").endsWith(".apk", ignoreCase = true)) {
-                    // Если файлов несколько, берём тот, что называется yougram.apk.
-                    if (asset == null || a.getString("name").equals("yougram.apk", ignoreCase = true)) asset = a
+                val name = a.getString("name")
+                if (name.endsWith(".apk", ignoreCase = true)) {
+                    if (asset == null || rank(name) > rank(asset.getString("name"))) asset = a
                 }
             }
             asset ?: error(tr("в релизе {0} нет файла .apk", tag))

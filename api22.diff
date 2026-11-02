@@ -1,0 +1,1279 @@
+diff -ruN orig/APPLY.txt new/APPLY.txt
+--- orig/APPLY.txt	1970-01-01 00:00:00.000000000 +0000
++++ new/APPLY.txt	2026-11-02 01:49:01.492003180 +0000
+@@ -0,0 +1,3 @@
++Распакуй архив в корень проекта YouGram с заменой файлов (пути совпадают с проектом).
++Потом положи свою иконку: app/src/main/assets/plugins/example-hello/icon.png (PNG, 256x256).
++Список всех изменений: api22.diff
+diff -ruN orig/README.md new/README.md
+--- orig/README.md	2026-11-02 01:48:38.420645079 +0000
++++ new/README.md	2026-11-02 01:48:38.430906746 +0000
+@@ -853,6 +853,7 @@
+ ```text
+ myplugin.ygplugin
+ ├── manifest.json
++├── icon.png
+ └── lib/
+     └── arm64-v8a/
+         └── libmyplugin.so
+@@ -877,14 +878,18 @@
+   "id": "com.example.myplugin",
+   "name": "My Plugin",
+   "version": "1.0.0",
+-  "api": "1.0",
++  "api": "2.2",
+   "author": "Developer",
+   "description": "Example plugin",
+   "entry": "libmyplugin.so",
++  "icon": "icon.png",
+   "permissions": []
+ }
+ ```
+ 
++- `api`: принимаются только `2.1` и `2.2`. Плагины `1.x` и `2.0`, а также манифесты без `api`, не устанавливаются.
++- `icon` (необязательно): путь к png/webp/jpg внутри пакета, до 512 КБ, лучше квадрат 256×256. SVG не поддерживается.
++
+ ## Entry point
+ 
+ Плагин должен экспортировать:
+diff -ruN orig/api22.diff new/api22.diff
+--- orig/api22.diff	1970-01-01 00:00:00.000000000 +0000
++++ new/api22.diff	2026-11-02 01:56:13.627094787 +0000
+@@ -0,0 +1,723 @@
++diff -ruN orig/APPLY.txt new/APPLY.txt
++--- orig/APPLY.txt	1970-01-01 00:00:00.000000000 +0000
+++++ new/APPLY.txt	2026-11-02 01:49:01.492003180 +0000
++@@ -0,0 +1,3 @@
+++Распакуй архив в корень проекта YouGram с заменой файлов (пути совпадают с проектом).
+++Потом положи свою иконку: app/src/main/assets/plugins/example-hello/icon.png (PNG, 256x256).
+++Список всех изменений: api22.diff
++diff -ruN orig/README.md new/README.md
++--- orig/README.md	2026-11-02 01:48:38.420645079 +0000
+++++ new/README.md	2026-11-02 01:48:38.430906746 +0000
++@@ -853,6 +853,7 @@
++ ```text
++ myplugin.ygplugin
++ ├── manifest.json
+++├── icon.png
++ └── lib/
++     └── arm64-v8a/
++         └── libmyplugin.so
++@@ -877,14 +878,18 @@
++   "id": "com.example.myplugin",
++   "name": "My Plugin",
++   "version": "1.0.0",
++-  "api": "1.0",
+++  "api": "2.2",
++   "author": "Developer",
++   "description": "Example plugin",
++   "entry": "libmyplugin.so",
+++  "icon": "icon.png",
++   "permissions": []
++ }
++ ```
++ 
+++- `api`: принимаются только `2.1` и `2.2`. Плагины `1.x` и `2.0`, а также манифесты без `api`, не устанавливаются.
+++- `icon` (необязательно): путь к png/webp/jpg внутри пакета, до 512 КБ, лучше квадрат 256×256. SVG не поддерживается.
+++
++ ## Entry point
++ 
++ Плагин должен экспортировать:
++diff -ruN orig/api22.diff new/api22.diff
++--- orig/api22.diff	1970-01-01 00:00:00.000000000 +0000
+++++ new/api22.diff	2026-11-02 01:49:01.494905898 +0000
++@@ -0,0 +1,352 @@
+++diff -ruN orig/README.md new/README.md
+++--- orig/README.md	2026-11-02 01:48:38.420645079 +0000
++++++ new/README.md	2026-11-02 01:48:38.430906746 +0000
+++@@ -853,6 +853,7 @@
+++ ```text
+++ myplugin.ygplugin
+++ ├── manifest.json
++++├── icon.png
+++ └── lib/
+++     └── arm64-v8a/
+++         └── libmyplugin.so
+++@@ -877,14 +878,18 @@
+++   "id": "com.example.myplugin",
+++   "name": "My Plugin",
+++   "version": "1.0.0",
+++-  "api": "1.0",
++++  "api": "2.2",
+++   "author": "Developer",
+++   "description": "Example plugin",
+++   "entry": "libmyplugin.so",
++++  "icon": "icon.png",
+++   "permissions": []
+++ }
+++ ```
+++ 
++++- `api`: принимаются только `2.1` и `2.2`. Плагины `1.x` и `2.0`, а также манифесты без `api`, не устанавливаются.
++++- `icon` (необязательно): путь к png/webp/jpg внутри пакета, до 512 КБ, лучше квадрат 256×256. SVG не поддерживается.
++++
+++ ## Entry point
+++ 
+++ Плагин должен экспортировать:
+++diff -ruN orig/app/src/main/assets/i18n/en.json new/app/src/main/assets/i18n/en.json
+++--- orig/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.413112039 +0000
++++++ new/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.428486447 +0000
+++@@ -994,7 +994,7 @@
+++     "Перезагрузить плагины": "Reload plugins",
+++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Native code is not isolated: it runs with the same rights as the app, and its crash closes Yougram. ",
+++     "Ставьте только плагины, которым доверяете.": "Install only plugins you trust.",
+++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
++++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
+++     "Установить плагин?": "Install plugin?",
+++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "A plugin is machine code. It will get full access to Yougram data and your Telegram account. ",
+++     "Устанавливайте только из источников, которым доверяете.": "Install only from sources you trust.",
+++@@ -1371,7 +1371,7 @@
+++     "Нет {0} для ABI устройства ({1})": "No {0} for the device ABI ({1})",
+++     "Недопустимый id плагина": "Invalid plugin id",
+++     "Недопустимое имя плагина": "Invalid plugin name",
+++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "Plugin API {0} is not supported (1.x or {1} is required)",
++++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "Plugin API {0} is not supported (from {1} to {2} is required)",
+++     "entry должен быть именем .so файла": "entry must be the name of a .so file",
+++     "Неизвестное разрешение: {0}": "Unknown permission: {0}",
+++     "priority: от -100 до 100": "priority: from -100 to 100",
+++diff -ruN orig/app/src/main/assets/i18n/uk.json new/app/src/main/assets/i18n/uk.json
+++--- orig/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.415976003 +0000
++++++ new/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.429674372 +0000
+++@@ -994,7 +994,7 @@
+++     "Перезагрузить плагины": "Перезавантажити плагіни",
+++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Нативний код не ізольований: він працює з тими самими правами, що й застосунок, і його збій закриває Yougram. ",
+++     "Ставьте только плагины, которым доверяете.": "Встановлюйте лише плагіни, яким довіряєте.",
+++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
++++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
+++     "Установить плагин?": "Встановити плагін?",
+++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "Плагін — це машинний код. Він отримає повний доступ до даних Yougram і вашого акаунта Telegram. ",
+++     "Устанавливайте только из источников, которым доверяете.": "Встановлюйте лише з джерел, яким довіряєте.",
+++@@ -1371,7 +1371,7 @@
+++     "Нет {0} для ABI устройства ({1})": "Немає {0} для ABI пристрою ({1})",
+++     "Недопустимый id плагина": "Недопустимий id плагіна",
+++     "Недопустимое имя плагина": "Недопустиме ім’я плагіна",
+++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "API плагіна {0} не підтримується (потрібен 1.x або {1})",
++++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "API плагіна {0} не підтримується (потрібен від {1} до {2})",
+++     "entry должен быть именем .so файла": "entry має бути іменем .so файлу",
+++     "Неизвестное разрешение: {0}": "Невідомий дозвіл: {0}",
+++     "priority: от -100 до 100": "priority: від -100 до 100",
+++diff -ruN orig/app/src/main/assets/i18n/zh.json new/app/src/main/assets/i18n/zh.json
+++--- orig/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.418778961 +0000
++++++ new/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.430588022 +0000
+++@@ -994,7 +994,7 @@
+++     "Перезагрузить плагины": "重新加载插件",
+++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "原生代码未被隔离：它与应用拥有相同权限，其崩溃会导致 Yougram 关闭。",
+++     "Ставьте только плагины, которым доверяете.": "请仅安装你信任的插件。",
+++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
++++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
+++     "Установить плагин?": "安装插件？",
+++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "插件是机器码，将获得对 Yougram 数据和你的 Telegram 账号的完全访问权限。",
+++     "Устанавливайте только из источников, которым доверяете.": "请仅从你信任的来源安装。",
+++@@ -1371,7 +1371,7 @@
+++     "Нет {0} для ABI устройства ({1})": "缺少适用于设备 ABI（{1}）的 {0}",
+++     "Недопустимый id плагина": "插件 ID 无效",
+++     "Недопустимое имя плагина": "插件名称无效",
+++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "不支持插件 API {0}（需要 1.x 或 {1}）",
++++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "不支持插件 API {0}（需要 {1} 至 {2}）",
+++     "entry должен быть именем .so файла": "entry 必须是 .so 文件名",
+++     "Неизвестное разрешение: {0}": "未知权限：{0}",
+++     "priority: от -100 до 100": "priority：-100 到 100",
+++diff -ruN orig/app/src/main/assets/plugins/example-hello/manifest.json new/app/src/main/assets/plugins/example-hello/manifest.json
+++--- orig/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.412134622 +0000
++++++ new/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.423658455 +0000
+++@@ -1,11 +1,12 @@
+++ {
+++   "id": "com.yougram.example.hello",
+++   "name": "Hello World",
+++-  "version": "2.0.0",
+++-  "api": "2.0",
++++  "version": "2.2.0",
++++  "api": "2.2",
+++   "author": "Yougram Example",
+++-  "description": "Встроенный пример C++ плагина (SDK 2.0): команда /ping отвечает текстом из настроек.",
++++  "description": "Встроенный пример C++ плагина (SDK 2.2): команда /ping отвечает текстом из настроек.",
+++   "entry": "libyg_example_hello.so",
++++  "icon": "icon.png",
+++   "bundled": true,
+++   "priority": 0,
+++   "permissions": ["chat.send", "hooks"],
+++diff -ruN orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt
+++--- orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.410255408 +0000
++++++ new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.422423655 +0000
+++@@ -196,6 +196,7 @@
+++     modifier: Modifier = Modifier,
+++     subtitle: String? = null,
+++     icon: ImageVector? = null,
++++    iconImage: androidx.compose.ui.graphics.ImageBitmap? = null,
+++     value: String? = null,
+++     onClick: (() -> Unit)? = null,
+++     trailing: (@Composable () -> Unit)? = null,
+++@@ -212,7 +213,15 @@
+++             .padding(horizontal = 20.dp, vertical = 16.dp),
+++     ) {
+++         Row(verticalAlignment = Alignment.CenterVertically) {
+++-            SettingIconTile(shownIcon)
++++            if (iconImage != null) {
++++                androidx.compose.foundation.Image(
++++                    iconImage, null,
++++                    Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape),
++++                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
++++                )
++++            } else {
++++                SettingIconTile(shownIcon)
++++            }
+++             Spacer(Modifier.width(16.dp))
+++             Column(Modifier.weight(1f)) {
+++                 Text(tr(title), style = MaterialTheme.typography.titleMedium)
+++diff -ruN orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt
+++--- orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:48:38.409761363 +0000
++++++ new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:48:38.422259397 +0000
+++@@ -107,6 +107,7 @@
+++                         title = plugin.manifest.name,
+++                         subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · API ${plugin.manifest.api} · C++",
+++                         icon = Icons.Filled.Extension,
++++                        iconImage = rememberPluginIcon(plugin),
+++                         trailing = {
+++                             Row(verticalAlignment = Alignment.CenterVertically) {
+++                                 IconButton(onClick = { settingsFor = plugin }) {
+++@@ -146,7 +147,7 @@
+++             tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
+++                 tr("Ставьте только плагины, которым доверяете."),
+++         )
+++-        SettingsFootnote("SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
++++        SettingsFootnote("SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+++     }
+++ 
+++     if (confirmInstall) {
+++@@ -206,6 +207,20 @@
+++     }
+++ }
+++ 
++++/** Иконка плагина из его пакета (manifest.json -> "icon"); null, если её нет или файл некорректен. */
++++@Composable
++++private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.graphics.ImageBitmap? =
++++    androidx.compose.runtime.remember(plugin.directory, plugin.manifest.icon) {
++++        val name = plugin.manifest.icon
++++        if (name.isBlank()) return@remember null
++++        runCatching {
++++            val dir = plugin.directory.canonicalFile
++++            val f = java.io.File(dir, name).canonicalFile
++++            if (!f.path.startsWith(dir.path + java.io.File.separator) || !f.isFile || f.length() > 512 * 1024) null
++++            else android.graphics.BitmapFactory.decodeFile(f.path)?.let { androidx.compose.ui.graphics.asImageBitmap(it) }
++++        }.getOrNull()
++++    }
++++
+++ private fun InstalledPlugin.hasDetails() =
+++     manifest.description.isNotBlank() || error != null
+++ 
+++diff -ruN orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt
+++--- orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.407644861 +0000
++++++ new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.421516867 +0000
+++@@ -22,7 +22,7 @@
+++ import org.json.JSONObject
+++ 
+++ /**
+++- * Хост нативных (C++) плагинов, API 2.0. Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
++++ * Хост нативных (C++) плагинов, API 2.2 (принимаются плагины 2.1 и 2.2). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+++  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
+++  *
+++  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.
+++@@ -337,7 +337,7 @@
+++         require(PLUGIN_ID.matches(manifest.id)) { tr("Недопустимый id плагина") }
+++         require(manifest.name.isNotBlank() && manifest.name.length <= 120) { tr("Недопустимое имя плагина") }
+++         require(PluginApiVersion.isSupported(manifest.api)) {
+++-            tr("API плагина {0} не поддерживается (нужен 1.x или {1})", manifest.api, API_VERSION)
++++            tr("API плагина {0} не поддерживается (нужен от {1} до {2})", manifest.api, PluginApiVersion.MIN, API_VERSION)
+++         }
+++         require(ENTRY.matches(manifest.entry)) { tr("entry должен быть именем .so файла") }
+++         manifest.permissions.forEach { require(it in PluginPermission.ALL) { tr("Неизвестное разрешение: {0}", it) } }
+++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt
+++--- orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.406574512 +0000
++++++ new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.421326013 +0000
+++@@ -1,10 +1,17 @@
+++ package app.yougram.plugin
+++ 
+++-/** Версия API плагинов. Манифест с тем же major и minor не выше хостового считается совместимым. */
++++/**
++++ * Версия API плагинов. Хост — 2.2; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
++++ * Принимается major 2 и minor от [MIN_MINOR] до [MINOR].
++++ */
+++ object PluginApiVersion {
+++     const val MAJOR = 2
+++-    const val MINOR = 1
+++-    const val CURRENT = "2.1"
++++    const val MINOR = 2
++++    const val CURRENT = "2.2"
++++
++++    /** Самая старая поддерживаемая версия. */
++++    const val MIN_MINOR = 1
++++    const val MIN = "2.1"
+++ 
+++     fun parse(value: String): Pair<Int, Int>? {
+++         val parts = value.trim().split('.')
+++@@ -14,9 +21,9 @@
+++         return Pair(major, minor)
+++     }
+++ 
+++-    /** 1.x (старые плагины) и 2.0..2.[MINOR] (2.1 добавил register_ui). */
++++    /** Только 2.[MIN_MINOR]..2.[MINOR]: 1.x и 2.0 отклоняются, версии новее хоста тоже. */
+++     fun isSupported(value: String): Boolean {
+++         val (major, minor) = parse(value) ?: return false
+++-        return major in 1 until MAJOR || (major == MAJOR && minor <= MINOR)
++++        return major == MAJOR && minor in MIN_MINOR..MINOR
+++     }
+++ }
+++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt
+++--- orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.408226207 +0000
++++++ new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.421696715 +0000
+++@@ -5,7 +5,7 @@
+++ import org.json.JSONArray
+++ import org.json.JSONObject
+++ 
+++-/** Чтение и проверка manifest.json (API 1.0 и 2.0). */
++++/** Чтение и проверка manifest.json (API 2.1 и 2.2). */
+++ object PluginManifestReader {
+++     private val SETTING_KEY = Regex("[a-z0-9_]{1,40}")
+++     private const val MAX_SETTINGS = 50
+++@@ -37,6 +37,7 @@
+++         bundled = json.optBoolean("bundled", false),
+++         permissions = strings(json.optJSONArray("permissions")),
+++         priority = json.optInt("priority", 0),
++++        icon = json.optString("icon", ""),
+++         settings = settings(json.optJSONArray("settings")),
+++     )
+++ 
+++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginModels.kt new/app/src/main/java/app/yougram/plugin/PluginModels.kt
+++--- orig/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.408944787 +0000
++++++ new/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.421777495 +0000
+++@@ -32,6 +32,8 @@
+++     /** Порядок в цепочке хуков: больше — раньше. */
+++     val priority: Int = 0,
+++     val settings: List<PluginSetting> = emptyList(),
++++    /** Путь к иконке внутри пакета (png/webp/jpg), например "icon.png". Пусто — иконки нет. */
++++    val icon: String = "",
+++ )
+++ 
+++ data class InstalledPlugin(
+++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginStore.kt new/app/src/main/java/app/yougram/plugin/PluginStore.kt
+++--- orig/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.409247001 +0000
++++++ new/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.422130782 +0000
+++@@ -80,6 +80,9 @@
+++                 val url = o.optString("url")
+++                 val sha = o.optString("sha256")
+++                 if (id.isEmpty() || url.isEmpty() || sha.isEmpty()) return@mapNotNull null
++++                // Каталог пишет "api" из manifest.json; плагины вне 2.1..2.2 не показываем: они всё равно не установятся.
++++                val api = o.optString("api")
++++                if (api.isNotEmpty() && !PluginApiVersion.isSupported(api)) return@mapNotNull null
+++                 val perms = o.optJSONArray("permissions")
+++                 StorePlugin(
+++                     id = id,
+++diff -ruN orig/plugin-host/src/main/cpp/example_hello.cpp new/plugin-host/src/main/cpp/example_hello.cpp
+++--- orig/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.411781867 +0000
++++++ new/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.423595760 +0000
+++@@ -1,4 +1,4 @@
+++-// Пример плагина SDK 2.0: команда /ping отвечает текстом из настроек плагина.
++++// Пример плагина SDK 2.2: команда /ping отвечает текстом из настроек плагина.
+++ // Без STL: плагину не нужна libc++, достаточно libc и yougram_plugin.h.
+++ #include <stdio.h>
+++ #include <string.h>
+++diff -ruN orig/plugin-host/src/main/cpp/include/yougram_plugin.h new/plugin-host/src/main/cpp/include/yougram_plugin.h
+++--- orig/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.411107046 +0000
++++++ new/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.422553588 +0000
+++@@ -1,5 +1,5 @@
+++ /*
+++- * Yougram Plugin SDK 2.0 (C ABI, YG_PLUGIN_API_VERSION 2, minor 0).
++++ * Yougram Plugin SDK 2.2 (C ABI, YG_PLUGIN_API_VERSION 2, minor 2). Хост принимает плагины API 2.1 и 2.2.
+++  *
+++  * Плагин — shared-библиотека (.so) с экспортом yougram_plugin_entry(). Интерфейс — чистый C.
+++  * Пакет .ygplugin — zip: manifest.json + lib/<abi>/<entry>.
+++@@ -9,7 +9,8 @@
+++  *     "id": "com.example.plugin",            // [A-Za-z0-9][A-Za-z0-9._-]{0,119}
+++  *     "name": "Мой плагин",
+++  *     "version": "1.0.0",
+++- *     "api": "2.0",                          // "1.0" тоже принимается
++++ *     "api": "2.2",                          // допустимо "2.1" и "2.2"; 1.x и 2.0 не устанавливаются
++++ *     "icon": "icon.png",                    // необязательно: png/webp/jpg в пакете, до 512 КБ, лучше 256x256
+++  *     "author": "...", "description": "...",
+++  *     "entry": "libplugin.so",
+++  *     "priority": 0,                         // -100..100, больше = раньше в цепочке хуков
+++@@ -103,7 +104,7 @@
+++ #endif
+++ 
+++ #define YG_PLUGIN_API_VERSION 2u
+++-#define YG_PLUGIN_API_MINOR   0u
++++#define YG_PLUGIN_API_MINOR   2u
+++ 
+++ #define YG_LOG_DEBUG 0
+++ #define YG_LOG_INFO  1
+++@@ -127,7 +128,7 @@
+++ } YgHost;
+++ 
+++ typedef struct YgPlugin {
+++-    uint32_t api_version; /* 1 или 2 */
++++    uint32_t api_version; /* 2 (YG_PLUGIN_API_VERSION) */
+++     void (*on_load)(const YgHost* host);
+++     void (*on_enable)(void);
+++     void (*on_disable)(void);
+++diff -ruN orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp new/plugin-host/src/main/cpp/yougram_plugin_host.cpp
+++--- orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.411524889 +0000
++++++ new/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.423422657 +0000
+++@@ -1,4 +1,4 @@
+++-// JNI-хост нативных плагинов Yougram (SDK 2.0): dlopen(), события, хуки, вызовы хоста из плагина.
++++// JNI-хост нативных плагинов Yougram (SDK 2.2): dlopen(), события, хуки, вызовы хоста из плагина.
+++ // Без STL. Все строки-payload ходят через JNI как byte[] (чистый UTF-8, эмодзи не ломаются).
+++ #include <android/log.h>
+++ #include <dlfcn.h>
+++@@ -224,9 +224,9 @@
+++             } else if (!api) {
+++                 dlclose(handle);
+++                 result = fail(env, "yougram_plugin_entry вернула null");
+++-            } else if (api->api_version < 1 || api->api_version > YG_PLUGIN_API_VERSION) {
++++            } else if (api->api_version != YG_PLUGIN_API_VERSION) {
+++                 dlclose(handle);
+++-                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна 1..%u)",
++++                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна %u)",
+++                               static_cast<unsigned>(api->api_version), static_cast<unsigned>(YG_PLUGIN_API_VERSION));
+++             } else {
+++                 auto* plugin = static_cast<Plugin*>(calloc(1, sizeof(Plugin)));
++diff -ruN orig/app/src/main/assets/i18n/en.json new/app/src/main/assets/i18n/en.json
++--- orig/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.413112039 +0000
+++++ new/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.428486447 +0000
++@@ -994,7 +994,7 @@
++     "Перезагрузить плагины": "Reload plugins",
++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Native code is not isolated: it runs with the same rights as the app, and its crash closes Yougram. ",
++     "Ставьте только плагины, которым доверяете.": "Install only plugins you trust.",
++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
+++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
++     "Установить плагин?": "Install plugin?",
++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "A plugin is machine code. It will get full access to Yougram data and your Telegram account. ",
++     "Устанавливайте только из источников, которым доверяете.": "Install only from sources you trust.",
++@@ -1371,7 +1371,7 @@
++     "Нет {0} для ABI устройства ({1})": "No {0} for the device ABI ({1})",
++     "Недопустимый id плагина": "Invalid plugin id",
++     "Недопустимое имя плагина": "Invalid plugin name",
++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "Plugin API {0} is not supported (1.x or {1} is required)",
+++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "Plugin API {0} is not supported (from {1} to {2} is required)",
++     "entry должен быть именем .so файла": "entry must be the name of a .so file",
++     "Неизвестное разрешение: {0}": "Unknown permission: {0}",
++     "priority: от -100 до 100": "priority: from -100 to 100",
++diff -ruN orig/app/src/main/assets/i18n/uk.json new/app/src/main/assets/i18n/uk.json
++--- orig/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.415976003 +0000
+++++ new/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.429674372 +0000
++@@ -994,7 +994,7 @@
++     "Перезагрузить плагины": "Перезавантажити плагіни",
++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Нативний код не ізольований: він працює з тими самими правами, що й застосунок, і його збій закриває Yougram. ",
++     "Ставьте только плагины, которым доверяете.": "Встановлюйте лише плагіни, яким довіряєте.",
++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
+++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
++     "Установить плагин?": "Встановити плагін?",
++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "Плагін — це машинний код. Він отримає повний доступ до даних Yougram і вашого акаунта Telegram. ",
++     "Устанавливайте только из источников, которым доверяете.": "Встановлюйте лише з джерел, яким довіряєте.",
++@@ -1371,7 +1371,7 @@
++     "Нет {0} для ABI устройства ({1})": "Немає {0} для ABI пристрою ({1})",
++     "Недопустимый id плагина": "Недопустимий id плагіна",
++     "Недопустимое имя плагина": "Недопустиме ім’я плагіна",
++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "API плагіна {0} не підтримується (потрібен 1.x або {1})",
+++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "API плагіна {0} не підтримується (потрібен від {1} до {2})",
++     "entry должен быть именем .so файла": "entry має бути іменем .so файлу",
++     "Неизвестное разрешение: {0}": "Невідомий дозвіл: {0}",
++     "priority: от -100 до 100": "priority: від -100 до 100",
++diff -ruN orig/app/src/main/assets/i18n/zh.json new/app/src/main/assets/i18n/zh.json
++--- orig/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.418778961 +0000
+++++ new/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.430588022 +0000
++@@ -994,7 +994,7 @@
++     "Перезагрузить плагины": "重新加载插件",
++     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "原生代码未被隔离：它与应用拥有相同权限，其崩溃会导致 Yougram 关闭。",
++     "Ставьте только плагины, которым доверяете.": "请仅安装你信任的插件。",
++-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
+++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
++     "Установить плагин?": "安装插件？",
++     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "插件是机器码，将获得对 Yougram 数据和你的 Telegram 账号的完全访问权限。",
++     "Устанавливайте только из источников, которым доверяете.": "请仅从你信任的来源安装。",
++@@ -1371,7 +1371,7 @@
++     "Нет {0} для ABI устройства ({1})": "缺少适用于设备 ABI（{1}）的 {0}",
++     "Недопустимый id плагина": "插件 ID 无效",
++     "Недопустимое имя плагина": "插件名称无效",
++-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "不支持插件 API {0}（需要 1.x 或 {1}）",
+++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "不支持插件 API {0}（需要 {1} 至 {2}）",
++     "entry должен быть именем .so файла": "entry 必须是 .so 文件名",
++     "Неизвестное разрешение: {0}": "未知权限：{0}",
++     "priority: от -100 до 100": "priority：-100 到 100",
++diff -ruN orig/app/src/main/assets/plugins/example-hello/manifest.json new/app/src/main/assets/plugins/example-hello/manifest.json
++--- orig/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.412134622 +0000
+++++ new/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.423658455 +0000
++@@ -1,11 +1,12 @@
++ {
++   "id": "com.yougram.example.hello",
++   "name": "Hello World",
++-  "version": "2.0.0",
++-  "api": "2.0",
+++  "version": "2.2.0",
+++  "api": "2.2",
++   "author": "Yougram Example",
++-  "description": "Встроенный пример C++ плагина (SDK 2.0): команда /ping отвечает текстом из настроек.",
+++  "description": "Встроенный пример C++ плагина (SDK 2.2): команда /ping отвечает текстом из настроек.",
++   "entry": "libyg_example_hello.so",
+++  "icon": "icon.png",
++   "bundled": true,
++   "priority": 0,
++   "permissions": ["chat.send", "hooks"],
++diff -ruN orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt
++--- orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.410255408 +0000
+++++ new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.422423655 +0000
++@@ -196,6 +196,7 @@
++     modifier: Modifier = Modifier,
++     subtitle: String? = null,
++     icon: ImageVector? = null,
+++    iconImage: androidx.compose.ui.graphics.ImageBitmap? = null,
++     value: String? = null,
++     onClick: (() -> Unit)? = null,
++     trailing: (@Composable () -> Unit)? = null,
++@@ -212,7 +213,15 @@
++             .padding(horizontal = 20.dp, vertical = 16.dp),
++     ) {
++         Row(verticalAlignment = Alignment.CenterVertically) {
++-            SettingIconTile(shownIcon)
+++            if (iconImage != null) {
+++                androidx.compose.foundation.Image(
+++                    iconImage, null,
+++                    Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape),
+++                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+++                )
+++            } else {
+++                SettingIconTile(shownIcon)
+++            }
++             Spacer(Modifier.width(16.dp))
++             Column(Modifier.weight(1f)) {
++                 Text(tr(title), style = MaterialTheme.typography.titleMedium)
++diff -ruN orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt
++--- orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:48:38.409761363 +0000
+++++ new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:56:13.599134641 +0000
++@@ -1,6 +1,7 @@
++ package app.yougram.feature.settings.extras
++ 
++ import app.yougram.core.i18n.tr
+++import androidx.compose.ui.graphics.asImageBitmap
++ import android.net.Uri
++ import android.os.Build
++ import android.widget.Toast
++@@ -107,6 +108,7 @@
++                         title = plugin.manifest.name,
++                         subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · API ${plugin.manifest.api} · C++",
++                         icon = Icons.Filled.Extension,
+++                        iconImage = rememberPluginIcon(plugin),
++                         trailing = {
++                             Row(verticalAlignment = Alignment.CenterVertically) {
++                                 IconButton(onClick = { settingsFor = plugin }) {
++@@ -146,7 +148,7 @@
++             tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
++                 tr("Ставьте только плагины, которым доверяете."),
++         )
++-        SettingsFootnote("SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+++        SettingsFootnote("SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
++     }
++ 
++     if (confirmInstall) {
++@@ -206,6 +208,20 @@
++     }
++ }
++ 
+++/** Иконка плагина из его пакета (manifest.json -> "icon"); null, если её нет или файл некорректен. */
+++@Composable
+++private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.graphics.ImageBitmap? =
+++    androidx.compose.runtime.remember(plugin.directory, plugin.manifest.icon) {
+++        val name = plugin.manifest.icon
+++        if (name.isBlank()) return@remember null
+++        runCatching {
+++            val dir = plugin.directory.canonicalFile
+++            val f = java.io.File(dir, name).canonicalFile
+++            if (!f.path.startsWith(dir.path + java.io.File.separator) || !f.isFile || f.length() > 512 * 1024) null
+++            else android.graphics.BitmapFactory.decodeFile(f.path)?.asImageBitmap()
+++        }.getOrNull()
+++    }
+++
++ private fun InstalledPlugin.hasDetails() =
++     manifest.description.isNotBlank() || error != null
++ 
++diff -ruN orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt
++--- orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.407644861 +0000
+++++ new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.421516867 +0000
++@@ -22,7 +22,7 @@
++ import org.json.JSONObject
++ 
++ /**
++- * Хост нативных (C++) плагинов, API 2.0. Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+++ * Хост нативных (C++) плагинов, API 2.2 (принимаются плагины 2.1 и 2.2). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
++  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
++  *
++  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.
++@@ -337,7 +337,7 @@
++         require(PLUGIN_ID.matches(manifest.id)) { tr("Недопустимый id плагина") }
++         require(manifest.name.isNotBlank() && manifest.name.length <= 120) { tr("Недопустимое имя плагина") }
++         require(PluginApiVersion.isSupported(manifest.api)) {
++-            tr("API плагина {0} не поддерживается (нужен 1.x или {1})", manifest.api, API_VERSION)
+++            tr("API плагина {0} не поддерживается (нужен от {1} до {2})", manifest.api, PluginApiVersion.MIN, API_VERSION)
++         }
++         require(ENTRY.matches(manifest.entry)) { tr("entry должен быть именем .so файла") }
++         manifest.permissions.forEach { require(it in PluginPermission.ALL) { tr("Неизвестное разрешение: {0}", it) } }
++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt
++--- orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.406574512 +0000
+++++ new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.421326013 +0000
++@@ -1,10 +1,17 @@
++ package app.yougram.plugin
++ 
++-/** Версия API плагинов. Манифест с тем же major и minor не выше хостового считается совместимым. */
+++/**
+++ * Версия API плагинов. Хост — 2.2; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
+++ * Принимается major 2 и minor от [MIN_MINOR] до [MINOR].
+++ */
++ object PluginApiVersion {
++     const val MAJOR = 2
++-    const val MINOR = 1
++-    const val CURRENT = "2.1"
+++    const val MINOR = 2
+++    const val CURRENT = "2.2"
+++
+++    /** Самая старая поддерживаемая версия. */
+++    const val MIN_MINOR = 1
+++    const val MIN = "2.1"
++ 
++     fun parse(value: String): Pair<Int, Int>? {
++         val parts = value.trim().split('.')
++@@ -14,9 +21,9 @@
++         return Pair(major, minor)
++     }
++ 
++-    /** 1.x (старые плагины) и 2.0..2.[MINOR] (2.1 добавил register_ui). */
+++    /** Только 2.[MIN_MINOR]..2.[MINOR]: 1.x и 2.0 отклоняются, версии новее хоста тоже. */
++     fun isSupported(value: String): Boolean {
++         val (major, minor) = parse(value) ?: return false
++-        return major in 1 until MAJOR || (major == MAJOR && minor <= MINOR)
+++        return major == MAJOR && minor in MIN_MINOR..MINOR
++     }
++ }
++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt
++--- orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.408226207 +0000
+++++ new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.421696715 +0000
++@@ -5,7 +5,7 @@
++ import org.json.JSONArray
++ import org.json.JSONObject
++ 
++-/** Чтение и проверка manifest.json (API 1.0 и 2.0). */
+++/** Чтение и проверка manifest.json (API 2.1 и 2.2). */
++ object PluginManifestReader {
++     private val SETTING_KEY = Regex("[a-z0-9_]{1,40}")
++     private const val MAX_SETTINGS = 50
++@@ -37,6 +37,7 @@
++         bundled = json.optBoolean("bundled", false),
++         permissions = strings(json.optJSONArray("permissions")),
++         priority = json.optInt("priority", 0),
+++        icon = json.optString("icon", ""),
++         settings = settings(json.optJSONArray("settings")),
++     )
++ 
++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginModels.kt new/app/src/main/java/app/yougram/plugin/PluginModels.kt
++--- orig/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.408944787 +0000
+++++ new/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.421777495 +0000
++@@ -32,6 +32,8 @@
++     /** Порядок в цепочке хуков: больше — раньше. */
++     val priority: Int = 0,
++     val settings: List<PluginSetting> = emptyList(),
+++    /** Путь к иконке внутри пакета (png/webp/jpg), например "icon.png". Пусто — иконки нет. */
+++    val icon: String = "",
++ )
++ 
++ data class InstalledPlugin(
++diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginStore.kt new/app/src/main/java/app/yougram/plugin/PluginStore.kt
++--- orig/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.409247001 +0000
+++++ new/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.422130782 +0000
++@@ -80,6 +80,9 @@
++                 val url = o.optString("url")
++                 val sha = o.optString("sha256")
++                 if (id.isEmpty() || url.isEmpty() || sha.isEmpty()) return@mapNotNull null
+++                // Каталог пишет "api" из manifest.json; плагины вне 2.1..2.2 не показываем: они всё равно не установятся.
+++                val api = o.optString("api")
+++                if (api.isNotEmpty() && !PluginApiVersion.isSupported(api)) return@mapNotNull null
++                 val perms = o.optJSONArray("permissions")
++                 StorePlugin(
++                     id = id,
++diff -ruN orig/plugin-host/src/main/cpp/example_hello.cpp new/plugin-host/src/main/cpp/example_hello.cpp
++--- orig/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.411781867 +0000
+++++ new/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.423595760 +0000
++@@ -1,4 +1,4 @@
++-// Пример плагина SDK 2.0: команда /ping отвечает текстом из настроек плагина.
+++// Пример плагина SDK 2.2: команда /ping отвечает текстом из настроек плагина.
++ // Без STL: плагину не нужна libc++, достаточно libc и yougram_plugin.h.
++ #include <stdio.h>
++ #include <string.h>
++diff -ruN orig/plugin-host/src/main/cpp/include/yougram_plugin.h new/plugin-host/src/main/cpp/include/yougram_plugin.h
++--- orig/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.411107046 +0000
+++++ new/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.422553588 +0000
++@@ -1,5 +1,5 @@
++ /*
++- * Yougram Plugin SDK 2.0 (C ABI, YG_PLUGIN_API_VERSION 2, minor 0).
+++ * Yougram Plugin SDK 2.2 (C ABI, YG_PLUGIN_API_VERSION 2, minor 2). Хост принимает плагины API 2.1 и 2.2.
++  *
++  * Плагин — shared-библиотека (.so) с экспортом yougram_plugin_entry(). Интерфейс — чистый C.
++  * Пакет .ygplugin — zip: manifest.json + lib/<abi>/<entry>.
++@@ -9,7 +9,8 @@
++  *     "id": "com.example.plugin",            // [A-Za-z0-9][A-Za-z0-9._-]{0,119}
++  *     "name": "Мой плагин",
++  *     "version": "1.0.0",
++- *     "api": "2.0",                          // "1.0" тоже принимается
+++ *     "api": "2.2",                          // допустимо "2.1" и "2.2"; 1.x и 2.0 не устанавливаются
+++ *     "icon": "icon.png",                    // необязательно: png/webp/jpg в пакете, до 512 КБ, лучше 256x256
++  *     "author": "...", "description": "...",
++  *     "entry": "libplugin.so",
++  *     "priority": 0,                         // -100..100, больше = раньше в цепочке хуков
++@@ -103,7 +104,7 @@
++ #endif
++ 
++ #define YG_PLUGIN_API_VERSION 2u
++-#define YG_PLUGIN_API_MINOR   0u
+++#define YG_PLUGIN_API_MINOR   2u
++ 
++ #define YG_LOG_DEBUG 0
++ #define YG_LOG_INFO  1
++@@ -127,7 +128,7 @@
++ } YgHost;
++ 
++ typedef struct YgPlugin {
++-    uint32_t api_version; /* 1 или 2 */
+++    uint32_t api_version; /* 2 (YG_PLUGIN_API_VERSION) */
++     void (*on_load)(const YgHost* host);
++     void (*on_enable)(void);
++     void (*on_disable)(void);
++diff -ruN orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp new/plugin-host/src/main/cpp/yougram_plugin_host.cpp
++--- orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.411524889 +0000
+++++ new/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.423422657 +0000
++@@ -1,4 +1,4 @@
++-// JNI-хост нативных плагинов Yougram (SDK 2.0): dlopen(), события, хуки, вызовы хоста из плагина.
+++// JNI-хост нативных плагинов Yougram (SDK 2.2): dlopen(), события, хуки, вызовы хоста из плагина.
++ // Без STL. Все строки-payload ходят через JNI как byte[] (чистый UTF-8, эмодзи не ломаются).
++ #include <android/log.h>
++ #include <dlfcn.h>
++@@ -224,9 +224,9 @@
++             } else if (!api) {
++                 dlclose(handle);
++                 result = fail(env, "yougram_plugin_entry вернула null");
++-            } else if (api->api_version < 1 || api->api_version > YG_PLUGIN_API_VERSION) {
+++            } else if (api->api_version != YG_PLUGIN_API_VERSION) {
++                 dlclose(handle);
++-                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна 1..%u)",
+++                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна %u)",
++                               static_cast<unsigned>(api->api_version), static_cast<unsigned>(YG_PLUGIN_API_VERSION));
++             } else {
++                 auto* plugin = static_cast<Plugin*>(calloc(1, sizeof(Plugin)));
+diff -ruN orig/app/src/main/assets/i18n/en.json new/app/src/main/assets/i18n/en.json
+--- orig/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.413112039 +0000
++++ new/app/src/main/assets/i18n/en.json	2026-11-02 01:48:38.428486447 +0000
+@@ -994,7 +994,7 @@
+     "Перезагрузить плагины": "Reload plugins",
+     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Native code is not isolated: it runs with the same rights as the app, and its crash closes Yougram. ",
+     "Ставьте только плагины, которым доверяете.": "Install only plugins you trust.",
+-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
+     "Установить плагин?": "Install plugin?",
+     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "A plugin is machine code. It will get full access to Yougram data and your Telegram account. ",
+     "Устанавливайте только из источников, которым доверяете.": "Install only from sources you trust.",
+@@ -1371,7 +1371,7 @@
+     "Нет {0} для ABI устройства ({1})": "No {0} for the device ABI ({1})",
+     "Недопустимый id плагина": "Invalid plugin id",
+     "Недопустимое имя плагина": "Invalid plugin name",
+-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "Plugin API {0} is not supported (1.x or {1} is required)",
++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "Plugin API {0} is not supported (from {1} to {2} is required)",
+     "entry должен быть именем .so файла": "entry must be the name of a .so file",
+     "Неизвестное разрешение: {0}": "Unknown permission: {0}",
+     "priority: от -100 до 100": "priority: from -100 to 100",
+diff -ruN orig/app/src/main/assets/i18n/uk.json new/app/src/main/assets/i18n/uk.json
+--- orig/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.415976003 +0000
++++ new/app/src/main/assets/i18n/uk.json	2026-11-02 01:48:38.429674372 +0000
+@@ -994,7 +994,7 @@
+     "Перезагрузить плагины": "Перезавантажити плагіни",
+     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Нативний код не ізольований: він працює з тими самими правами, що й застосунок, і його збій закриває Yougram. ",
+     "Ставьте только плагины, которым доверяете.": "Встановлюйте лише плагіни, яким довіряєте.",
+-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: заголовок yougram_plugin.h і приклад example_hello.cpp у вихідному коді застосунку.",
+     "Установить плагин?": "Встановити плагін?",
+     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "Плагін — це машинний код. Він отримає повний доступ до даних Yougram і вашого акаунта Telegram. ",
+     "Устанавливайте только из источников, которым доверяете.": "Встановлюйте лише з джерел, яким довіряєте.",
+@@ -1371,7 +1371,7 @@
+     "Нет {0} для ABI устройства ({1})": "Немає {0} для ABI пристрою ({1})",
+     "Недопустимый id плагина": "Недопустимий id плагіна",
+     "Недопустимое имя плагина": "Недопустиме ім’я плагіна",
+-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "API плагіна {0} не підтримується (потрібен 1.x або {1})",
++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "API плагіна {0} не підтримується (потрібен від {1} до {2})",
+     "entry должен быть именем .so файла": "entry має бути іменем .so файлу",
+     "Неизвестное разрешение: {0}": "Невідомий дозвіл: {0}",
+     "priority: от -100 до 100": "priority: від -100 до 100",
+diff -ruN orig/app/src/main/assets/i18n/zh.json new/app/src/main/assets/i18n/zh.json
+--- orig/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.418778961 +0000
++++ new/app/src/main/assets/i18n/zh.json	2026-11-02 01:48:38.430588022 +0000
+@@ -994,7 +994,7 @@
+     "Перезагрузить плагины": "重新加载插件",
+     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "原生代码未被隔离：它与应用拥有相同权限，其崩溃会导致 Yougram 关闭。",
+     "Ставьте только плагины, которым доверяете.": "请仅安装你信任的插件。",
+-    "SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.0：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
++    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2：头文件 yougram_plugin.h 和示例 example_hello.cpp 位于应用源码中。",
+     "Установить плагин?": "安装插件？",
+     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "插件是机器码，将获得对 Yougram 数据和你的 Telegram 账号的完全访问权限。",
+     "Устанавливайте только из источников, которым доверяете.": "请仅从你信任的来源安装。",
+@@ -1371,7 +1371,7 @@
+     "Нет {0} для ABI устройства ({1})": "缺少适用于设备 ABI（{1}）的 {0}",
+     "Недопустимый id плагина": "插件 ID 无效",
+     "Недопустимое имя плагина": "插件名称无效",
+-    "API плагина {0} не поддерживается (нужен 1.x или {1})": "不支持插件 API {0}（需要 1.x 或 {1}）",
++    "API плагина {0} не поддерживается (нужен от {1} до {2})": "不支持插件 API {0}（需要 {1} 至 {2}）",
+     "entry должен быть именем .so файла": "entry 必须是 .so 文件名",
+     "Неизвестное разрешение: {0}": "未知权限：{0}",
+     "priority: от -100 до 100": "priority：-100 到 100",
+diff -ruN orig/app/src/main/assets/plugins/example-hello/manifest.json new/app/src/main/assets/plugins/example-hello/manifest.json
+--- orig/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.412134622 +0000
++++ new/app/src/main/assets/plugins/example-hello/manifest.json	2026-11-02 01:48:38.423658455 +0000
+@@ -1,11 +1,12 @@
+ {
+   "id": "com.yougram.example.hello",
+   "name": "Hello World",
+-  "version": "2.0.0",
+-  "api": "2.0",
++  "version": "2.2.0",
++  "api": "2.2",
+   "author": "Yougram Example",
+-  "description": "Встроенный пример C++ плагина (SDK 2.0): команда /ping отвечает текстом из настроек.",
++  "description": "Встроенный пример C++ плагина (SDK 2.2): команда /ping отвечает текстом из настроек.",
+   "entry": "libyg_example_hello.so",
++  "icon": "icon.png",
+   "bundled": true,
+   "priority": 0,
+   "permissions": ["chat.send", "hooks"],
+diff -ruN orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt
+--- orig/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.410255408 +0000
++++ new/app/src/main/java/app/yougram/feature/settings/component/SettingsComponents.kt	2026-11-02 01:48:38.422423655 +0000
+@@ -196,6 +196,7 @@
+     modifier: Modifier = Modifier,
+     subtitle: String? = null,
+     icon: ImageVector? = null,
++    iconImage: androidx.compose.ui.graphics.ImageBitmap? = null,
+     value: String? = null,
+     onClick: (() -> Unit)? = null,
+     trailing: (@Composable () -> Unit)? = null,
+@@ -212,7 +213,15 @@
+             .padding(horizontal = 20.dp, vertical = 16.dp),
+     ) {
+         Row(verticalAlignment = Alignment.CenterVertically) {
+-            SettingIconTile(shownIcon)
++            if (iconImage != null) {
++                androidx.compose.foundation.Image(
++                    iconImage, null,
++                    Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape),
++                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
++                )
++            } else {
++                SettingIconTile(shownIcon)
++            }
+             Spacer(Modifier.width(16.dp))
+             Column(Modifier.weight(1f)) {
+                 Text(tr(title), style = MaterialTheme.typography.titleMedium)
+diff -ruN orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt
+--- orig/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:48:38.409761363 +0000
++++ new/app/src/main/java/app/yougram/feature/settings/extras/PluginsScreen.kt	2026-11-02 01:59:50.832445700 +0000
+@@ -1,19 +1,37 @@
+ package app.yougram.feature.settings.extras
+ 
+ import app.yougram.core.i18n.tr
++import app.yougram.core.ui.glass.plateColor
++import app.yougram.core.settings.PlateArea
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.graphics.ImageBitmap
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.draw.alpha
++import androidx.compose.runtime.key
++import androidx.compose.material3.Surface
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.background
++import androidx.compose.foundation.Image
++import androidx.compose.ui.graphics.asImageBitmap
+ import android.net.Uri
+ import android.os.Build
+ import android.widget.Toast
+ import androidx.activity.compose.rememberLauncherForActivityResult
+ import androidx.activity.result.contract.ActivityResultContracts
+-import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.PaddingValues
+ import androidx.compose.foundation.layout.Row
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.Code
+ import androidx.compose.material.icons.filled.DeleteOutline
+-import androidx.compose.material.icons.filled.Extension
+ import androidx.compose.material.icons.filled.FileOpen
+ import androidx.compose.material.icons.filled.Refresh
+ import androidx.compose.material.icons.filled.Settings
+@@ -97,30 +115,15 @@
+         }
+ 
+         SectionLabel("Установленные")
+-        SettingGroup {
+-            if (plugins.isEmpty()) {
+-                item { SettingRow(title = "Пока нет плагинов", subtitle = "Установите .ygplugin с библиотекой на C++") }
+-            }
+-            plugins.forEach { plugin ->
+-                item {
+-                    SettingRow(
+-                        title = plugin.manifest.name,
+-                        subtitle = "v${plugin.manifest.version} · ${plugin.manifest.author} · API ${plugin.manifest.api} · C++",
+-                        icon = Icons.Filled.Extension,
+-                        trailing = {
+-                            Row(verticalAlignment = Alignment.CenterVertically) {
+-                                IconButton(onClick = { settingsFor = plugin }) {
+-                                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки плагина"))
+-                                }
+-                                CheckSwitch(plugin.enabled) { manager.setEnabled(plugin.manifest.id, it) }
+-                                IconButton(onClick = { pendingDelete = plugin }) {
+-                                    Icon(Icons.Filled.DeleteOutline, contentDescription = tr("Удалить"))
+-                                }
+-                            }
+-                        },
+-                        below = if (plugin.hasDetails()) ({ PluginDetails(plugin) }) else null,
+-                    )
+-                }
++        if (plugins.isEmpty()) EmptyPluginsCard()
++        plugins.forEach { plugin ->
++            key(plugin.manifest.id) {
++                PluginCard(
++                    plugin = plugin,
++                    onToggle = { manager.setEnabled(plugin.manifest.id, it) },
++                    onSettings = { settingsFor = plugin },
++                    onDelete = { pendingDelete = plugin },
++                )
+             }
+         }
+ 
+@@ -146,7 +149,7 @@
+             tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
+                 tr("Ставьте только плагины, которым доверяете."),
+         )
+-        SettingsFootnote("SDK 2.0: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
++        SettingsFootnote("SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+     }
+ 
+     if (confirmInstall) {
+@@ -206,28 +209,125 @@
+     }
+ }
+ 
+-private fun InstalledPlugin.hasDetails() =
+-    manifest.description.isNotBlank() || error != null
++/** Иконка плагина из его пакета (manifest.json -> "icon"); null, если её нет или файл некорректен. */
++@Composable
++private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.graphics.ImageBitmap? =
++    androidx.compose.runtime.remember(plugin.directory, plugin.manifest.icon) {
++        val name = plugin.manifest.icon
++        if (name.isBlank()) return@remember null
++        runCatching {
++            val dir = plugin.directory.canonicalFile
++            val f = java.io.File(dir, name).canonicalFile
++            if (!f.path.startsWith(dir.path + java.io.File.separator) || !f.isFile || f.length() > 512 * 1024) null
++            else android.graphics.BitmapFactory.decodeFile(f.path)?.asImageBitmap()
++        }.getOrNull()
++    }
+ 
++private val CardShape = RoundedCornerShape(28.dp)
++
++/** Карточка установленного плагина: иконка, имя, версия и автор, описание, ошибка, переключатель и действия. */
+ @Composable
+-private fun PluginDetails(plugin: InstalledPlugin) {
+-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+-        if (plugin.manifest.description.isNotBlank()) {
+-            // В списке — только короткая строка; полное описание и разрешения — в настройках плагина.
++private fun PluginCard(
++    plugin: InstalledPlugin,
++    onToggle: (Boolean) -> Unit,
++    onSettings: () -> Unit,
++    onDelete: () -> Unit,
++) {
++    val m = plugin.manifest
++    val icon = rememberPluginIcon(plugin)
++    // Выключенный плагин без ошибки выглядит приглушённо; переключатель и кнопки остаются яркими.
++    val dim = if (plugin.enabled || plugin.error != null) 1f else 0.6f
++    Surface(
++        onClick = onSettings,
++        shape = CardShape,
++        color = plateColor(PlateArea.Settings),
++        modifier = Modifier.fillMaxWidth(),
++    ) {
++        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)) {
++            Row(verticalAlignment = Alignment.CenterVertically) {
++                PluginCardIcon(m.name, icon, Modifier.alpha(dim))
++                Column(Modifier.weight(1f).padding(start = 14.dp, end = 8.dp).alpha(dim)) {
++                    Text(m.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
++                    Text(
++                        "v${m.version} · ${m.author}",
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant,
++                        maxLines = 1,
++                        overflow = TextOverflow.Ellipsis,
++                    )
++                }
++                Box(Modifier.padding(end = 8.dp)) { CheckSwitch(plugin.enabled, onToggle) }
++            }
++            if (m.description.isNotBlank()) {
++                Text(
++                    m.description,
++                    style = MaterialTheme.typography.bodyMedium,
++                    maxLines = 3,
++                    overflow = TextOverflow.Ellipsis,
++                    modifier = Modifier.padding(top = 12.dp, end = 8.dp).alpha(dim),
++                )
++            }
++            plugin.error?.let {
++                Text(
++                    tr("Ошибка: {0}", it),
++                    style = MaterialTheme.typography.bodySmall,
++                    color = MaterialTheme.colorScheme.error,
++                    maxLines = 3,
++                    overflow = TextOverflow.Ellipsis,
++                    modifier = Modifier.padding(top = 8.dp, end = 8.dp),
++                )
++            }
++            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
++                PluginChip("API ${m.api}")
++                Spacer(Modifier.width(6.dp))
++                PluginChip("C++")
++                Spacer(Modifier.weight(1f))
++                IconButton(onClick = onSettings) {
++                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки плагина"))
++                }
++                IconButton(onClick = onDelete) {
++                    Icon(Icons.Filled.DeleteOutline, contentDescription = tr("Удалить"))
++                }
++            }
++        }
++    }
++}
++
++@Composable
++private fun PluginCardIcon(name: String, bitmap: ImageBitmap?, modifier: Modifier = Modifier) {
++    Box(
++        modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer),
++        contentAlignment = Alignment.Center,
++    ) {
++        if (bitmap != null) {
++            Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
++        } else {
+             Text(
+-                plugin.manifest.description,
+-                style = MaterialTheme.typography.bodyMedium,
+-                maxLines = 1,
+-                overflow = TextOverflow.Ellipsis,
++                name.take(1).uppercase(),
++                style = MaterialTheme.typography.titleLarge,
++                color = MaterialTheme.colorScheme.onPrimaryContainer,
+             )
+         }
+-        plugin.error?.let {
++    }
++}
++
++@Composable
++private fun PluginChip(text: String) {
++    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
++        Text(text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
++    }
++}
++
++@Composable
++private fun EmptyPluginsCard() {
++    Surface(shape = CardShape, color = plateColor(PlateArea.Settings), modifier = Modifier.fillMaxWidth()) {
++        Column(Modifier.padding(20.dp)) {
++            Text("Пока нет плагинов", style = MaterialTheme.typography.titleMedium)
+             Text(
+-                tr("Ошибка: {0}", it),
+-                style = MaterialTheme.typography.bodySmall,
+-                color = MaterialTheme.colorScheme.error,
+-                maxLines = 2,
+-                overflow = TextOverflow.Ellipsis,
++                "Установите .ygplugin с библиотекой на C++",
++                style = MaterialTheme.typography.bodyMedium,
++                color = MaterialTheme.colorScheme.onSurfaceVariant,
++                modifier = Modifier.padding(top = 4.dp),
+             )
+         }
+     }
+diff -ruN orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt
+--- orig/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.407644861 +0000
++++ new/app/src/main/java/app/yougram/plugin/NativePluginManager.kt	2026-11-02 01:48:38.421516867 +0000
+@@ -22,7 +22,7 @@
+ import org.json.JSONObject
+ 
+ /**
+- * Хост нативных (C++) плагинов, API 2.0. Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
++ * Хост нативных (C++) плагинов, API 2.2 (принимаются плагины 2.1 и 2.2). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
+  *
+  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.
+@@ -337,7 +337,7 @@
+         require(PLUGIN_ID.matches(manifest.id)) { tr("Недопустимый id плагина") }
+         require(manifest.name.isNotBlank() && manifest.name.length <= 120) { tr("Недопустимое имя плагина") }
+         require(PluginApiVersion.isSupported(manifest.api)) {
+-            tr("API плагина {0} не поддерживается (нужен 1.x или {1})", manifest.api, API_VERSION)
++            tr("API плагина {0} не поддерживается (нужен от {1} до {2})", manifest.api, PluginApiVersion.MIN, API_VERSION)
+         }
+         require(ENTRY.matches(manifest.entry)) { tr("entry должен быть именем .so файла") }
+         manifest.permissions.forEach { require(it in PluginPermission.ALL) { tr("Неизвестное разрешение: {0}", it) } }
+diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt
+--- orig/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.406574512 +0000
++++ new/app/src/main/java/app/yougram/plugin/PluginApiVersion.kt	2026-11-02 01:48:38.421326013 +0000
+@@ -1,10 +1,17 @@
+ package app.yougram.plugin
+ 
+-/** Версия API плагинов. Манифест с тем же major и minor не выше хостового считается совместимым. */
++/**
++ * Версия API плагинов. Хост — 2.2; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
++ * Принимается major 2 и minor от [MIN_MINOR] до [MINOR].
++ */
+ object PluginApiVersion {
+     const val MAJOR = 2
+-    const val MINOR = 1
+-    const val CURRENT = "2.1"
++    const val MINOR = 2
++    const val CURRENT = "2.2"
++
++    /** Самая старая поддерживаемая версия. */
++    const val MIN_MINOR = 1
++    const val MIN = "2.1"
+ 
+     fun parse(value: String): Pair<Int, Int>? {
+         val parts = value.trim().split('.')
+@@ -14,9 +21,9 @@
+         return Pair(major, minor)
+     }
+ 
+-    /** 1.x (старые плагины) и 2.0..2.[MINOR] (2.1 добавил register_ui). */
++    /** Только 2.[MIN_MINOR]..2.[MINOR]: 1.x и 2.0 отклоняются, версии новее хоста тоже. */
+     fun isSupported(value: String): Boolean {
+         val (major, minor) = parse(value) ?: return false
+-        return major in 1 until MAJOR || (major == MAJOR && minor <= MINOR)
++        return major == MAJOR && minor in MIN_MINOR..MINOR
+     }
+ }
+diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt
+--- orig/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.408226207 +0000
++++ new/app/src/main/java/app/yougram/plugin/PluginManifestReader.kt	2026-11-02 01:48:38.421696715 +0000
+@@ -5,7 +5,7 @@
+ import org.json.JSONArray
+ import org.json.JSONObject
+ 
+-/** Чтение и проверка manifest.json (API 1.0 и 2.0). */
++/** Чтение и проверка manifest.json (API 2.1 и 2.2). */
+ object PluginManifestReader {
+     private val SETTING_KEY = Regex("[a-z0-9_]{1,40}")
+     private const val MAX_SETTINGS = 50
+@@ -37,6 +37,7 @@
+         bundled = json.optBoolean("bundled", false),
+         permissions = strings(json.optJSONArray("permissions")),
+         priority = json.optInt("priority", 0),
++        icon = json.optString("icon", ""),
+         settings = settings(json.optJSONArray("settings")),
+     )
+ 
+diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginModels.kt new/app/src/main/java/app/yougram/plugin/PluginModels.kt
+--- orig/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.408944787 +0000
++++ new/app/src/main/java/app/yougram/plugin/PluginModels.kt	2026-11-02 01:48:38.421777495 +0000
+@@ -32,6 +32,8 @@
+     /** Порядок в цепочке хуков: больше — раньше. */
+     val priority: Int = 0,
+     val settings: List<PluginSetting> = emptyList(),
++    /** Путь к иконке внутри пакета (png/webp/jpg), например "icon.png". Пусто — иконки нет. */
++    val icon: String = "",
+ )
+ 
+ data class InstalledPlugin(
+diff -ruN orig/app/src/main/java/app/yougram/plugin/PluginStore.kt new/app/src/main/java/app/yougram/plugin/PluginStore.kt
+--- orig/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.409247001 +0000
++++ new/app/src/main/java/app/yougram/plugin/PluginStore.kt	2026-11-02 01:48:38.422130782 +0000
+@@ -80,6 +80,9 @@
+                 val url = o.optString("url")
+                 val sha = o.optString("sha256")
+                 if (id.isEmpty() || url.isEmpty() || sha.isEmpty()) return@mapNotNull null
++                // Каталог пишет "api" из manifest.json; плагины вне 2.1..2.2 не показываем: они всё равно не установятся.
++                val api = o.optString("api")
++                if (api.isNotEmpty() && !PluginApiVersion.isSupported(api)) return@mapNotNull null
+                 val perms = o.optJSONArray("permissions")
+                 StorePlugin(
+                     id = id,
+diff -ruN orig/plugin-host/src/main/cpp/example_hello.cpp new/plugin-host/src/main/cpp/example_hello.cpp
+--- orig/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.411781867 +0000
++++ new/plugin-host/src/main/cpp/example_hello.cpp	2026-11-02 01:48:38.423595760 +0000
+@@ -1,4 +1,4 @@
+-// Пример плагина SDK 2.0: команда /ping отвечает текстом из настроек плагина.
++// Пример плагина SDK 2.2: команда /ping отвечает текстом из настроек плагина.
+ // Без STL: плагину не нужна libc++, достаточно libc и yougram_plugin.h.
+ #include <stdio.h>
+ #include <string.h>
+diff -ruN orig/plugin-host/src/main/cpp/include/yougram_plugin.h new/plugin-host/src/main/cpp/include/yougram_plugin.h
+--- orig/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.411107046 +0000
++++ new/plugin-host/src/main/cpp/include/yougram_plugin.h	2026-11-02 01:48:38.422553588 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * Yougram Plugin SDK 2.0 (C ABI, YG_PLUGIN_API_VERSION 2, minor 0).
++ * Yougram Plugin SDK 2.2 (C ABI, YG_PLUGIN_API_VERSION 2, minor 2). Хост принимает плагины API 2.1 и 2.2.
+  *
+  * Плагин — shared-библиотека (.so) с экспортом yougram_plugin_entry(). Интерфейс — чистый C.
+  * Пакет .ygplugin — zip: manifest.json + lib/<abi>/<entry>.
+@@ -9,7 +9,8 @@
+  *     "id": "com.example.plugin",            // [A-Za-z0-9][A-Za-z0-9._-]{0,119}
+  *     "name": "Мой плагин",
+  *     "version": "1.0.0",
+- *     "api": "2.0",                          // "1.0" тоже принимается
++ *     "api": "2.2",                          // допустимо "2.1" и "2.2"; 1.x и 2.0 не устанавливаются
++ *     "icon": "icon.png",                    // необязательно: png/webp/jpg в пакете, до 512 КБ, лучше 256x256
+  *     "author": "...", "description": "...",
+  *     "entry": "libplugin.so",
+  *     "priority": 0,                         // -100..100, больше = раньше в цепочке хуков
+@@ -103,7 +104,7 @@
+ #endif
+ 
+ #define YG_PLUGIN_API_VERSION 2u
+-#define YG_PLUGIN_API_MINOR   0u
++#define YG_PLUGIN_API_MINOR   2u
+ 
+ #define YG_LOG_DEBUG 0
+ #define YG_LOG_INFO  1
+@@ -127,7 +128,7 @@
+ } YgHost;
+ 
+ typedef struct YgPlugin {
+-    uint32_t api_version; /* 1 или 2 */
++    uint32_t api_version; /* 2 (YG_PLUGIN_API_VERSION) */
+     void (*on_load)(const YgHost* host);
+     void (*on_enable)(void);
+     void (*on_disable)(void);
+diff -ruN orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp new/plugin-host/src/main/cpp/yougram_plugin_host.cpp
+--- orig/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.411524889 +0000
++++ new/plugin-host/src/main/cpp/yougram_plugin_host.cpp	2026-11-02 01:48:38.423422657 +0000
+@@ -1,4 +1,4 @@
+-// JNI-хост нативных плагинов Yougram (SDK 2.0): dlopen(), события, хуки, вызовы хоста из плагина.
++// JNI-хост нативных плагинов Yougram (SDK 2.2): dlopen(), события, хуки, вызовы хоста из плагина.
+ // Без STL. Все строки-payload ходят через JNI как byte[] (чистый UTF-8, эмодзи не ломаются).
+ #include <android/log.h>
+ #include <dlfcn.h>
+@@ -224,9 +224,9 @@
+             } else if (!api) {
+                 dlclose(handle);
+                 result = fail(env, "yougram_plugin_entry вернула null");
+-            } else if (api->api_version < 1 || api->api_version > YG_PLUGIN_API_VERSION) {
++            } else if (api->api_version != YG_PLUGIN_API_VERSION) {
+                 dlclose(handle);
+-                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна 1..%u)",
++                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна %u)",
+                               static_cast<unsigned>(api->api_version), static_cast<unsigned>(YG_PLUGIN_API_VERSION));
+             } else {
+                 auto* plugin = static_cast<Plugin*>(calloc(1, sizeof(Plugin)));

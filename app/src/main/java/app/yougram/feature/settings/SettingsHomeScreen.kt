@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.Delete
@@ -142,7 +143,9 @@ enum class SettingsPage(val title: String) {
     Privacy("Безопасность и конфиденциальность"),
     Notifications("Уведомления"),
     DataStorage("Данные и память"),
-    Plugins("Модули"),
+    Plugins("Плагины"),
+    PluginsNew("Новые плагины"),
+    PluginManager("Менеджер плагинов"),
     Archive("Архив"),
     Devices("Устройства"),
     PowerSaving("Энергосбережение"),
@@ -164,7 +167,8 @@ enum class SettingsPage(val title: String) {
     TelegramHub("Telegram"),
     CreateHub("Создать / Добавить"),
     SystemHub("Система"),
-    Update("Обновление");
+    Update("Обновление"),
+    Assistant("ИИ-ассистент");
 
     /** Страница, на которую ведёт «Назад». */
     val parent: SettingsPage
@@ -248,12 +252,22 @@ fun SettingsHomeScreen(
             onOpenProfile = { state.profile?.id?.let(onOpenProfile) },
         )
 
+        app.yougram.plugin.PluginSlot(app.yougram.plugin.PluginUi.SETTINGS_HOME, layout = app.yougram.plugin.PluginSlotLayout.Column)
+
+        val pluginHidden = app.yougram.plugin.rememberPluginHiddenSet()
+
+        SectionLabel("ИИ-ассистент")
+        SettingGroup {
+            item { SettingRow("ИИ-ассистент", subtitle = "Помощь по настройкам, работает на устройстве", icon = Icons.Filled.AutoAwesome, onClick = { onNavigate(SettingsPage.Assistant) }) }
+        }
+
         // «О приложении» и обновление — сразу под профилем, в одной группе.
         SectionLabel("Обновления и ПО")
         val openUpdate = { onNavigate(SettingsPage.Update) }
         SettingGroup {
             item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
-            item {
+            item { SettingRow("Плагины", subtitle = "Плагины на C++", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
+            if (app.yougram.plugin.PluginUi.SETTINGS_UPDATE !in pluginHidden) item {
                 when (val u = update) {
                     UpdateState.Idle, UpdateState.Checking -> SettingRow(
                         title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
@@ -296,10 +310,12 @@ fun SettingsHomeScreen(
         val layout = remember(savedLayout) { HomeLayout.normalize(HomeLayout.parse(savedLayout), all.map { it.id }) }
 
         layout.forEach { section ->
-            if (section.entries.isNotEmpty()) {
+            // Вкладки, скрытые плагинами, не рисуем; секция без видимых вкладок пропадает целиком.
+            val visible = section.entries.filter { (app.yougram.plugin.PluginUi.SETTINGS_ENTRY_PREFIX + it) !in pluginHidden }
+            if (visible.isNotEmpty()) {
                 SectionLabel(section.title)
                 SettingGroup {
-                    section.entries.forEach { id ->
+                    visible.forEach { id ->
                         val e = byId[id] ?: return@forEach
                         item { HomeEntryRow(e, onNavigate) }
                     }
@@ -334,7 +350,6 @@ internal class HomeEntry(
 internal fun homeEntries(devices: String?, language: String?): List<HomeEntry> = listOf(
     HomeEntry("appearance", "Внешний вид и чаты", "Тема, панели, настройки чатов, папки", Icons.Filled.Tune, null, SettingsPage.Appearance),
     HomeEntry("client", "Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
-    HomeEntry("plugins", "Модули", "Модули на C++", Icons.Filled.Extension, null, SettingsPage.Plugins),
     HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
     HomeEntry("security", "Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
     HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, devices, SettingsPage.Devices),
@@ -373,9 +388,9 @@ private fun ProfileHeader(
         color = scheme.primaryContainer,
         contentColor = scheme.onPrimaryContainer,
     ) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // Родитель не обрезаем: иначе бейдж камеры в углу срезается формой аватара.
             Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
@@ -410,60 +425,59 @@ private fun ProfileHeader(
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    profile?.name.orEmpty(),
-                    style = MaterialTheme.typography.headlineSmallEmphasized,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
-                )
-                if (premium) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        Modifier.size(28.dp).clip(CircleShape).background(scheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.Star,
-                            contentDescription = "Premium",
-                            tint = scheme.onTertiaryContainer,
-                            modifier = Modifier.size(18.dp),
-                        )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        profile?.name.orEmpty(),
+                        style = MaterialTheme.typography.titleLargeEmphasized,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
+                    )
+                    if (premium) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            Modifier.size(24.dp).clip(CircleShape).background(scheme.tertiaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = "Premium",
+                                tint = scheme.onTertiaryContainer,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
-            }
-            val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
-            val sub = listOfNotNull(
-                profile?.phone?.takeIf { it.isNotEmpty() }?.let { if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else it },
-                profile?.username?.let { if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else "@$it" },
-            ).joinToString(" • ")
-            if (sub.isNotEmpty()) {
-                Text(
-                    sub,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
-                )
-            }
-
-            // Кнопка Expressive (Medium): форма перетекает при нажатии.
-            androidx.compose.material3.Button(
-                onClick = onOpenAccountManager,
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .heightIn(min = androidx.compose.material3.ButtonDefaults.MediumContainerHeight),
-                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                contentPadding = androidx.compose.material3.ButtonDefaults
-                    .contentPaddingFor(androidx.compose.material3.ButtonDefaults.MediumContainerHeight),
-            ) {
-                Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(tr("Аккаунты ({0})", accounts.size), style = MaterialTheme.typography.titleMediumEmphasized)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
+                val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
+                val phone = profile?.phone?.takeIf { it.isNotEmpty() }?.let { if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else it }
+                val username = profile?.username?.let { if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else "@$it" }
+                val contacts = listOfNotNull(phone, username).joinToString(" • ")
+                if (contacts.isNotEmpty()) {
+                    Text(
+                        contacts,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                // Кнопка Expressive: форма перетекает при нажатии.
+                androidx.compose.material3.Button(
+                    onClick = onOpenAccountManager,
+                    modifier = Modifier.padding(top = 10.dp).heightIn(min = 44.dp),
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+                ) {
+                    Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr("Аккаунты ({0})", accounts.size), style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 1)
+                    Spacer(Modifier.width(2.dp))
+                    Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }

@@ -8,7 +8,7 @@ import app.yougram.core.settings.BlurType
 import app.yougram.feature.settings.component.ConnectedChoiceGroup
 import app.yougram.feature.settings.component.SettingRow
 
-/** Выбор алгоритма размытия фона под панелями: Гаусс / Box / Kawase / Боке в связанной группе кнопок. */
+/** Выбор алгоритма размытия фона под панелями: Гаусс / Kawase в связанной группе кнопок. */
 @Composable
 fun BlurTypeRow(selected: BlurType, onSelect: (BlurType) -> Unit) {
     val shaders = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

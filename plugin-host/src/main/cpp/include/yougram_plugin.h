@@ -1,5 +1,5 @@
 /*
- * Yougram Plugin SDK 2.0 (C ABI, YG_PLUGIN_API_VERSION 2, minor 0).
+ * Yougram Plugin SDK 2.2 (C ABI, YG_PLUGIN_API_VERSION 2, minor 2). Хост принимает плагины API 2.1 и 2.2.
  *
  * Плагин — shared-библиотека (.so) с экспортом yougram_plugin_entry(). Интерфейс — чистый C.
  * Пакет .ygplugin — zip: manifest.json + lib/<abi>/<entry>.
@@ -9,7 +9,8 @@
  *     "id": "com.example.plugin",            // [A-Za-z0-9][A-Za-z0-9._-]{0,119}
  *     "name": "Мой плагин",
  *     "version": "1.0.0",
- *     "api": "2.0",                          // "1.0" тоже принимается
+ *     "api": "2.2",                          // допустимо "2.1" и "2.2"; 1.x и 2.0 не устанавливаются
+ *     "icon": "icon.png",                    // необязательно: png/webp/jpg в пакете, до 512 КБ, лучше 256x256
  *     "author": "...", "description": "...",
  *     "entry": "libplugin.so",
  *     "priority": 0,                         // -100..100, больше = раньше в цепочке хуков
@@ -103,7 +104,7 @@ extern "C" {
 #endif
 
 #define YG_PLUGIN_API_VERSION 2u
-#define YG_PLUGIN_API_MINOR   0u
+#define YG_PLUGIN_API_MINOR   2u
 
 #define YG_LOG_DEBUG 0
 #define YG_LOG_INFO  1
@@ -127,7 +128,7 @@ typedef struct YgHost {
 } YgHost;
 
 typedef struct YgPlugin {
-    uint32_t api_version; /* 1 или 2 */
+    uint32_t api_version; /* 2 (YG_PLUGIN_API_VERSION) */
     void (*on_load)(const YgHost* host);
     void (*on_enable)(void);
     void (*on_disable)(void);

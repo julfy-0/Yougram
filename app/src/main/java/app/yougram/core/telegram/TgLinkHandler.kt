@@ -7,6 +7,14 @@ sealed interface TgLinkResult {
     data class OpenUrl(val url: String) : TgLinkResult
     /** Приглашение в чат, где мы ещё не состоим: перед вступлением спрашиваем пользователя. */
     data class JoinInvite(val url: String, val title: String) : TgLinkResult
+    /** t.me/бот/приложение или главное приложение бота: [shortName] == null — главное. */
+    data class MiniApp(
+        val chatId: Long,
+        val botUserId: Long,
+        val botName: String,
+        val shortName: String?,
+        val startParameter: String,
+    ) : TgLinkResult
     data object Failed : TgLinkResult
 }
 

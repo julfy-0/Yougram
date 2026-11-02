@@ -131,8 +131,8 @@ fun GlassPickerPanel(
     }
 }
 
-/** Цвет «плашек» внутри стеклянной панели: полупрозрачный, чтобы блюр был виден и под ними. */
+/** Цвет «плашек» внутри панели эмодзи/стикеров: M3 — выбранная primaryContainer, остальные surfaceContainerHighest. */
 @Composable
 fun pickerChipColor(selected: Boolean): Color =
-    if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
-    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    if (selected) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.surfaceContainerHighest

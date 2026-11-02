@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
@@ -101,9 +100,12 @@ fun AudioFileRow(
                 )
             }
             if (isCurrent) {
-                LinearProgressIndicator(
+                app.yougram.core.ui.component.LinearWavyProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    amplitude = 2.dp,
+                    wavelength = 16.dp,
+                    strokeWidth = 3.dp,
                 )
             }
             Text(

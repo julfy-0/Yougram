@@ -39,6 +39,7 @@ data class ChatUiState(
     val typing: String? = null,
     /** Команды бота (команда без «/», описание); пусто, если чат не с ботом. */
     val botCommands: List<Pair<String, String>> = emptyList(),
+    val botMenu: app.yougram.feature.chat.data.BotMenu? = null,
     val isOnline: Boolean = false,
     /** Порядок: новые сообщения в начале списка (для LazyColumn с reverseLayout). */
     val messages: List<MessageItem> = emptyList(),
@@ -52,6 +53,8 @@ data class ChatUiState(
     val avatarFileId: Int? = null,
     /** Можно подписаться на канал / вступить в группу. */
     val canJoin: Boolean = false,
+    /** Цена одного вашего сообщения в звёздах; 0 — бесплатно. */
+    val paidMessageStars: Long = 0L,
     val joining: Boolean = false,
     /** Сообщения, удалённые в Telegram, но сохранённые режимом шпиона. */
     val deletedIds: Set<Long> = emptySet(),
@@ -102,6 +105,9 @@ class ChatViewModel(
     }
 
     val typingWatch = settings.typingWatch
+
+    /** Сообщения, которые открепили событием после открытия чата: начальная загрузка не должна их вернуть. */
+    private val unpinnedByEvent = HashSet<Long>()
 
     private val typingNow = LinkedHashMap<Long, String>()
     private val typingJobs = HashMap<Long, Job>()
@@ -405,6 +411,9 @@ class ChatViewModel(
             val commands = repository.botCommands(chatId)
             if (commands.isNotEmpty()) _state.update { it.copy(botCommands = commands) }
         }
+        viewModelScope.launch {
+            repository.botMenuButton(chatId)?.let { menu -> _state.update { it.copy(botMenu = menu) } }
+        }
         // Сначала подписываемся на новые сообщения, потом грузим историю — чтобы ничего не потерять.
         viewModelScope.launch {
             repository.incomingFor(chatId).collect { message ->
@@ -499,7 +508,22 @@ class ChatViewModel(
         refreshPinned()
         viewModelScope.launch {
             repository.pinEvents.collect { event ->
-                if (event.chatId == chatId) refreshPinned()
+                if (event.chatId != chatId) return@collect
+                // Точечно, без перезагрузки всего списка: поиск закреплённых бывает неполным или приходит
+                // не по порядку, и тогда закреплённые «пропадали» или открепляли сами себя.
+                if (event.isPinned) {
+                    unpinnedByEvent.remove(event.messageId)
+                    launch {
+                        val item = repository.pinnedItem(chatId, event.messageId) ?: return@launch
+                        _state.update { s ->
+                            if (s.pinned.any { it.id == item.id } || item.id in unpinnedByEvent) s
+                            else s.copy(pinned = (s.pinned + item).sortedByDescending { it.id })
+                        }
+                    }
+                } else {
+                    unpinnedByEvent += event.messageId
+                    _state.update { s -> s.copy(pinned = s.pinned.filterNot { it.id == event.messageId }) }
+                }
             }
         }
         viewModelScope.launch {
@@ -530,7 +554,9 @@ class ChatViewModel(
                 val chatInfo = repository.getChatInfo(chatId, viaThread = threadId != 0L)
                 // Без таймаута зависший запрос истории (нет сети, TDLib ждёт ответа) оставлял пустой чат
                 // с бесконечным спиннером и без заголовка.
-                val history = withTimeoutOrNull(HISTORY_TIMEOUT_MS) { repository.loadHistory(chatId) } // от старых к новым
+                // Первая попытка могла упереться в сеть: TDLib к этому моменту уже подгрузил часть истории, повтор обычно быстрее.
+                val history = (withTimeoutOrNull(HISTORY_TIMEOUT_MS) { runCatching { repository.loadHistory(chatId) }.getOrNull() }
+                    ?: withTimeoutOrNull(HISTORY_TIMEOUT_MS * 2) { repository.loadHistory(chatId) }) // от старых к новым
                     ?: run {
                         _state.update { it.copy(title = chatInfo.title, loading = false, error = tr("Не удалось загрузить историю")) }
                         return@launch
@@ -555,6 +581,7 @@ class ChatViewModel(
                         isSecret = chatInfo.isSecret,
                         avatarFileId = chatInfo.avatarFileId,
                         canJoin = chatInfo.canJoin,
+                        paidMessageStars = chatInfo.paidMessageStars,
                         deletedIds = s.deletedIds + deletedFrom(low).map { it.id },
                         edits = snapshot.edits + s.edits,
                         readAt = initialReadAt + s.readAt,
@@ -616,10 +643,26 @@ class ChatViewModel(
 
     fun unpin(messageId: Long) = action("Сообщение откреплено") { repository.unpinMessage(chatId, messageId) }
 
+    /** Начальная загрузка закреплённых; дальше список меняется только событиями (см. pinEvents). */
     private fun refreshPinned() {
         viewModelScope.launch {
-            runCatching { repository.loadPinned(chatId) }
-                .onSuccess { list -> _state.update { it.copy(pinned = list) } }
+            var loaded: List<PinnedItem>? = null
+            // Поиск закреплённых иногда падает или возвращает пусто, пока TDLib не готов: пробуем несколько раз.
+            for (attempt in 0 until 3) {
+                val list = runCatching { repository.loadPinned(chatId) }.getOrNull()
+                if (list != null && (list.isNotEmpty() || attempt == 2)) { loaded = list; break }
+                if (list != null) loaded = list
+                delay(800L * (attempt + 1))
+            }
+            val fresh = loaded ?: return@launch
+            _state.update { s ->
+                // Объединяем с тем, что уже добавили события за время загрузки, и убираем открепленное событиями.
+                val merged = (fresh.filterNot { it.id in unpinnedByEvent } + s.pinned)
+                    .distinctBy { it.id }
+                    .filterNot { it.id in unpinnedByEvent }
+                    .sortedByDescending { it.id }
+                s.copy(pinned = merged)
+            }
         }
     }
 
@@ -709,7 +752,7 @@ class ChatViewModel(
     fun download(fileId: Int, priority: Int = 8) = repository.download(fileId, priority)
 
     /** Автозагрузка без нажатия: не качает, если память приложения упёрлась в лимит из настроек. */
-    fun autoDownload(fileId: Int, priority: Int = 8) = repository.autoDownload(fileId, priority)
+    fun autoDownload(fileId: Int, priority: Int = 8, size: Long = 0L) = repository.autoDownload(fileId, priority, size)
 
     val storageAlert = repository.storageAlert
 
@@ -735,7 +778,7 @@ class ChatViewModel(
                 // Сразу прячем кнопку; права пересчитываем уже по новому статусу.
                 _state.update { it.copy(canJoin = false, joining = false) }
                 runCatching { repository.getChatInfo(chatId, viaThread = threadId != 0L) }.onSuccess { info ->
-                    _state.update { it.copy(canSendMessages = info.canSendMessages) }
+                    _state.update { it.copy(canSendMessages = info.canSendMessages, paidMessageStars = info.paidMessageStars) }
                 }
                 runCatching { repository.loadProfileDetails(chatId) }.onSuccess { details ->
                     _state.update { it.copy(subtitle = details.subtitle) }

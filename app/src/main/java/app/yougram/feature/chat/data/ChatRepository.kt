@@ -157,6 +157,8 @@ data class ChatInfo(
     val avatarFileId: Int? = null,
     /** Вы не состоите в канале/группе и можете подписаться (вступить). */
     val canJoin: Boolean = false,
+    /** Сколько звёзд стоит одно ваше сообщение в этом чате; 0 — бесплатно. */
+    val paidMessageStars: Long = 0L,
 )
 
 /** Вид чата для уведомлений и их фильтров. */
@@ -279,7 +281,7 @@ data class StickerItem(
 )
 
 /** Тип кнопки inline-клавиатуры бота. */
-enum class InlineButtonKind { URL, CALLBACK, COPY, OTHER }
+enum class InlineButtonKind { URL, CALLBACK, COPY, WEBAPP, OTHER }
 
 data class InlineButton(
     val text: String,
@@ -290,12 +292,19 @@ data class InlineButton(
 )
 
 /** Кнопка reply-клавиатуры бота (панель под полем ввода). sendable=false — спец-кнопка (контакт, гео…). */
-data class ReplyKey(val text: String, val sendable: Boolean)
+/** [webAppUrl] != null — кнопка открывает мини-приложение, а не отправляет текст. */
+data class ReplyKey(val text: String, val sendable: Boolean, val webAppUrl: String? = null)
 
 data class ReplyKeyboardItem(val rows: List<List<ReplyKey>>, val oneTime: Boolean)
 
 /** Ответ бота на нажатие callback-кнопки. */
 data class ButtonAnswer(val text: String, val showAlert: Boolean, val url: String)
+
+/** Запущенное мини-приложение: [launchId] — для closeWebApp (0 — запуск по ссылке без идентификатора). */
+data class MiniAppLaunch(val launchId: Long, val url: String)
+
+/** Кнопка меню бота («Открыть»), которая запускает его мини-приложение. */
+data class BotMenu(val botUserId: Long, val botName: String, val text: String, val url: String)
 
 data class StickerSetItem(val id: Long, val title: String, val cover: StickerItem?)
 
@@ -1126,31 +1135,16 @@ class ChatRepository(
         val media = item.media ?: return
         if (!p.saveAttachments || item.isOutgoing) return
         if (media.size > MAX_AUTO_ATTACHMENT) return
-        if (!autoDownloadAllowed()) return
         val limit = p.maxFolderBytes
         if (limit != null && media.size > limit) return
         val meta = chatMeta(item.chatId)
         if (meta.isBot && !p.saveInBots) return
         if (meta.isChannel && !p.attachmentsChannels) return
-        val save = PendingSave(item.chatId, attachmentName(item, media))
-        pendingSaves[media.fileId] = save
-        val result = client.downloadFile(
-            fileId = media.fileId,
-            priority = 2,
-            offset = 0L,
-            limit = 0L,
-            synchronous = false,
-        )
-        if (result is TdlResult.Success) {
-            track(result.result)
-            val local = result.result.local
-            // Файл уже лежит в кэше TDLib — updateFile не придёт, копируем сразу.
-            if (local.isDownloadingCompleted && local.path.isNotEmpty() && pendingSaves.remove(media.fileId) != null) {
-                copyAttachment(local.path, save)
-            }
-        } else {
-            pendingSaves.remove(media.fileId)
-        }
+        // Сами ничего не качаем (иначе вложения всех чатов копятся в фоне и занимают память):
+        // только запоминаем, что файл надо сохранить. Копия сделается, когда файл скачается
+        // там, где сообщение реально просмотрено (автозагрузка в открытом чате или нажатие).
+        if (pendingSaves.size > MAX_PENDING_SAVES) pendingSaves.clear()
+        pendingSaves[media.fileId] = PendingSave(item.chatId, attachmentName(item, media))
     }
 
     private fun attachmentName(item: MessageItem, media: MediaItem): String {
@@ -1306,14 +1300,29 @@ class ChatRepository(
     }
 
     /** Автоматическая загрузка (без нажатия пользователя): уважает лимит памяти. Ручная — [download]. */
-    fun autoDownload(fileId: Int, priority: Int = 8) {
+    fun autoDownload(fileId: Int, priority: Int = 8, size: Long = 0L) {
+        // Файлы крупнее 50 МБ сами не качаются — только по нажатию пользователя.
+        if (size > AUTO_DOWNLOAD_MAX_BYTES) return
         scope.launch {
             if (autoDownloadAllowed()) download(fileId, priority)
         }
     }
 
-    /** Удаляет кэшированные файлы (медиа можно скачать заново) и пересчитывает занятую память. */
-    suspend fun clearCache() {
+    /**
+     * Удаляет кэшированные файлы (медиа можно скачать заново) и пересчитывает занятую память.
+     * Возвращает, сколько байт освобождено (по статистике TDLib, не меньше 0).
+     */
+    suspend fun clearCache(): Long {
+        val before = (client.getStorageStatisticsFast() as? TdlResult.Success)?.result?.let { it.filesSize + it.databaseSize } ?: 0L
+        // Временные файлы самого приложения (черновики вложений, записи голосовых/кружков, скачанные обновления).
+        // Состояние звонков (voip*) не трогаем.
+        withContext(Dispatchers.IO) {
+            runCatching {
+                context.cacheDir.listFiles().orEmpty()
+                    .filter { !it.name.startsWith("voip") && !it.name.startsWith("spy_import") }
+                    .forEach { it.deleteRecursively() }
+            }
+        }
         client.optimizeStorage(
             size = 0L,
             ttl = 0,
@@ -1328,7 +1337,8 @@ class ChatRepository(
         _storageAlert.value = null
         warnShown = false
         capShown = false
-        storageUsage(force = true)
+        val after = storageUsage(force = true)
+        return (before - after).coerceAtLeast(0L)
     }
 
     /** Запускает загрузку файла; прогресс и путь придут через [fileState]. */
@@ -1404,9 +1414,15 @@ class ChatRepository(
         // В канале писать могут только создатель и админы с правом публикации, в группе — с учётом
         // вашего статуса (админ, ограничен, вышел, забанен).
         var notMember = false
+        var paidStars = 0L
         val canSend = when (type) {
             is ChatTypeSupergroup -> {
-                val status = (client.getSupergroup(supergroupId = type.supergroupId) as? TdlResult.Success)?.result?.status
+                val sg = (client.getSupergroup(supergroupId = type.supergroupId) as? TdlResult.Success)?.result
+                val status = sg?.status
+                // Админы и создатель пишут бесплатно, остальные платят за каждое сообщение.
+                if (status !is ChatMemberStatusCreator && status !is ChatMemberStatusAdministrator) {
+                    paidStars = sg?.paidMessageStarCount ?: 0L
+                }
                 notMember = isNotMember(status)
                 canWriteAs(status, type.isChannel, chat.permissions.canSendBasicMessages, viaThread)
             }
@@ -1414,6 +1430,10 @@ class ChatRepository(
                 val status = (client.getBasicGroup(basicGroupId = type.basicGroupId) as? TdlResult.Success)?.result?.status
                 notMember = isNotMember(status)
                 canWriteAs(status, false, chat.permissions.canSendBasicMessages)
+            }
+            is ChatTypePrivate -> {
+                paidStars = (client.getUser(userId = type.userId) as? TdlResult.Success)?.result?.paidMessageStarCount ?: 0L
+                chat.permissions.canSendBasicMessages
             }
             else -> chat.permissions.canSendBasicMessages
         }
@@ -1427,6 +1447,7 @@ class ChatRepository(
             isSecret = type is ChatTypeSecret,
             avatarFileId = avatar?.id,
             canJoin = notMember && !canSend,
+            paidMessageStars = paidStars,
         )
     }.getOrDefault(ChatInfo(title = getChatTitle(chatId)))
 
@@ -2166,6 +2187,12 @@ class ChatRepository(
     suspend fun unpinMessage(chatId: Long, messageId: Long) {
         client.unpinChatMessage(chatId = chatId, messageId = realId(messageId)).getOrThrow()
     }
+
+    /** Одно сообщение как элемент панели закрепа (для точечного добавления по событию закрепления). */
+    suspend fun pinnedItem(chatId: Long, messageId: Long): PinnedItem? = runCatching {
+        val it = client.getMessage(chatId = chatId, messageId = messageId).getOrThrow().toItem()
+        PinnedItem(it.id, it.summary.ifEmpty { tr("Сообщение") })
+    }.getOrNull()
 
     /** Все закреплённые сообщения чата, от новых к старым. */
     suspend fun loadPinned(chatId: Long): List<PinnedItem> {
@@ -2951,7 +2978,27 @@ class ChatRepository(
             }
         }
 
-    private fun Message.toItem(): MessageItem {
+    /**
+     * Одно «сломавшееся» сообщение (платное медиа, неизвестный тип контента) не должно ронять загрузку всей истории
+     * или появление чата в списке: при ошибке разбора возвращаем простую заглушку.
+     */
+    private fun Message.toItem(): MessageItem = try {
+        toItemUnsafe()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        android.util.Log.w("ChatRepository", "toItem failed for message $id in chat $chatId", e)
+        MessageItem(
+            id = id,
+            chatId = chatId,
+            text = if (paidMessageStarCount > 0) tr("⭐ {0} · Платное сообщение", paidMessageStarCount) else typeLabel(content),
+            isOutgoing = isOutgoing,
+            date = date,
+            paidMessageStars = paidMessageStarCount,
+        )
+    }
+
+    private fun Message.toItemUnsafe(): MessageItem {
         val c = content
         val media = c.toMedia()
         val callItem = (c as? MessageCall)?.let { call ->
@@ -3060,7 +3107,9 @@ class ChatRepository(
     private fun replyKeyboardOf(m: Message): ReplyKeyboardItem? {
         val markup = m.replyMarkup as? ReplyMarkupShowKeyboard ?: return null
         val rows = markup.rows.orEmpty().filterNotNull().map { row ->
-            row.orEmpty().filterNotNull().map { b -> ReplyKey(b.text, b.type is KeyboardButtonTypeText) }
+            row.orEmpty().filterNotNull().map { b ->
+                ReplyKey(b.text, b.type is KeyboardButtonTypeText, (b.type as? dev.g000sha256.tdl.dto.KeyboardButtonTypeWebApp)?.url)
+            }
         }.filter { it.isNotEmpty() }
         return if (rows.isEmpty()) null else ReplyKeyboardItem(rows, markup.oneTime)
     }
@@ -3073,11 +3122,110 @@ class ChatRepository(
                     is InlineKeyboardButtonTypeUrl -> InlineButton(b.text, InlineButtonKind.URL, url = t.url)
                     is InlineKeyboardButtonTypeCallback -> InlineButton(b.text, InlineButtonKind.CALLBACK, data = t.data)
                     is InlineKeyboardButtonTypeCopyText -> InlineButton(b.text, InlineButtonKind.COPY, copyText = t.text)
+                    is dev.g000sha256.tdl.dto.InlineKeyboardButtonTypeWebApp -> InlineButton(b.text, InlineButtonKind.WEBAPP, url = t.url)
                     else -> InlineButton(b.text, InlineButtonKind.OTHER)
                 }
             }
         }.filter { it.isNotEmpty() }
     }
+
+    // ------------------------------------------------------------------ Мини-приложения (Telegram Web Apps)
+
+    private fun miniAppParams(theme: dev.g000sha256.tdl.dto.ThemeParameters?) =
+        dev.g000sha256.tdl.dto.WebAppOpenParameters(
+            theme = theme,
+            applicationName = "Yougram",
+            mode = dev.g000sha256.tdl.dto.WebAppOpenModeFullSize(),
+        )
+
+    /** Открывает мини-приложение по готовому адресу (inline-кнопка, кнопка меню, кнопка клавиатуры). */
+    suspend fun openMiniApp(
+        chatId: Long,
+        botUserId: Long,
+        url: String,
+        theme: dev.g000sha256.tdl.dto.ThemeParameters?,
+    ): Result<MiniAppLaunch> = withContext(Dispatchers.IO) {
+        runCatching {
+            val info = client.openWebApp(
+                chatId = chatId,
+                botUserId = botUserId,
+                url = url,
+                topicId = null,
+                replyTo = null,
+                parameters = miniAppParams(theme),
+            ).getOrThrow()
+            MiniAppLaunch(info.launchId, info.url.url)
+        }
+    }
+
+    /** Мини-приложение по ссылке t.me/бот/приложение ([shortName] != null) или главное приложение бота. */
+    suspend fun miniAppFromLink(
+        chatId: Long,
+        botUserId: Long,
+        shortName: String?,
+        startParameter: String,
+        theme: dev.g000sha256.tdl.dto.ThemeParameters?,
+    ): Result<MiniAppLaunch> = withContext(Dispatchers.IO) {
+        runCatching {
+            val params = miniAppParams(theme)
+            if (shortName.isNullOrEmpty()) {
+                val main = client.getMainWebApp(
+                    chatId = chatId,
+                    botUserId = botUserId,
+                    startParameter = startParameter,
+                    parameters = params,
+                ).getOrThrow()
+                MiniAppLaunch(0L, main.url.url)
+            } else {
+                val link = client.getWebAppLinkUrl(
+                    chatId = chatId,
+                    botUserId = botUserId,
+                    webAppShortName = shortName,
+                    startParameter = startParameter,
+                    allowWriteAccess = false,
+                    parameters = params,
+                ).getOrThrow()
+                MiniAppLaunch(0L, link.url)
+            }
+        }
+    }
+
+    fun closeMiniApp(launchId: Long) {
+        if (launchId == 0L) return
+        scope.launch { runCatching { client.closeWebApp(webAppLaunchId = launchId) } }
+    }
+
+    /** Данные из мини-приложения, открытого кнопкой клавиатуры (Telegram.WebApp.sendData). */
+    suspend fun sendMiniAppData(botUserId: Long, buttonText: String, data: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching { client.sendWebAppData(botUserId = botUserId, buttonText = buttonText, data = data).getOrThrow() }
+                .map { }
+        }
+
+    /** Разрешить боту писать пользователю (запрос requestWriteAccess из мини-приложения). */
+    suspend fun allowMiniAppWrite(botUserId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching { client.allowBotToSendMessages(botUserId = botUserId).getOrThrow() }.map { }
+    }
+
+    /** Свой метод бота (web_app_invoke_custom_method): параметры и ответ — JSON-строки. */
+    suspend fun miniAppCustomMethod(botUserId: Long, method: String, parameters: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                client.sendWebAppCustomRequest(botUserId = botUserId, method = method, parameters = parameters)
+                    .getOrThrow().result
+            }
+        }
+
+    /** Кнопка меню бота в личном чате с ботом; null — чат не с ботом или у бота нет мини-приложения. */
+    suspend fun botMenuButton(chatId: Long): BotMenu? = runCatching {
+        val type = client.getChat(chatId = chatId).getOrThrow().type as? ChatTypePrivate ?: return@runCatching null
+        val user = client.getUser(userId = type.userId).getOrThrow()
+        if (user.type !is UserTypeBot) return@runCatching null
+        val button = client.getUserFullInfo(userId = type.userId).getOrThrow().botInfo?.menuButton
+            ?: return@runCatching null
+        if (button.url.isBlank()) null
+        else BotMenu(type.userId, user.firstName, button.text.ifBlank { tr("Открыть") }, button.url)
+    }.getOrNull()
 
     /** Нажатие callback-кнопки: возвращает ответ бота (текст, алерт или ссылку). */
     suspend fun pressInlineButton(chatId: Long, messageId: Long, data: ByteArray): Result<ButtonAnswer> =
@@ -3134,8 +3282,10 @@ class ChatRepository(
     }
 
     private companion object {
-        /** Автосохранение вложений пропускает файлы крупнее 100 МБ, чтобы не съедать трафик. */
-        const val MAX_AUTO_ATTACHMENT = 100L shl 20
+        /** Автозагрузка и автосохранение вложений пропускают файлы крупнее 50 МБ, чтобы не съедать трафик. */
+        const val MAX_AUTO_ATTACHMENT = 50L shl 20
+        const val AUTO_DOWNLOAD_MAX_BYTES = 50L shl 20
+        const val MAX_PENDING_SAVES = 2000
         private const val STORAGE_TTL_MS = 20_000L
 
         /** TDLib считает мьют на 366 дней и больше бессрочным. */

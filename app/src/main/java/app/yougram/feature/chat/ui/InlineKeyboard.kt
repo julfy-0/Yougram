@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,14 +49,31 @@ import app.yougram.core.ui.component.LocalOpenLink
 import app.yougram.core.ui.component.TextButton
 import app.yougram.feature.chat.data.InlineButton
 import app.yougram.feature.chat.data.InlineButtonKind
+import app.yougram.feature.miniapp.ui.LocalOpenMiniApp
+import app.yougram.feature.miniapp.ui.MiniAppRequest
 import app.yougram.feature.chat.data.MessageItem
 import kotlinx.coroutines.launch
 
-/** Inline-клавиатура бота под сообщением: ряды кнопок одинаковой ширины внутри ряда. */
+/**
+ * Inline-клавиатура бота под сообщением: ряды кнопок одинаковой ширины внутри ряда.
+ *
+ * [mine] — true, если пузырь принадлежит нам (фон primaryContainer), false — чужой пузырь.
+ * Цвета кнопок адаптируются к фону пузыря, оставаясь синхронными с акцентным цветом темы:
+ *   - своё сообщение: кнопка = onPrimaryContainer-фон + primaryContainer-текст (инверсия пузыря)
+ *   - чужое сообщение: кнопка = primary-фон + onPrimary-текст (стандартный акцент)
+ *   - кастомный фон пузыря: контрастный цвет поверх него
+ */
 @Composable
-fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Modifier = Modifier) {
+fun InlineKeyboard(
+    message: MessageItem,
+    viewModel: ChatViewModel,
+    modifier: Modifier = Modifier,
+    mine: Boolean = false,
+    customBubbleBg: androidx.compose.ui.graphics.Color? = null,
+) {
     val context = LocalContext.current
     val openLink = LocalOpenLink.current
+    val openMiniApp = LocalOpenMiniApp.current
     val scope = rememberCoroutineScope()
     // Позиция кнопки, ответа на которую ждём; такая кнопка приглушена и повторно не нажимается.
     var pending by remember(message.id) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -89,9 +107,34 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
                     pending = null
                 }
             }
+            InlineButtonKind.WEBAPP -> button.url?.let { url ->
+                // Бот — отправитель сообщения; в личном чате с ботом id чата совпадает с id бота.
+                openMiniApp(
+                    MiniAppRequest(
+                        chatId = message.chatId,
+                        botUserId = message.senderUserId ?: message.chatId,
+                        url = url,
+                        buttonText = button.text,
+                    ),
+                )
+            }
             InlineButtonKind.OTHER ->
                 Toast.makeText(context, tr("Эта кнопка пока не поддерживается"), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // Цвета кнопок синхронизированы с акцентом и адаптированы к фону пузыря:
+    //  • своё сообщение (primaryContainer): инверсия — onPrimaryContainer-фон, primaryContainer-текст
+    //  • чужое сообщение: стандартный акцент — primary-фон, onPrimary-текст
+    //  • кастомный фон: контрастный цвет поверх него
+    val scheme = MaterialTheme.colorScheme
+    val (btnColor, btnContent) = when {
+        customBubbleBg != null -> {
+            val fg = app.yougram.core.ui.theme.ensureContrast(scheme.primary, customBubbleBg, 4.5f)
+            fg to app.yougram.core.ui.theme.ensureContrast(scheme.onPrimary, fg, 4.5f)
+        }
+        mine -> scheme.onPrimaryContainer to scheme.primaryContainer
+        else -> scheme.primary to scheme.onPrimary
     }
 
     // Сгруппированная клавиатура: внешние углы крупные, внутренние мелкие; нажатая кнопка «округляется».
@@ -106,6 +149,8 @@ fun InlineKeyboard(message: MessageItem, viewModel: ChatViewModel, modifier: Mod
                         firstCol = colIndex == 0,
                         lastCol = colIndex == row.lastIndex,
                         pending = pending == rowIndex to colIndex,
+                        btnColor = btnColor,
+                        btnContent = btnContent,
                         modifier = Modifier.weight(1f),
                         onClick = { press(rowIndex, colIndex, button) },
                     )
@@ -134,6 +179,8 @@ private fun InlineButtonCell(
     firstCol: Boolean,
     lastCol: Boolean,
     pending: Boolean,
+    btnColor: androidx.compose.ui.graphics.Color,
+    btnContent: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -155,9 +202,9 @@ private fun InlineButtonCell(
             .heightIn(min = 44.dp)
             .alpha(if (pending) 0.5f else 1f),
         shape = shape,
-        // Полупрозрачные кнопки: сквозь них виден пузырь сообщения.
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        // Цвет синхронизирован с акцентом; адаптирован к фону пузыря (передаётся из InlineKeyboard).
+        color = btnColor,
+        contentColor = btnContent,
         interactionSource = interaction,
         onClick = onClick,
     ) {
@@ -171,6 +218,7 @@ private fun InlineButtonCell(
             )
             val badge = when (button.kind) {
                 InlineButtonKind.URL -> Icons.Filled.NorthEast
+                InlineButtonKind.WEBAPP -> Icons.Filled.RocketLaunch
                 InlineButtonKind.COPY -> Icons.Filled.ContentCopy
                 else -> null
             }

@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * Хост нативных (C++) модулей, API 2.0. Модуль — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+ * Хост нативных (C++) плагинов, API 2.2 (принимаются плагины 2.1 и 2.2). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
  *
  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.
@@ -45,10 +45,10 @@ class NativePluginManager(private val context: Context) {
 
     val events = PluginEventBus()
 
-    /** Значения настроек модулей (экран рисуется по схеме из манифеста). */
+    /** Значения настроек плагинов (экран рисуется по схеме из манифеста). */
     val settings = PluginSettingsStore(context)
 
-    /** API для модулей (host->call). Выставляется из AppContainer после создания ChatRepository. */
+    /** API для плагинов (host->call). Выставляется из AppContainer после создания ChatRepository. */
     @Volatile var api: PluginApi? = null
 
     private val root = File(context.filesDir, "plugins").apply { mkdirs() }
@@ -88,7 +88,7 @@ class NativePluginManager(private val context: Context) {
     fun isEnabled(pluginId: String): Boolean =
         _plugins.value.any { it.manifest.id == pluginId && it.enabled }
 
-    /** Список вида ",id1,id2," — модули, которые включены и имеют разрешение. */
+    /** Список вида ",id1,id2," — плагины, которые включены и имеют разрешение. */
     fun idsWith(permission: String): String = _plugins.value
         .filter { it.enabled && permission in it.manifest.permissions }
         .joinToString(",", prefix = ",", postfix = ",") { it.manifest.id }
@@ -117,7 +117,7 @@ class NativePluginManager(private val context: Context) {
         refresh()
     }
 
-    /** Удаляет модуль вместе с его данными: хранилищем, файлами и настройками. */
+    /** Удаляет плагин вместе с его данными: хранилищем, файлами и настройками. */
     fun uninstall(pluginId: String) = synchronized(lock) {
         api?.onPluginStopped(pluginId)
         if (hostAvailable && pluginId in loaded) nativeUnload(pluginId)
@@ -132,11 +132,11 @@ class NativePluginManager(private val context: Context) {
     }
 
     /**
-     * Сохраняет настройки модуля и сообщает ему событием settings_changed (по одному на изменённый ключ).
+     * Сохраняет настройки плагина и сообщает ему событием settings_changed (по одному на изменённый ключ).
      * Бросает IllegalArgumentException с текстом для пользователя, если какое-то значение недопустимо.
      */
     fun applySettings(pluginId: String, values: Map<String, String>) {
-        val manifest = manifestOf(pluginId) ?: error(tr("Модуль не найден"))
+        val manifest = manifestOf(pluginId) ?: error(tr("Плагин не найден"))
         val changed = settings.setAll(manifest, values)
         changed.forEach { (key, value) ->
             emitTo(pluginId, "settings_changed", linkedMapOf<String, Any?>("key" to key, "value" to value))
@@ -144,7 +144,7 @@ class NativePluginManager(private val context: Context) {
     }
 
     /** Устанавливает .ygplugin; бросает исключение с понятным текстом, если пакет некорректен или не загрузился. */
-    fun installFromZip(zipFile: File): InstalledPlugin {
+    fun installFromZip(zipFile: File, allowSuspicious: Boolean = false): InstalledPlugin {
         val staging = File(context.cacheDir, "plugin-install-${System.nanoTime()}").apply { mkdirs() }
         try {
             var total = 0L
@@ -152,9 +152,9 @@ class NativePluginManager(private val context: Context) {
                 while (true) {
                     val entry = input.nextEntry ?: break
                     val name = entry.name.replace('\\', '/')
-                    require(!name.startsWith("/") && !name.split('/').contains("..")) { tr("Небезопасный архив модуля") }
+                    require(!name.startsWith("/") && !name.split('/').contains("..")) { tr("Небезопасный архив плагина") }
                     val target = File(staging, name)
-                    require(target.canonicalPath.startsWith(staging.canonicalPath + File.separator)) { tr("Небезопасный архив модуля") }
+                    require(target.canonicalPath.startsWith(staging.canonicalPath + File.separator)) { tr("Небезопасный архив плагина") }
                     if (entry.isDirectory) {
                         target.mkdirs()
                     } else {
@@ -165,7 +165,7 @@ class NativePluginManager(private val context: Context) {
                                 val n = input.read(buf)
                                 if (n < 0) break
                                 total += n
-                                require(total <= MAX_UNPACKED_BYTES) { tr("Модуль слишком большой") }
+                                require(total <= MAX_UNPACKED_BYTES) { tr("Плагин слишком большой") }
                                 out.write(buf, 0, n)
                             }
                         }
@@ -175,6 +175,14 @@ class NativePluginManager(private val context: Context) {
             val manifest = PluginManifestReader.readOrThrow(staging)
             validate(manifest)
             resolveLibrary(staging, manifest.copy(bundled = false)) // есть ли .so под ABI устройства
+
+            // Проверка на вредоносный код — до загрузки .so (загрузка уже исполняет код плагина).
+            val report = PluginScanner.scan(staging, manifest, PluginScanner.sha256(zipFile))
+            Log.i(TAG, "scan ${manifest.id} sha256=${report.sha256} verdict=${report.verdict}")
+            if (report.verdict == ScanVerdict.MALICIOUS) {
+                throw IllegalArgumentException("Установка заблокирована: найден вредоносный код.\n" + report.details())
+            }
+            if (report.verdict == ScanVerdict.SUSPICIOUS && !allowSuspicious) throw SuspiciousPluginException(report)
 
             return synchronized(lock) {
                 val target = File(root, manifest.id)
@@ -190,7 +198,7 @@ class NativePluginManager(private val context: Context) {
                 refresh()
                 if (err != null) {
                     uninstall(manifest.id)
-                    error(tr("Модуль не загрузился: {0}", err))
+                    error(tr("Плагин не загрузился: {0}", err))
                 }
                 _plugins.value.first { it.manifest.id == manifest.id }
             }
@@ -208,12 +216,12 @@ class NativePluginManager(private val context: Context) {
     fun emitMessageSent(message: PluginMessage, oldMessageId: Long) =
         events.emit("message_sent", message.asMap() + ("old_message_id" to oldMessageId))
 
-    /** Событие только одному модулю (timer, command, action, settings_changed, plugin_message, http_response). */
+    /** Событие только одному плагину (timer, command, action, settings_changed, plugin_message, http_response). */
     fun emitTo(pluginId: String, event: String, payload: Map<String, Any?>) = dispatch(event, payload, ",$pluginId,")
 
     /**
      * Хук перед отправкой текста. Возвращает итоговый текст или null, если отправку нужно отменить
-     * (модуль отменил сообщение или это была команда модуля).
+     * (плагин отменил сообщение или это была команда плагина).
      */
     suspend fun beforeSend(chatId: Long, text: String, replyTo: Long?): String? {
         if (!hostAvailable || !active) return text
@@ -241,7 +249,7 @@ class NativePluginManager(private val context: Context) {
         return json.optString("text", text).takeIf { it.isNotEmpty() } ?: text
     }
 
-    /** Цепочка хуков модулей с разрешением hooks. null — никто ничего не изменил (или хук не уложился во время). */
+    /** Цепочка хуков плагинов с разрешением hooks. null — никто ничего не изменил (или хук не уложился во время). */
     private suspend fun runHook(hook: String, payload: JSONObject): JSONObject? {
         val allowed = idsWith(PluginPermission.HOOKS)
         if (allowed == ",,") return null
@@ -260,7 +268,7 @@ class NativePluginManager(private val context: Context) {
         return runCatching { JSONObject(String(out, Charsets.UTF_8)) }.getOrNull()
     }
 
-    /** Вызывается из JNI, когда модуль просит показать уведомление. */
+    /** Вызывается из JNI, когда плагин просит показать уведомление. */
     @Suppress("unused")
     fun onNativeNotify(pluginId: String, title: ByteArray, message: ByteArray) {
         val t = String(title, Charsets.UTF_8)
@@ -269,7 +277,7 @@ class NativePluginManager(private val context: Context) {
         main.post { Toast.makeText(context, "$t: $m", Toast.LENGTH_LONG).show() }
     }
 
-    /** Вызывается из JNI: host->call() модуля. */
+    /** Вызывается из JNI: host->call() плагина. */
     @Suppress("unused")
     fun onNativeCall(pluginId: String, method: String, args: ByteArray): ByteArray {
         val response = api?.call(pluginId, method, String(args, Charsets.UTF_8))
@@ -290,7 +298,7 @@ class NativePluginManager(private val context: Context) {
         permissionCache[manifest.id] = manifest.permissions
         api?.onPluginStopped(manifest.id)
         if (!hostAvailable) {
-            errors[manifest.id] = tr("Нативный хост модулей недоступен на этом устройстве")
+            errors[manifest.id] = tr("Нативный хост плагинов недоступен на этом устройстве")
             return
         }
         val bundled = manifest.bundled && manifest.id == BUNDLED_ID
@@ -325,16 +333,13 @@ class NativePluginManager(private val context: Context) {
     }
 
     private fun validate(manifest: PluginManifest) {
-        // id становится именем каталога: точки в начале (".", "..") дали бы выход из каталога модулей.
-        require(PLUGIN_ID.matches(manifest.id)) { tr("Недопустимый id модуля") }
-        require(manifest.name.isNotBlank() && manifest.name.length <= 120) { tr("Недопустимое имя модуля") }
+        // id становится именем каталога: точки в начале (".", "..") дали бы выход из каталога плагинов.
+        require(PLUGIN_ID.matches(manifest.id)) { tr("Недопустимый id плагина") }
+        require(manifest.name.isNotBlank() && manifest.name.length <= 120) { tr("Недопустимое имя плагина") }
         require(PluginApiVersion.isSupported(manifest.api)) {
-            tr("API модуля {0} не поддерживается (нужен 1.x или {1})", manifest.api, API_VERSION)
+            tr("API плагина {0} не поддерживается (нужен от {1} до {2})", manifest.api, PluginApiVersion.MIN, API_VERSION)
         }
-        require(ENTRY.matches(manifest.entry)) {
-            if (manifest.entry.endsWith(".lua")) tr("Lua-модули больше не поддерживаются: нужна библиотека .so (C++)")
-            else tr("entry должен быть именем .so файла")
-        }
+        require(ENTRY.matches(manifest.entry)) { tr("entry должен быть именем .so файла") }
         manifest.permissions.forEach { require(it in PluginPermission.ALL) { tr("Неизвестное разрешение: {0}", it) } }
         require(manifest.priority in -100..100) { tr("priority: от -100 до 100") }
     }

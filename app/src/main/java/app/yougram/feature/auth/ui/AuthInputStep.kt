@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -69,6 +69,8 @@ fun AuthInputStep(
     onEdit: () -> Unit,
     onSubmit: (String) -> Unit,
     hint: String? = null,
+    /** Если задано — кнопки «Далее» и этот блок стоят вплотную (connected group из M3). */
+    bottomContent: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     var value by rememberSaveable(kind) { mutableStateOf("") }
@@ -159,7 +161,7 @@ fun AuthInputStep(
         Button(
             onClick = { submit() },
             enabled = canSubmit,
-            shape = CircleShape,
+            shape = if (bottomContent != null) RoundedCornerShape(28.dp, 28.dp, 6.dp, 6.dp) else RoundedCornerShape(50),
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) {
             if (busy) {
@@ -169,6 +171,10 @@ fun AuthInputStep(
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
             }
+        }
+        if (bottomContent != null) {
+            Spacer(Modifier.height(2.dp))
+            bottomContent()
         }
     }
 }

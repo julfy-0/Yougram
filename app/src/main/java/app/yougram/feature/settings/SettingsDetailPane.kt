@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,7 +76,13 @@ fun SettingsDetailPane(
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                if (page == SettingsPage.Plugins) {
+                    IconButton(onClick = { onNavigate(SettingsPage.PluginManager) }) {
+                        Icon(Icons.Filled.Extension, contentDescription = tr("Менеджер плагинов"))
+                    }
+                }
             }
             Box(Modifier.weight(1f).fillMaxWidth().backdropSource(backdrop)) {
                 val shapeBag = remember(page) { ShapeBag() }

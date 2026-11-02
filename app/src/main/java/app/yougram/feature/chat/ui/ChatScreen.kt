@@ -1,67 +1,45 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
+
 package app.yougram.feature.chat.ui
 
-import app.yougram.core.i18n.tr
-import app.yougram.core.ui.theme.LocalChatBackground
-import android.Manifest
-import android.location.Location
-import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,1659 +47,513 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddCircleOutline
-import androidx.compose.material.icons.filled.Apps
-import app.yougram.feature.chat.data.ReplyKeyboardItem
+import androidx.compose.material.icons.filled.AddReaction
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Videocam
-import app.yougram.core.ui.component.LoadingIndicator
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialShapes
+import androidx.graphics.shapes.Morph
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import app.yougram.core.i18n.Text
-import app.yougram.core.ui.component.TextButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import app.yougram.core.settings.GlassSettings
+import app.yougram.core.di.AppContainer
 import app.yougram.core.settings.SettingsRepository
-import app.yougram.core.ui.component.Avatar
+import app.yougram.core.i18n.Text
+import app.yougram.core.i18n.tr
+import app.yougram.core.ui.Haptics
 import app.yougram.core.ui.component.ChatWallpaper
-import app.yougram.core.ui.wallpaper.WallpaperBackground
-import app.yougram.core.ui.wallpaper.WallpaperKind
-import app.yougram.core.ui.wallpaper.WallpaperStore
 import app.yougram.core.ui.component.FileAvatar
-import app.yougram.core.ui.component.LocalOpenLink
-import app.yougram.core.ui.component.LocalOpenUsername
-import app.yougram.core.ui.component.highlightMatches
-import app.yougram.core.ui.component.rememberFileBitmap
+import app.yougram.core.ui.component.LoadingIndicator
+import app.yougram.core.ui.component.openExternally
 import app.yougram.core.ui.component.rememberLinkified
-import app.yougram.core.ui.glass.BackdropState
-import app.yougram.core.ui.glass.LocalPlates
+import app.yougram.core.ui.glass.LocalGlass
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
 import app.yougram.core.ui.glass.rememberBackdropState
-import app.yougram.feature.badge.ui.YougramBadge
-import app.yougram.feature.chat.comments.ui.CommentsButton
-import app.yougram.feature.chat.data.EditRecord
-import app.yougram.feature.chat.data.FileState
-import app.yougram.feature.chat.data.ForwardRef
+import app.yougram.core.ui.rememberHaptics
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.onSizeChanged
+import app.yougram.core.i18n.Localization
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ChatBubble
 import app.yougram.feature.chat.data.MediaItem
 import app.yougram.feature.chat.data.MediaKind
-import app.yougram.feature.chat.data.MessageFilters
 import app.yougram.feature.chat.data.MessageItem
-import app.yougram.feature.chat.data.ReactionItem
-import app.yougram.feature.chat.data.ReplyPreview
-import app.yougram.feature.chat.data.SenderInfo
-import app.yougram.feature.chat.data.StickerItem
-import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import kotlin.reflect.KProperty
-import app.yougram.core.settings.DraftStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-private val TopBarContentHeight = 64.dp
-private val PinnedBarHeight = 48.dp
-/** Угол со стороны автора у сообщений, склеенных в серию. */
-private val BubbleInner = 8.dp
-/** «Хвостик»: острый угол у последнего сообщения серии. */
-private val BubbleTail = 3.dp
-private const val GroupGapSeconds = 300
-private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val QuickReactions = listOf("👍", "❤️", "🔥", "😂", "😮", "😢", "👎")
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Что сейчас делает поле ввода помимо обычной отправки. */
+private enum class ComposerButtonKind { Voice, Round, Send, Confirm }
+
+/** Общая высота элементов строки ввода: скрепка, поле и кнопка справа ровно в одну линию. */
+private val ComposerHeight = 56.dp
+
+private sealed interface ComposerMode {
+    data object Idle : ComposerMode
+    data class Reply(val message: MessageItem) : ComposerMode
+    data class Edit(val message: MessageItem) : ComposerMode
+}
+
+/**
+ * Экран чата в Material 3 Expressive.
+ *
+ * Верхняя панель — TopAppBar с аватаркой и статусом, пузыри — тональные контейнеры M3
+ * (исходящие — primaryContainer, входящие — surfaceContainerHigh) с большим внешним
+ * и малым «хвостовым» скруглением, поле ввода — pill TextField + FAB отправки/микрофона.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
-    settings: SettingsRepository,
     onBack: () -> Unit,
-    /** В правой панели планшета у корневого чата кнопки «Назад» нет. */
-    showBack: Boolean = true,
-    /** Тап по шапке чата — профиль собеседника, группы или канала. */
-    onOpenChatProfile: () -> Unit = {},
-    /** Профиль автора сообщения по id чата. */
-    onOpenProfile: (Long) -> Unit = {},
-    /** Звонок собеседнику в личном чате: (userId, видео). */
+    onOpenChatProfile: () -> Unit,
+    onOpenProfile: (Long) -> Unit,
+    container: AppContainer? = null,
+    settings: SettingsRepository? = container?.settings,
     onCall: (Long, Boolean) -> Unit = { _, _ -> },
-    /** Открыть комментарии к канальному посту. */
     onOpenComments: (Long, Long) -> Unit = { _, _ -> },
-    /** Заголовок вместо названия чата (имя темы форума). */
+    showBack: Boolean = true,
+    /** Свой заголовок/подзаголовок (например, «Комментарии» и число ответов). */
     titleOverride: String? = null,
-    /** Подзаголовок вместо стандартного (в комментариях — название канала). */
     subtitleOverride: String? = null,
-    /** Режим комментариев к посту: у сообщений нет кнопки «Комментарии». */
+    /** Ветка комментариев: без звонков и без профиля чата в шапке. */
     threadMode: Boolean = false,
 ) {
-    val state by viewModel.state.collectAsState()
-    // Секретный чат: запрещаем скриншоты и запись экрана (FLAG_SECURE) во всех окнах чата.
-    androidx.compose.runtime.DisposableEffect(state.isSecret) {
-        if (state.isSecret) app.yougram.core.ui.SecureScreen.enter()
-        onDispose { if (state.isSecret) app.yougram.core.ui.SecureScreen.leave() }
-    }
-    app.yougram.core.ui.SecureWindowEffect()
-    val senders by viewModel.senders.collectAsState()
-    val replies by viewModel.replies.collectAsState()
-    val glass by settings.glass.collectAsState()
-    val chatPrefs by settings.chatPrefs.collectAsState()
-    val cameraPrefs by settings.camera.collectAsState()
-    val filters by settings.filterPrefs.collectAsState()
-    val powerSaving by settings.powerSaving.collectAsState()
-    val appContext = LocalContext.current
-    val wallpaper by remember(appContext) { WallpaperStore.get(appContext).config }.collectAsState()
-    val lowRam = remember(appContext) {
-        app.yougram.core.ui.DeviceProfile.tier(appContext) == app.yougram.core.ui.DeviceTier.Low
-    }
-    // Пружинное движение Expressive; на слабых устройствах — короткие tween.
-    val motion = MaterialTheme.motionScheme
-    val fadeSpec: FiniteAnimationSpec<Float> = if (lowRam) tween(150) else motion.defaultEffectsSpec()
-    val fastScaleSpec: FiniteAnimationSpec<Float> = if (lowRam) tween(150) else motion.fastSpatialSpec()
-    val slideSpec: FiniteAnimationSpec<IntOffset> = if (lowRam) tween(220) else motion.defaultSpatialSpec()
-    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowRam) snap() else motion.fastSpatialSpec()
-    val colorSpec: FiniteAnimationSpec<Color> = if (lowRam) snap() else motion.defaultEffectsSpec()
-    // Размытие под сообщениями дорогое: на слабых устройствах, в энергосбережении и при сплошных пузырях его нет.
-    val bubbleBlurOn = chatPrefs.bubbleBlur && chatPrefs.bubbleOpacity < 100 && !powerSaving && !lowRam
-    LaunchedEffect(bubbleBlurOn) {
-        if (bubbleBlurOn) {
-            settings.armChatGuard()
-            delay(2500) // чат успел отрисоваться без падения
-            settings.disarmChatGuard()
-        }
-    }
-    DisposableEffect(Unit) { onDispose { settings.disarmChatGuard() } }
-    val backdrop = rememberBackdropState()
-    // Отдельный источник размытия только для фона чата (обои), без самих сообщений.
-    val bubbleBackdrop = rememberBackdropState()
-    val listState = rememberLazyListState()
-    val snackbar = remember { SnackbarHostState() }
-    val draftContext = LocalContext.current
-    val inputHolder = remember {
-        InputHolder().also { h ->
-            val saved = DraftStore.get(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId)
-            h.value = TextFieldValue(saved, TextRange(saved.length))
-        }
-    }
-    var input by inputHolder
-    var commandsOpen by remember { mutableStateOf(false) }
-    var keyboardOpen by remember { mutableStateOf(false) }
-    // Для клавиатуры «one_time»: id сообщения, клавиатуру которого уже использовали.
-    var usedKeyboardId by remember { mutableStateOf(0L) }
-    // Упоминания людей без username: «@Имя» → id (уходят в сообщение как сущности).
-    val mentionIds = remember { mutableStateMapOf<String, Long>() }
-    var viewerMedia by remember { mutableStateOf<MediaItem?>(null) }
-    var actionMessage by remember { mutableStateOf<MessageItem?>(null) }
-    var replyTo by remember { mutableStateOf<MessageItem?>(null) }
-    var editing by remember { mutableStateOf<MessageItem?>(null) }
-    var forwardMessage by remember { mutableStateOf<MessageItem?>(null) }
-    var deleteMessage by remember { mutableStateOf<MessageItem?>(null) }
-    var editsDialog by remember { mutableStateOf<List<EditRecord>?>(null) }
-    var emojiSheet by remember { mutableStateOf(false) }
-    var attachmentTab by remember { mutableStateOf(0) } // 0 emoji, 1 stickers, 2 GIF
-    var stickerQuery by remember { mutableStateOf("") }
-    var searchOpen by remember { mutableStateOf(false) }
-    var searchText by remember { mutableStateOf("") }
-    var highlightId by remember { mutableStateOf<Long?>(null) }
-    val search by viewModel.search.collectAsState()
-    val jump by viewModel.pendingJump.collectAsState()
-    var recording by remember { mutableStateOf(false) }
-    var recordSeconds by remember { mutableStateOf(0) }
-    var videoMode by remember { mutableStateOf(false) }
-    var videoRecorderOpen by remember { mutableStateOf(false) }
-    // Запись зажатием: recordLocked — голосовая закреплена свайпом вверх; videoHold/videoAuto — то же для кружка.
-    var recordLocked by remember { mutableStateOf(false) }
-    var videoHold by remember { mutableStateOf(HOLD_NONE) }
-    var videoAuto by remember { mutableStateOf(false) }
+    requireNotNull(settings) { "ChatScreen: нужен container или settings" }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val recorder = remember { VoiceRecorder(context) }
+    val haptics = rememberHaptics()
+    val state by viewModel.state.collectAsState()
+    val prefs by settings.chatPrefs.collectAsState()
+    val senders by viewModel.senders.collectAsState()
+    val replies by viewModel.replies.collectAsState()
+    val pendingJump by viewModel.pendingJump.collectAsState()
+    val typingWatch by viewModel.typingWatch.collectAsState()
 
-    fun beginRecording() {
-        AudioPlayback.stop()
-        if (recorder.start()) recording = true
-        else Toast.makeText(context, tr("Не удалось начать запись"), Toast.LENGTH_SHORT).show()
-    }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            recordLocked = true // палец уже отпущен: запись идёт, как после закрепления
-            beginRecording()
-        } else Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
-    }
-    val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) {
-            videoAuto = false
-            videoHold = HOLD_NONE
-            videoRecorderOpen = true
-        }
-        else Toast.makeText(context, tr("Нужен доступ к камере и микрофону"), Toast.LENGTH_SHORT).show()
-    }
-    // Редактирование: фокус и клавиатура на поле, курсор в конце текста.
-    val inputFocus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    var draftBeforeEdit by remember { mutableStateOf("") }
-    // Черновик: сохраняем набранное (кроме режима редактирования), при выходе из чата — сразу.
-    val latestDraft by rememberUpdatedState(if (editing == null) input else null)
-    LaunchedEffect(input, editing == null) {
-        if (editing == null) {
-            delay(400)
-            DraftStore.set(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId, input)
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            latestDraft?.let { DraftStore.set(draftContext, viewModel.chatId, viewModel.topicId, viewModel.threadId, it) }
-        }
-    }
-    LaunchedEffect(editing?.id) {
-        if (editing != null) {
-            delay(200) // меню сообщения ещё закрывается
-            runCatching { inputFocus.requestFocus() }
-            keyboard?.show()
-        }
-    }
+    val listState = rememberLazyListState()
+    val entries = remember(state.messages) { state.messages.groupAlbums() }
 
-    /** Выходит из режима редактирования и возвращает в поле то, что человек набирал до него. */
-    fun stopEditing() {
-        editing = null
-        input = draftBeforeEdit
-        draftBeforeEdit = ""
-    }
-
-    val haptics = app.yougram.core.ui.rememberHaptics()
-    fun submit() {
-        val e = editing
-        if (e != null) {
-            // Текст не менялся — Telegram ответил бы ошибкой «сообщение не изменено», поэтому просто выходим.
-            if (input.trim() != e.text.trim()) viewModel.edit(e.id, input)
-            stopEditing()
-        } else {
-            haptics(app.yougram.core.ui.Haptics.Kind.Confirm)
-            viewModel.send(input, replyTo?.id, mentionIds.filterKeys { input.contains(it) })
-            mentionIds.clear()
-            replyTo = null
-            input = ""
-        }
-    }
-    var pendingCallVideo by remember { mutableStateOf(false) }
-    val callPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.RECORD_AUDIO] != false) onCall(viewModel.chatId, pendingCallVideo)
-        else Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
-    }
-    fun startCall(video: Boolean) {
-        val needed = buildList {
-            add(Manifest.permission.RECORD_AUDIO)
-            if (video) add(Manifest.permission.CAMERA)
-        }.toTypedArray()
-        if (needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
-            onCall(viewModel.chatId, video)
-        } else {
-            pendingCallVideo = video
-            callPermissions.launch(needed)
-        }
-    }
-    /** hold = true: запись кружка стартует сразу и идёт, пока палец зажат. Возвращает true, если окно открыто. */
-    fun openVideoRecorder(hold: Boolean = false): Boolean {
-        AudioPlayback.stop()
-        val needed = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-        return if (needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
-            videoAuto = hold
-            videoHold = if (hold) HOLD_ACTIVE else HOLD_NONE
-            videoRecorderOpen = true
-            true
-        } else {
-            videoAuto = false
-            videoHold = HOLD_NONE
-            videoPermissions.launch(needed)
-            false
-        }
-    }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            copyToCache(context, uri)?.let { viewModel.sendDocument(it) }
-                ?: Toast.makeText(context, tr("Не удалось прочитать файл"), Toast.LENGTH_SHORT).show()
-        }
-    }
-    // «Сохранить в файлы»: путь скачанного файла ждёт, пока пользователь выберет место в проводнике.
-    var exportPath by remember { mutableStateOf<String?>(null) }
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
-        val path = exportPath
-        exportPath = null
-        if (uri != null && path != null) scope.launch {
-            val ok = exportToUri(context, path, uri)
-            snackbar.showSnackbar(if (ok) "Файл сохранён" else "Не удалось сохранить")
-        }
-    }
-    // Меню «+», опрос и отправка геопозиции (с подтверждением перед отправкой).
+    var mode by remember { mutableStateOf<ComposerMode>(ComposerMode.Idle) }
+    var draft by remember { mutableStateOf("") }
+    var menuFor by remember { mutableStateOf<ChatEntry?>(null) }
     var attachOpen by remember { mutableStateOf(false) }
+    // Панель эмодзи / стикеров / GIF.
+    var pickerOpen by remember { mutableStateOf(false) }
+    var pickerTab by remember { mutableStateOf(PickerTab.Emoji) }
+    var stickerQuery by remember { mutableStateOf("") }
+    BackHandler(enabled = pickerOpen || attachOpen) { pickerOpen = false; attachOpen = false }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var pollOpen by remember { mutableStateOf(false) }
-    var pendingLocation by remember { mutableStateOf<Location?>(null) }
-    fun fetchLocation() {
-        Toast.makeText(context, tr("Определяем местоположение…"), Toast.LENGTH_SHORT).show()
-        scope.launch {
-            val loc = currentLocation(context)
-            if (loc != null) pendingLocation = loc
-            else Toast.makeText(context, tr("Не удалось определить местоположение"), Toast.LENGTH_SHORT).show()
-        }
-    }
-    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.any { it }) fetchLocation()
-        else Toast.makeText(context, tr("Нет доступа к геолокации"), Toast.LENGTH_SHORT).show()
-    }
-    // Выбранное медиа сначала попадает в экран подготовки (подпись, поворот, обрезка), и только потом уходит.
-    var composing by remember { mutableStateOf<PendingMedia?>(null) }
-    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
-        if (uris.size == 1) scope.launch {
-            val uri = uris.first()
-            val mime = context.contentResolver.getType(uri).orEmpty()
-            val path = copyToCache(context, uri)
-            if (path == null) {
-                Toast.makeText(context, tr("Не удалось прочитать файл"), Toast.LENGTH_SHORT).show()
-            } else {
-                composing = PendingMedia(
-                    path,
-                    when {
-                        mime == "image/gif" -> PendingKind.GIF
-                        mime.startsWith("image/") -> PendingKind.PHOTO
-                        else -> PendingKind.VIDEO
-                    },
-                )
-            }
-        } else if (uris.size > 1) scope.launch {
-            // Несколько файлов: фото уходят одним альбомом, GIF и видео — по отдельности.
-            val picked = uris.mapNotNull { uri ->
-                copyToCache(context, uri)?.let { it to context.contentResolver.getType(uri).orEmpty() }
-            }
-            if (picked.isEmpty()) {
-                Toast.makeText(context, tr("Не удалось прочитать файлы"), Toast.LENGTH_SHORT).show()
-            } else {
-                val photos = picked.filter { (_, mime) -> mime.startsWith("image/") && mime != "image/gif" }.map { it.first }
-                if (photos.size >= 2) viewModel.sendPhotoAlbum(photos) else photos.forEach { viewModel.sendPhoto(it) }
-                picked.filter { (_, mime) -> !(mime.startsWith("image/") && mime != "image/gif") }.forEach { (path, mime) ->
-                    if (mime == "image/gif") viewModel.sendAnimation(path) else viewModel.sendDocument(path)
-                }
-            }
-        }
-    }
-    val stickerPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            copyToCache(context, uri)?.let { path ->
-                viewModel.sendStickerFile(path)
-            } ?: Toast.makeText(context, tr("Не удалось прочитать стикер"), Toast.LENGTH_SHORT).show()
-        }
-    }
-    val gifPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            copyToCache(context, uri)?.let { path ->
-                composing = PendingMedia(path, PendingKind.GIF)
-            } ?: Toast.makeText(context, tr("Не удалось прочитать GIF"), Toast.LENGTH_SHORT).show()
-        }
-    }
-    LaunchedEffect(recording) {
-        recordSeconds = 0
-        while (recording) {
-            delay(1000)
-            recordSeconds++
+    var overflowOpen by remember { mutableStateOf(false) }
+    var viewer by remember { mutableStateOf<Pair<List<MediaItem>, Int>?>(null) }
+    var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }
+    var stickerSet by remember { mutableLongStateOf(0L) }
+
+    val isDirect = !threadMode && !state.isGroup && !state.isChannel && !state.isSecret && viewModel.chatId > 0L
+    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
+
+    // Прыжок к сообщению (из поиска, ответа, закрепа).
+    LaunchedEffect(pendingJump, entries) {
+        val target = pendingJump ?: return@LaunchedEffect
+        val index = entries.indexOfFirst { target in it.ids }
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+            viewModel.consumeJump()
         }
     }
 
-    // Фильтры: скрытые сообщения просто не попадают в список (в данных остаются).
-    val visibleMessages = remember(state.messages, filters, state.blockedUserIds) {
-        state.messages.filterNot { MessageFilters.isHidden(it, filters, state.blockedUserIds) }
-    }
-    // Альбомы (несколько фото одним сообщением) склеиваются в один пузырь.
-    val entries = remember(visibleMessages) { visibleMessages.groupAlbums() }
-    val entriesState = rememberUpdatedState(entries)
-
-    fun closeSearch() {
-        searchOpen = false
-        searchText = ""
-        highlightId = null
-        viewModel.clearSearch()
-    }
-
-    BackHandler(enabled = searchOpen) { closeSearch() }
-
-    // Переход к сообщению: из результатов поиска (в чате и глобального). Подсветка снимается сама,
-    // если поиск в чате не открыт.
-    LaunchedEffect(jump) {
-        val id = jump ?: return@LaunchedEffect
-        highlightId = id
-        val list = withTimeoutOrNull(2000) {
-            snapshotFlow { entriesState.value }.first { l -> l.any { id in it.ids } }
-        }
-        val idx = list?.indexOfFirst { id in it.ids } ?: -1
-        if (idx >= 0) {
-            listState.animateScrollToItem(idx, -(listState.layoutInfo.viewportSize.height / 3))
-            if (!searchOpen) {
-                scope.launch {
-                    delay(2000)
-                    if (highlightId == id) highlightId = null
-                }
-            }
-        } else {
-            scope.launch { snackbar.showSnackbar("Сообщение не найдено в истории") }
-        }
-        viewModel.consumeJump()
-    }
-
-    val density = LocalDensity.current
-    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // Панель закреплённых сообщений под шапкой; тап — к сообщению, следующий тап — к более старому закреплённому.
-    var pinIndex by remember { mutableStateOf(0) }
-    LaunchedEffect(state.pinned.size) { if (pinIndex >= state.pinned.size) pinIndex = 0 }
-    val showPinnedBar = state.pinned.isNotEmpty() && !searchOpen
-    // Высота нижней панели меняется (клавиатура, многострочный ввод), поэтому измеряем её.
-    var bottomBarHeightPx by remember { mutableStateOf(0) }
-    val pickerFocus = androidx.compose.ui.platform.LocalFocusManager.current
-    // Клавиатура и панель эмодзи не живут вместе: клавиатура закрывает панель.
-    val imeVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
-    LaunchedEffect(imeVisible) { if (imeVisible) emojiSheet = false }
-    androidx.activity.compose.BackHandler(enabled = emojiSheet) { emojiSheet = false }
-    LaunchedEffect(emojiSheet) { if (emojiSheet) { keyboard?.hide(); pickerFocus.clearFocus() } }
-    // Клавиатура поднимает панель ввода, а список должен остаться видимым над ней.
-    val imeHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    val bottomBarHeight = with(density) { bottomBarHeightPx.toDp() } + imeHeight
-
-    // Голосовое не должно играть после выхода из чата.
-    DisposableEffect(Unit) {
-        onDispose {
-            AudioPlayback.stop()
-            recorder.cancel()
-        }
-    }
-
-    LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbar.showSnackbar(it)
-            viewModel.dismissError()
-        }
-    }
-    // При появлении нового сообщения прокручиваем вниз (в reverseLayout это индекс 0).
-    // Если чат открыт на конкретном сообщении (из поиска), стартовую прокрутку вниз пропускаем.
-    var skipInitialScroll by remember { mutableStateOf(viewModel.initialMessageId != 0L) }
-    var unreadNew by remember { mutableStateOf(0) }
-    var lastNewestId by remember { mutableStateOf<Long?>(null) }
-    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
-    val showScrollDown by remember {
-        derivedStateOf { listState.firstVisibleItemIndex >= 20 || (unreadNew > 0 && listState.firstVisibleItemIndex > 0) }
-    }
-    LaunchedEffect(atBottom) { if (atBottom) unreadNew = 0 }
-    LaunchedEffect(state.messages.firstOrNull()?.id) {
-        val newest = state.messages.firstOrNull() ?: return@LaunchedEffect
-        val prevId = lastNewestId
-        lastNewestId = newest.id
-        if (skipInitialScroll) {
-            skipInitialScroll = false
-            return@LaunchedEffect
-        }
-        if (prevId == null) {
-            if (!searchOpen) listState.scrollToItem(0)
-            return@LaunchedEffect
-        }
-        // Индекс <= 2: пользователь у самого низа (после вставки список мог сдвинуться на 1–2 позиции).
-        val nearBottom = listState.firstVisibleItemIndex <= 2
-        if (newest.isOutgoing || (nearBottom && chatPrefs.autoScrollNew)) {
-            if (!searchOpen) listState.animateScrollToItem(0)
-        } else {
-            val prevIndex = state.messages.indexOfFirst { it.id == prevId }
-            val fresh = if (prevIndex < 0) listOf(newest) else state.messages.take(prevIndex)
-            unreadNew += fresh.count { !it.isOutgoing }.coerceAtLeast(if (newest.isOutgoing) 0 else 1)
-        }
-    }
-
-    // reverseLayout: старые сообщения — в конце списка; у верхнего края просим следующую порцию.
-    LaunchedEffect(listState) {
+    // Подгрузка старой истории, когда долистали до конца.
+    LaunchedEffect(listState, entries.size) {
         snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-            last >= info.totalItemsCount - 8
-        }.collect { nearTop -> if (nearTop) viewModel.loadOlder() }
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= entries.size - 6
+        }.collect { nearTop -> if (nearTop && entries.isNotEmpty()) viewModel.loadOlder() }
     }
 
-    // Подсказка упоминания: слово «@…» перед курсором.
-    val mentionToken = remember(inputHolder.value.text, inputHolder.value.selection, editing) {
-        val v = inputHolder.value
-        if (!v.selection.collapsed || editing != null) null
-        else Regex("(?:^|\\s)@([\\p{L}\\p{N}_]*)$").find(v.text.substring(0, v.selection.start))
-            ?.let { it.groups[1]!!.range.first - 1 to it.groupValues[1] }
-    }
-    var mentionResults by remember { mutableStateOf(emptyList<app.yougram.feature.chat.data.ChatRepository.MentionCandidate>()) }
-    LaunchedEffect(mentionToken?.second, mentionToken != null) {
-        val q = mentionToken?.second
-        if (q == null) { mentionResults = emptyList(); return@LaunchedEffect }
-        if (q.isNotEmpty()) delay(150)
-        mentionResults = viewModel.searchMentions(q)
-    }
-    val shownMentions = if (mentionToken != null) mentionResults else emptyList()
-
-    // Список команд бота для подсказки (по кнопке-меню или при вводе «/»).
-    val typedCommand = input.startsWith("/") && !input.contains(' ') && !input.contains('\n')
-    val shownCommands = when {
-        state.botCommands.isEmpty() -> emptyList()
-        typedCommand -> state.botCommands.filter { ("/" + it.first).lowercase().startsWith(input.lowercase()) }
-        commandsOpen && input.isEmpty() -> state.botCommands
-        else -> emptyList()
+    // Новое входящее: докручиваем вниз, только если пользователь уже внизу.
+    LaunchedEffect(entries.firstOrNull()?.key) {
+        if (atBottom || entries.firstOrNull()?.message?.isOutgoing == true) listState.animateScrollToItem(0)
     }
 
-    // Reply-клавиатура бота (кнопки под полем ввода). Новая клавиатура раскрывается сама.
-    val activeKeyboard = remember(state.messages) { activeReplyKeyboard(state.messages) }
-    val shownKeyboard = activeKeyboard?.takeIf { it.second != usedKeyboardId }
-    LaunchedEffect(shownKeyboard?.second) { keyboardOpen = shownKeyboard != null }
-
-    // Меню «+», меню сообщения и запись кружка: пока они открыты, весь экран чата плавно размывается
-    // (сами они — отдельные окна, остаются чёткими).
-    val overlayOpen = attachOpen || actionMessage != null || videoRecorderOpen
-    val attachBlur by animateDpAsState(
-        if (overlayOpen && !lowRam && !powerSaving) 16.dp else 0.dp,
-        if (lowRam) tween(120) else tween(220),
-        label = "attachBlur",
-    )
-    Box(Modifier.fillMaxSize().then(if (attachBlur > 0.dp) Modifier.blur(attachBlur) else Modifier)) {
-        // Сообщения: прокручиваются под панелями, их размытая копия видна в панелях.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .backdropSource(backdrop)
-                .background(LocalChatBackground.current),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .then(if (bubbleBlurOn) Modifier.backdropSource(bubbleBackdrop) else Modifier)
-                    .background(LocalChatBackground.current),
-            ) {
-                if (wallpaper.kind != WallpaperKind.None) WallpaperBackground(wallpaper, Modifier.fillMaxSize())
-                else if (chatPrefs.wallpaper != 0L) ChatWallpaper(chatPrefs.wallpaper, Modifier.fillMaxSize())
-            }
-            if (state.loading && state.messages.isEmpty()) {
-                LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
-            } else {
-                LazyColumn(
-                    state = listState,
-                    reverseLayout = true,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = topInset + TopBarContentHeight + 8.dp + if (showPinnedBar) PinnedBarHeight else 0.dp,
-                        bottom = bottomBarHeight + 8.dp,
-                    ),
-                ) {
-                    // Список в обратном порядке: index - 1 — более новое сообщение, index + 1 — более старое.
-                    itemsIndexed(entries, key = { _, e -> e.key }) { index, entry ->
-                        val message = entry.message
-                        if (message.isService) {
-                            ServiceMessage(message.text.trim('[', ']'))
-                            return@itemsIndexed
-                        }
-                        val newer = entries.getOrNull(index - 1)?.message
-                        val older = entries.getOrNull(index + 1)?.message
-                        val joinedWithOlder = older != null && sameGroup(older, message)
-                        val joinedWithNewer = newer != null && sameGroup(message, newer)
-                        SwipeToReply(
-                            onThreshold = { haptics(app.yougram.core.ui.Haptics.Kind.Click) },
-                            onReply = {
-                                if (editing != null) stopEditing()
-                                replyTo = message
-                            },
-                        ) {
-                            MessageBubble(
-                                message = message,
-                                albumMedia = entry.albumMedia,
-                                joinedWithOlder = joinedWithOlder,
-                                joinedWithNewer = joinedWithNewer,
-                                viewModel = viewModel,
-                                textSize = chatPrefs.textSize,
-                                cornerRadius = chatPrefs.bubbleRadius.dp,
-                                onOpenPhoto = { media -> viewerMedia = media },
-                                deleted = message.id in state.deletedIds,
-                                edits = state.edits[message.id].orEmpty(),
-                                readAt = state.readAt[message.id],
-                                onLongPress = {
-                                    haptics(app.yougram.core.ui.Haptics.Kind.Heavy)
-                                    actionMessage = message
-                                },
-                                onShowEdits = { editsDialog = state.edits[message.id] },
-                                groupChat = state.isGroup || state.isChannel,
-                                sender = message.senderKey?.let { senders[it] },
-                                onOpenSender = { message.senderKey?.let { key -> viewModel.openSender(key, onOpenProfile) } },
-                                forwardFrom = message.forward?.key?.let { senders[it] },
-                                reply = message.reply?.let { replies[it.messageId] },
-                                onReplyClick = {
-                                    val target = message.reply?.messageId
-                                    val idx = entries.indexOfFirst { e -> target != null && target in e.ids }
-                                    scope.launch {
-                                        if (idx >= 0) {
-                                            listState.animateScrollToItem(idx)
-                                            highlightId = target
-                                            delay(1500)
-                                            if (!searchOpen && highlightId == target) highlightId = null
-                                        } else {
-                                            snackbar.showSnackbar("Исходное сообщение не загружено")
-                                        }
-                                    }
-                                },
-                                onReact = { emoji -> viewModel.react(message.id, emoji) },
-                                onOpenComments = { onOpenComments(message.chatId, message.id) },
-                                commentsEnabled = !threadMode,
-                                ownBubbleColor = chatPrefs.ownBubbleColor.takeIf { it != 0L }?.let { Color(it) },
-                                otherBubbleColor = chatPrefs.otherBubbleColor.takeIf { it != 0L }?.let { Color(it) },
-                                bubbleOpacity = chatPrefs.bubbleOpacity / 100f,
-                                bubbleBackdrop = if (bubbleBlurOn) bubbleBackdrop else null,
-                                glassSettings = glass,
-                                highlighted = highlightId != null && highlightId in entry.ids,
-                                searchQuery = if (searchOpen) search.query else "",
-                            )
-                        }
-                    }
-                    if (state.loadingOlder) {
-                        item(key = "older-loader") {
-                            Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                                LoadingIndicator(Modifier.size(24.dp))
-                            }
-                        }
-                    }
-                }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val copy = copyToCache(context, uri) ?: return@launch
+            viewModel.sendDocument(copy.path)
+        }
+    }
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val copy = copyToCache(context, uri) ?: return@launch
+            val mime = context.contentResolver.getType(uri).orEmpty()
+            when {
+                mime == "image/gif" -> pendingMedia = PendingMedia(copy.path, PendingKind.GIF)
+                mime.startsWith("video/") -> pendingMedia = PendingMedia(copy.path, PendingKind.VIDEO)
+                else -> pendingMedia = PendingMedia(copy.path, PendingKind.PHOTO)
             }
         }
+    }
 
-        // Подсказки упоминания: «@» + начало имени, список участников группы над полем ввода.
-        run {
-            var lastMentions by remember { mutableStateOf(emptyList<app.yougram.feature.chat.data.ChatRepository.MentionCandidate>()) }
-            if (shownMentions.isNotEmpty()) lastMentions = shownMentions
-            val plates = LocalPlates.current
-            val mentionGlass = remember(glass.blurRadius, glass.blurType, plates.commands) {
-                glass.copy(opacity = (1f - plates.commands).coerceIn(0f, 1f))
-            }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = shownMentions.isNotEmpty(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
-                    .fillMaxWidth(),
-                enter = fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 4 },
-                exit = fadeOut(fadeSpec) + slideOutVertically(slideSpec) { it / 5 },
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .glass(backdrop, mentionGlass, MaterialTheme.shapes.large, tint = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    LazyColumn(Modifier.heightIn(max = 260.dp)) {
-                        itemsIndexed(lastMentions, key = { _, m -> m.userId }) { _, m ->
-                            Column(
-                                Modifier
-                                    .animateItem()
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val token = mentionToken ?: return@clickable
-                                        val v = inputHolder.value
-                                        val label = if (m.username != null) "@${m.username}" else "@${m.name}"
-                                        if (m.username == null) mentionIds[label] = m.userId
-                                        val cursor = v.selection.start
-                                        val newText = v.text.substring(0, token.first) + label + " " + v.text.substring(cursor)
-                                        val pos = token.first + label.length + 1
-                                        inputHolder.value = TextFieldValue(newText, TextRange(pos))
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+    val pickStickerFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val copy = copyToCache(context, uri) ?: return@launch
+            viewModel.sendStickerFile(copy.path)
+            pickerOpen = false
+        }
+    }
+
+    val backdrop = rememberBackdropState()
+    val glass = LocalGlass.current
+    val density = LocalDensity.current
+    var topBarPx by remember { mutableIntStateOf(0) }
+    var bottomBarPx by remember { mutableIntStateOf(0) }
+    // Высота выдвижных панелей (эмодзи / вложения): список едет вместе с ними через translationY, без перекомпоновки.
+    var panelPx by remember { mutableIntStateOf(0) }
+
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).imePadding()) {
+        // Источник размытия: фон, обои и список. Панели внутрь класть нельзя — они лежат сверху отдельными слоями.
+        // Фон должен быть внутри источника (после backdropSource): иначе размытая копия прозрачная и под панелями виден чёткий список.
+        Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.surface)) {
+            if (prefs.wallpaper != 0L) ChatWallpaper(version = prefs.wallpaper, modifier = Modifier.fillMaxSize())
+
+            Box(Modifier.fillMaxSize()) {
+                when {
+                    state.loading && entries.isEmpty() ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            LoadingIndicator(contained = true)
+                        }
+
+                    entries.isEmpty() ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             ) {
-                                Text(m.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (m.username != null) {
-                                    Text("@" + m.username, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Подсказки команд бота: по кнопке-меню или при вводе «/». Стеклянная панель с размытием фона чата;
-        // появляется из-под поля ввода и уезжает обратно, строки списка плавно перестраиваются при фильтрации.
-        run {
-            // Последний непустой список: пока идёт анимация закрытия, содержимое не должно пропадать.
-            var lastShown by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
-            if (shownCommands.isNotEmpty()) lastShown = shownCommands
-            val plates = LocalPlates.current
-            // Радиус размытия — общий, из настроек внешнего вида (как у остальных панелей); прозрачность своя.
-            val commandsGlass = remember(glass.blurRadius, glass.blurType, plates.commands) {
-                glass.copy(opacity = (1f - plates.commands).coerceIn(0f, 1f))
-            }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = shownCommands.isNotEmpty(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
-                    .fillMaxWidth(),
-                enter = fadeIn(fadeSpec) +
-                        scaleIn(
-                            fastScaleSpec,
-                            initialScale = 0.88f,
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
-                        ) +
-                        slideInVertically(slideSpec) { it / 4 },
-                exit = fadeOut(fadeSpec) +
-                        scaleOut(
-                            fastScaleSpec,
-                            targetScale = 0.92f,
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.1f, 1f),
-                        ) +
-                        slideOutVertically(slideSpec) { it / 5 },
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .glass(
-                            backdrop,
-                            commandsGlass,
-                            MaterialTheme.shapes.large,
-                            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ),
-                ) {
-                    LazyColumn(Modifier.heightIn(max = 260.dp)) {
-                        itemsIndexed(lastShown, key = { _, cmd -> cmd.first }) { _, cmd ->
-                            Column(
-                                Modifier
-                                    .animateItem()
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (typedCommand) {
-                                            input = "/" + cmd.first + " "
-                                        } else {
-                                            viewModel.send("/" + cmd.first)
-                                        }
-                                        commandsOpen = false
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                            ) {
-                                Text("/" + cmd.first, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                                if (cmd.second.isNotBlank()) {
-                                    Text(
-                                        cmd.second,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Reply-клавиатура бота: стеклянная панель над полем ввода (как список команд).
-        run {
-            var lastKeyboard by remember { mutableStateOf<ReplyKeyboardItem?>(null) }
-            shownKeyboard?.let { lastKeyboard = it.first }
-            val kbMessageId = shownKeyboard?.second ?: 0L
-            val kbPlates = LocalPlates.current
-            val kbGlass = remember(glass.blurRadius, glass.blurType, kbPlates.commands) {
-                glass.copy(opacity = (1f - kbPlates.commands).coerceIn(0f, 1f))
-            }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = keyboardOpen && shownKeyboard != null && shownCommands.isEmpty(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 4.dp)
-                    .fillMaxWidth(),
-                enter = fadeIn(fadeSpec) +
-                        scaleIn(
-                            fastScaleSpec,
-                            initialScale = 0.9f,
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
-                        ) +
-                        slideInVertically(slideSpec) { it / 4 },
-                exit = fadeOut(fadeSpec) +
-                        scaleOut(
-                            fastScaleSpec,
-                            targetScale = 0.94f,
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
-                        ) +
-                        slideOutVertically(slideSpec) { it / 5 },
-            ) {
-                val kb = lastKeyboard
-                if (kb != null) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .glass(
-                                backdrop,
-                                kbGlass,
-                                MaterialTheme.shapes.large,
-                                tint = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                    ) {
-                        ReplyKeyboardPanel(kb) { key ->
-                            if (key.sendable) {
-                                viewModel.send(key.text)
-                                if (kb.oneTime) usedKeyboardId = kbMessageId
-                            } else {
-                                Toast.makeText(context, tr("Эта кнопка пока не поддерживается"), Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Кнопка «вниз» со счётчиком новых сообщений.
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showScrollDown,
-            enter = fadeIn(fadeSpec) + scaleIn(fastScaleSpec, initialScale = 0.6f),
-            exit = fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = bottomBarHeight + 16.dp),
-        ) {
-            androidx.compose.material3.BadgedBox(
-                badge = {
-                    if (unreadNew > 0) {
-                        androidx.compose.material3.Badge { Text(if (unreadNew > 99) "99+" else unreadNew.toString()) }
-                    }
-                },
-            ) {
-                androidx.compose.material3.SmallFloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            if (listState.firstVisibleItemIndex > 30) listState.scrollToItem(0) else listState.animateScrollToItem(0)
-                            unreadNew = 0
-                        }
-                    },
-                    shape = MaterialTheme.shapes.medium,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                ) {
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = tr("Вниз"))
-                }
-            }
-        }
-
-        // Верхняя панель: назад, аватарка, название.
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(topInset + TopBarContentHeight)
-                .glass(backdrop, glass, RectangleShape),
-        ) {
-            if (searchOpen) {
-                val focusRequester = remember { FocusRequester() }
-                LaunchedEffect(Unit) { focusRequester.requestFocus() }
-                Row(
-                    Modifier
-                        .padding(top = topInset)
-                        .height(TopBarContentHeight)
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = { closeSearch() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Закрыть поиск"))
-                    }
-                    TextField(
-                        value = searchText,
-                        onValueChange = {
-                            searchText = it
-                            viewModel.search(it)
-                        },
-                        placeholder = { Text("Поиск в чате") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { viewModel.searchOlder() }),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                        ),
-                        modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                    )
-                    val counter = when {
-                        search.loading -> "…"
-                        search.notFound -> "0"
-                        search.index >= 0 -> "${search.index + 1}/${search.total}"
-                        else -> ""
-                    }
-                    if (counter.isNotEmpty()) {
-                        Text(
-                            counter,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { viewModel.searchOlder() }, enabled = search.ids.isNotEmpty()) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = tr("Предыдущее (старее)"))
-                    }
-                    IconButton(onClick = { viewModel.searchNewer() }, enabled = search.index > 0) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = tr("Следующее (новее)"))
-                    }
-                }
-            } else {
-                Row(
-                    Modifier
-                        .padding(top = topInset)
-                        .height(TopBarContentHeight)
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, end = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (showBack) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
-                        }
-                    } else {
-                        Spacer(Modifier.width(12.dp))
-                    }
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .height(TopBarContentHeight)
-                            .combinedClickable(onClick = onOpenChatProfile),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FileAvatar(title = state.title, fileId = state.avatarFileId, fileState = viewModel::fileState, size = 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    titleOverride?.takeIf { it.isNotEmpty() } ?: state.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                )
-                                YougramBadge(viewModel.chatId, Modifier.padding(start = 6.dp))
-                            }
-                            val headerSubtitle = state.typing ?: subtitleOverride ?: state.subtitle
-                            if (headerSubtitle.isNotEmpty()) {
-                                Text(
-                                    headerSubtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = when {
-                                        state.typing != null -> MaterialTheme.colorScheme.primary
-                                        state.isOnline -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    "Здесь пока нет сообщений",
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
-                    }
-                    IconButton(onClick = { searchOpen = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Search, contentDescription = tr("Поиск в чате"), modifier = Modifier.size(22.dp))
-                    }
-                    // Звонки доступны только в личных чатах (id чата = id пользователя).
-                    if (!state.isGroup && !state.isChannel && viewModel.chatId > 0L) {
-                        IconButton(onClick = { startCall(false) }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Call, contentDescription = tr("Аудиозвонок"), modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(onClick = { startCall(true) }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Videocam, contentDescription = tr("Видеозвонок"), modifier = Modifier.size(22.dp))
-                        }
-                    }
-                }
-            }
-        }
 
-        // Панель закреплённых сообщений.
-        if (showPinnedBar) {
-            val current = state.pinned[pinIndex.coerceIn(0, state.pinned.lastIndex)]
-            Row(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = topInset + TopBarContentHeight)
-                    .fillMaxWidth()
-                    .height(PinnedBarHeight)
-                    .glass(backdrop, glass, RectangleShape)
-                    .clickable {
-                        viewModel.jumpTo(current.id)
-                        pinIndex = (pinIndex + 1) % state.pinned.size
-                    }
-                    .padding(start = 16.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    Modifier
-                        .width(3.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        if (state.pinned.size > 1) tr("Закреплённое сообщение #{0}", state.pinned.size - state.pinned.indexOf(current))
-                        else "Закреплённое сообщение",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                    )
-                    Text(
-                        current.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    else -> MessageList(
+                        topPad = with(density) { topBarPx.toDp() },
+                        bottomPad = with(density) { (bottomBarPx - panelPx).coerceAtLeast(0).toDp() },
+                        bottomShift = { panelPx.toFloat() },
+                        entries = entries,
+                        listState = listState,
+                        state = state,
+                        textSize = prefs.textSize,
+                        bubbleRadius = prefs.bubbleRadius,
+                        viewModel = viewModel,
+                        senders = senders,
+                        replies = replies,
+                        onOpenMedia = { items, index -> viewer = items to index },
+                        onOpenProfile = onOpenProfile,
+                        onOpenComments = onOpenComments,
+                        onLongPress = { menuFor = it },
+                        onReact = { id, emoji -> viewModel.react(id, emoji); haptics(Haptics.Kind.Click) },
+                        onReplyTap = { viewModel.jumpTo(it) },
+                        onSwipeReply = { mode = ComposerMode.Reply(it); haptics(Haptics.Kind.Tick) },
                     )
                 }
-                IconButton(onClick = { viewModel.unpin(current.id) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = tr("Открепить"), modifier = Modifier.size(20.dp))
-                }
             }
+
         }
 
-        // Нижняя панель: поле ввода поднимается над клавиатурой.
+        // Верхняя стеклянная панель (шапка + закреп).
         Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .imePadding(),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .glass(backdrop, glass, RectangleShape)
+                .onSizeChanged { topBarPx = it.height },
         ) {
-            SnackbarHost(snackbar)
-            if (!state.canSendMessages) {
-                val restrictionText = if (state.isChannel) {
-                    "В этом канале нельзя писать"
-                } else {
-                    "Вам запрещено писать здесь"
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onSizeChanged { bottomBarHeightPx = it.height }
-                        .glass(backdrop, glass, RectangleShape)
-                        .padding(
-                            start = 12.dp,
-                            end = 12.dp,
-                            top = 8.dp,
-                            bottom = 8.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                        )
-                        .heightIn(min = 52.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (state.canJoin) {
-                        TextButton(
-                            onClick = { viewModel.join() },
-                            enabled = !state.joining,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            if (state.joining) {
-                                LoadingIndicator(Modifier.size(18.dp))
-                            } else {
-                                Text(
-                                    if (state.isChannel) "Подписаться" else "Вступить в группу",
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                            }
-                        }
-                    } else {
-                        Text(
-                            text = restrictionText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            } else {
-                val bannerMessage = editing ?: replyTo
-                if (bannerMessage != null) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .glass(backdrop, glass, RectangleShape)
-                            .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        ) {
-                            Row(
-                                Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    Modifier
-                                        .width(4.dp)
-                                        .height(36.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        if (editing != null) "Редактирование" else "Ответ",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        bannerMessage.summary,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                                    )
-                                }
-                                IconButton(onClick = {
-                                    if (editing != null) stopEditing()
-                                    replyTo = null
-                                }) { Icon(Icons.Filled.Close, contentDescription = tr("Отмена")) }
-                            }
-                        }
-                    }
-                }
-                // Поле ввода и панель эмодзи/стикеров/GIF — одна стеклянная панель.
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .onSizeChanged { bottomBarHeightPx = it.height }
-                        // В комментариях общей панели нет: размытие у самого поля ввода.
-                        .then(if (threadMode) Modifier else Modifier.glass(backdrop, glass, RectangleShape)),
-                ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = 12.dp,
-                            end = 12.dp,
-                            top = 8.dp,
-                            bottom = 8.dp + if (emojiSheet) 0.dp else WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                        ),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    // Поле ввода-«таблетка».
-                    val pillShape = MaterialTheme.shapes.largeIncreased
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 56.dp)
-                            .then(
-                                if (threadMode) {
-                                    Modifier.glass(
-                                        backdrop,
-                                        glass,
-                                        pillShape,
-                                        tint = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    )
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                        shape = pillShape,
-                        // Полупрозрачное поле: сквозь него просвечивают обои и размытый фон панели.
-                        // В комментариях фон поля рисует само стекло (размытие + подкраска).
-                        color = if (threadMode) {
-                            androidx.compose.ui.graphics.Color.Transparent
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = InputFieldAlpha)
+            ChatTopBar(
+                title = titleOverride ?: state.title,
+                subtitle = subtitleOverride ?: state.typing ?: state.subtitle,
+                typing = subtitleOverride == null && state.typing != null,
+                online = state.isOnline,
+                avatarFileId = state.avatarFileId,
+                fileState = { viewModel.fileState(it) },
+                showBack = showBack,
+                onBack = onBack,
+                onTitleClick = if (threadMode) ({}) else onOpenChatProfile,
+                canCall = isDirect,
+                onCall = { video -> onCall(viewModel.chatId, video) },
+                overflowOpen = overflowOpen,
+                onOverflow = { overflowOpen = it },
+                onSearch = { /* поиск живёт в ChatViewModel.search(); панель поиска подключается отдельно */ },
+            )
+
+            if (state.pinned.isNotEmpty()) {
+                PinnedBar(
+                    text = state.pinned.first().text,
+                    count = state.pinned.size,
+                    onClick = { viewModel.jumpTo(state.pinned.first().id) },
+                )
+            }
+
+        }
+
+        // Нижняя стеклянная панель (поле ввода / вступить / только чтение).
+        Box(
+            Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .glass(backdrop, glass, RectangleShape)
+                .onSizeChanged { bottomBarPx = it.height },
+        ) {
+            when {
+                state.canJoin -> JoinBar(
+                    channel = state.isChannel,
+                    joining = state.joining,
+                    onJoin = viewModel::join,
+                )
+
+                !state.canSendMessages -> ReadOnlyBar()
+
+                else -> Column {
+                    Composer(
+                        mode = mode,
+                        draft = draft,
+                        onDraft = { draft = it },
+                        onCancelMode = {
+                            if (mode is ComposerMode.Edit) draft = ""
+                            mode = ComposerMode.Idle
                         },
-                        border = null,
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (recording) {
-                                Box(Modifier.padding(start = 12.dp).size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "%d:%02d".format(recordSeconds / 60, recordSeconds % 60),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                if (recordLocked) {
-                                    Text(
-                                        "Отмена",
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                recorder.cancel()
-                                                recording = false
-                                                recordLocked = false
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        style = MaterialTheme.typography.labelLarge,
-                                    )
-                                } else {
-                                    Text(
-                                        "← отмена   ↑ закрепить",
-                                        modifier = Modifier.padding(horizontal = 8.dp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.labelMedium,
-                                    )
-                                }
+                        paidStars = state.paidMessageStars,
+                        pickerOpen = pickerOpen,
+                        attachOpen = attachOpen,
+                        onTogglePicker = {
+                            if (pickerOpen) {
+                                pickerOpen = false
                             } else {
-                                if (state.botCommands.isNotEmpty()) {
-                                    InputAction(Icons.Filled.Menu, tr("Команды бота"), MaterialTheme.colorScheme.primary) {
-                                        commandsOpen = !commandsOpen
-                                        if (commandsOpen) keyboardOpen = false
-                                    }
-                                }
-                                if (shownKeyboard != null) {
-                                    InputAction(Icons.Filled.Apps, tr("Клавиатура бота"), MaterialTheme.colorScheme.primary) {
-                                        keyboardOpen = !keyboardOpen
-                                        if (keyboardOpen) commandsOpen = false
-                                    }
-                                }
-                                Box {
-                                    // Кнопка «+» Material 3 Expressive: форма перетекает при нажатии, плюс поворачивается в «×».
-                                    val plusRotation by animateFloatAsState(
-                                        if (attachOpen) 45f else 0f,
-                                        MaterialTheme.motionScheme.fastSpatialSpec(),
-                                        label = "plusRotation",
-                                    )
-                                    androidx.compose.material3.FilledTonalIconButton(
-                                        onClick = { attachOpen = true },
-                                        modifier = Modifier.size(40.dp),
-                                        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Add,
-                                            contentDescription = tr("Прикрепить"),
-                                            modifier = Modifier.graphicsLayer { rotationZ = plusRotation },
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                attachOpen = false
+                                pickerOpen = true
+                            }
+                        },
+                        onFieldFocus = { pickerOpen = false; attachOpen = false },
+                        onAttach = {
+                            if (attachOpen) {
+                                attachOpen = false
+                            } else {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                pickerOpen = false
+                                attachOpen = true
+                            }
+                        },
+                        onSend = {
+                            val text = draft.trim()
+                            if (text.isEmpty()) return@Composer
+                            when (val m = mode) {
+                                is ComposerMode.Edit -> viewModel.edit(m.message.id, text)
+                                is ComposerMode.Reply -> viewModel.send(text, replyToId = m.message.id)
+                                ComposerMode.Idle -> viewModel.send(text)
+                            }
+                            haptics(Haptics.Kind.Confirm)
+                            draft = ""
+                            mode = ComposerMode.Idle
+                        },
+                    )
+
+                    Column(Modifier.onSizeChanged { panelPx = it.height }) {
+                        // Панель эмодзи / стикеров / GIF — часть той же стеклянной панели: общий фон, без отдельных углов и «ручки».
+                        AnimatedVisibility(
+                            visible = pickerOpen,
+                            enter = expandVertically(
+                                animationSpec = tween(420, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)),
+                                expandFrom = Alignment.Top,
+                            ) + slideInVertically(
+                                animationSpec = tween(420, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)),
+                            ) { it / 5 } + fadeIn(tween(280, delayMillis = 40)),
+                            exit = shrinkVertically(
+                                animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                shrinkTowards = Alignment.Top,
+                            ) + fadeOut(tween(160)),
+                        ) {
+                            Column {
+                                PickerTabs(selected = pickerTab, onSelect = { pickerTab = it })
+                                // Фиксированная высота: панель не «прыгает» при смене вкладок; содержимое выезжает в сторону переключения.
+                                AnimatedContent(
+                                    targetState = pickerTab,
+                                    modifier = Modifier.fillMaxWidth().height(368.dp).clipToBounds(),
+                                    transitionSpec = {
+                                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                                        (slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = 500f)) { dir * it / 3 } + fadeIn(tween(200, delayMillis = 60)))
+                                            .togetherWith(slideOutHorizontally(tween(180)) { -dir * it / 3 } + fadeOut(tween(120)))
+                                    },
+                                    label = "pickerTab",
+                                ) { tab ->
+                                    when (tab) {
+                                        PickerTab.Emoji -> EmojiTab(onPick = { draft += it }, modifier = Modifier.fillMaxSize())
+                                        PickerTab.Stickers -> StickerTab(
+                                            viewModel = viewModel,
+                                            query = stickerQuery,
+                                            onQueryChange = { stickerQuery = it },
+                                            onPickFile = { pickStickerFile.launch("image/*") },
+                                            onSent = { pickerOpen = false },
+                                        )
+                                        PickerTab.Gif -> GifTab(
+                                            viewModel = viewModel,
+                                            onPickFile = { pickMedia.launch("image/gif") },
+                                            onSent = { pickerOpen = false },
                                         )
                                     }
-                                    AttachMenu(
-                                        expanded = attachOpen,
-                                        onDismiss = { attachOpen = false },
-                                        onFile = { filePicker.launch(arrayOf("*/*")) },
-                                        onMedia = {
-                                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                                        },
-                                        onPoll = { pollOpen = true },
-                                        onLocation = {
-                                            val granted = listOf(
-                                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                            ).any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-                                            if (granted) fetchLocation() else locationPermission.launch(
-                                                arrayOf(
-                                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                                ),
-                                            )
-                                        },
-                                        onVoice = {
-                                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                                                PackageManager.PERMISSION_GRANTED
-                                            ) beginRecording() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                                        },
-                                        onRound = { openVideoRecorder() },
-                                    )
                                 }
-                                Box(Modifier.weight(1f).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
-                                    if (input.isEmpty()) {
-                                        Text(
-                                            "Сообщение",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    BasicTextField(
-                                        value = inputHolder.value,
-                                        onValueChange = { inputHolder.value = it },
-                                        modifier = Modifier.fillMaxWidth().focusRequester(inputFocus),
-                                        maxLines = 5,
-                                        keyboardOptions = KeyboardOptions(
-                                            imeAction = if (chatPrefs.enterToSend) ImeAction.Send else ImeAction.Default,
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                            onSend = {
-                                                if (input.isNotBlank()) submit()
-                                            },
-                                        ),
-                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                    )
-                                }
-                                // Пока панель открыта, кнопка эмодзи превращается в кнопку закрытия.
-                                InputAction(
-                                    if (emojiSheet) Icons.Filled.Close else Icons.Filled.EmojiEmotions,
-                                    if (emojiSheet) "Закрыть панель" else "Эмодзи",
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                ) {
-                                    if (emojiSheet) {
-                                        emojiSheet = false
-                                    } else {
-                                        attachmentTab = 0
-                                        emojiSheet = true
-                                    }
-                                }
+                                Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
                             }
                         }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    // Круглая кнопка: отправка (есть текст) / микрофон / камера для кружка.
-                    // Тап — переключение «голосовое ↔ кружок» (если нет текста), зажатие — запись:
-                    // отпустить — отправить, свайп вверх — закрепить (можно отпустить), свайп влево — отмена.
-                    val canSend = input.isNotBlank()
-                    val sendActive = canSend || recording
-                    // Морфинг: «квадрат со скруглением» (микрофон/камера) становится кругом (отправка).
-                    val sendCorner by animateDpAsState(if (sendActive) 28.dp else 16.dp, cornerSpec, label = "sendCorner")
-                    val sendContainer by animateColorAsState(
-                        if (sendActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                        colorSpec,
-                        label = "sendContainer",
-                    )
-                    val sendContent by animateColorAsState(
-                        if (sendActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
-                        colorSpec,
-                        label = "sendContent",
-                    )
-                    // Жест не перезапускается при смене состояния (ключ Unit), актуальные значения читаем через State.
-                    val canSendNow by rememberUpdatedState(canSend)
-                    val recordingNow by rememberUpdatedState(recording)
-                    val videoModeNow by rememberUpdatedState(videoMode)
-                    val haptic = LocalHapticFeedback.current
-                    val onSubmit by rememberUpdatedState({ submit() })
-                    val finishVoice by rememberUpdatedState({
-                        recording = false
-                        recordLocked = false
-                        recorder.stop()?.let { (path, seconds) -> viewModel.sendVoice(path, seconds) }
-                        Unit
-                    })
-                    val startHold by rememberUpdatedState<(Boolean) -> Boolean>({ video ->
-                        if (video) {
-                            openVideoRecorder(hold = true)
-                        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                            PackageManager.PERMISSION_GRANTED
+
+                        // Панель вложений: та же анимация и тот же стиль кнопок, что у панели эмодзи.
+                        AnimatedVisibility(
+                            visible = attachOpen,
+                            enter = expandVertically(
+                                animationSpec = tween(420, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)),
+                                expandFrom = Alignment.Top,
+                            ) + slideInVertically(
+                                animationSpec = tween(420, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)),
+                            ) { it / 5 } + fadeIn(tween(280, delayMillis = 40)),
+                            exit = shrinkVertically(
+                                animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                shrinkTowards = Alignment.Top,
+                            ) + fadeOut(tween(160)),
                         ) {
-                            recordLocked = false
-                            beginRecording()
-                            recording
-                        } else {
-                            micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                            false
-                        }
-                    })
-                    val lockHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
-                        if (video) videoHold = HOLD_LOCKED else recordLocked = true
-                    })
-                    val cancelHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
-                        if (video) {
-                            videoHold = HOLD_CANCELLED
-                        } else {
-                            recorder.cancel()
-                            recording = false
-                            recordLocked = false
-                        }
-                    })
-                    val releaseHold by rememberUpdatedState<(Boolean) -> Unit>({ video ->
-                        if (video) videoHold = HOLD_RELEASED else finishVoice()
-                    })
-                    // Смена режима голосовое ↔ кружок: кнопка коротко «дрожит» в стороны и даёт вибрацию (как плитки быстрых настроек).
-                    val wiggle = remember { Animatable(0f) }
-                    var modeSeen by remember { mutableStateOf(false) }
-                    LaunchedEffect(videoMode) {
-                        if (!modeSeen) {
-                            modeSeen = true
-                            return@LaunchedEffect
-                        }
-                        haptic.performHapticFeedback(
-                            if (videoMode) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
-                        )
-                        if (!lowRam) {
-                            wiggle.snapTo(0f)
-                            wiggle.animateTo(
-                                targetValue = 0f,
-                                animationSpec = keyframes {
-                                    durationMillis = 320
-                                    0f at 0
-                                    -1f at 50
-                                    1f at 110
-                                    -0.7f at 170
-                                    0.5f at 225
-                                    -0.25f at 275
-                                    0f at 320
-                                },
-                            )
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .graphicsLayer { translationX = wiggle.value * 3.dp.toPx() }
-                            .pointerInput(Unit) {
-                                val lockDistance = 64.dp.toPx()
-                                val cancelDistance = 96.dp.toPx()
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    if (canSendNow) {
-                                        if (waitForUpOrCancellation() != null) onSubmit()
-                                        return@awaitEachGesture
-                                    }
-                                    if (recordingNow) { // закреплённая запись: тап — отправить
-                                        if (waitForUpOrCancellation() != null) finishVoice()
-                                        return@awaitEachGesture
-                                    }
-                                    var tapped = false
-                                    val completed = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                        tapped = waitForUpOrCancellation() != null
-                                    }
-                                    if (completed != null) { // короткий тап: микрофон ↔ кружок
-                                        if (tapped) videoMode = !videoMode
-                                        return@awaitEachGesture
-                                    }
-                                    val video = videoModeNow
-                                    if (!startHold(video)) return@awaitEachGesture
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    var locked = false
-                                    var cancelled = false
-                                    while (true) {
-                                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                        if (!change.pressed) break
-                                        val dx = change.position.x - down.position.x
-                                        val dy = change.position.y - down.position.y
-                                        if (dy < -lockDistance) {
-                                            locked = true
-                                            lockHold(video)
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            change.consume()
-                                            break
-                                        } else if (dx < -cancelDistance) {
-                                            cancelled = true
-                                            cancelHold(video)
-                                            change.consume()
-                                            break
-                                        }
-                                        change.consume()
-                                    }
-                                    if (!locked && !cancelled) releaseHold(video)
-                                }
-                            },
-                        shape = RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)),
-                        color = sendContainer,
-                        contentColor = sendContent,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            AnimatedContent(
-                                targetState = when {
-                                    sendActive -> 0
-                                    videoMode -> 1
-                                    else -> 2
-                                },
-                                transitionSpec = {
-                                    (fadeIn(fadeSpec) + scaleIn(fastScaleSpec, initialScale = 0.6f)) togetherWith
-                                            (fadeOut(fadeSpec) + scaleOut(fastScaleSpec, targetScale = 0.6f))
-                                },
-                                label = "sendIcon",
-                            ) { kind ->
-                                Icon(
-                                    when (kind) {
-                                        0 -> Icons.AutoMirrored.Filled.Send
-                                        1 -> Icons.Filled.Videocam
-                                        else -> Icons.Filled.Mic
-                                    },
-                                    contentDescription = when (kind) {
-                                        0 -> "Отправить"
-                                        1 -> "Видеосообщение"
-                                        else -> "Голосовое сообщение"
-                                    },
-                                    modifier = Modifier.size(24.dp),
+                            Column {
+                                AttachActionsPanel(
+                                    onFile = { attachOpen = false; pickFile.launch("*/*") },
+                                    onMedia = { attachOpen = false; pickMedia.launch("image/*") },
+                                    onPoll = { attachOpen = false; pollOpen = true },
+                                    onLocation = { attachOpen = false },
+                                    onVoice = { attachOpen = false },
+                                    onRound = { attachOpen = false },
                                 )
+                                Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
                             }
                         }
                     }
-                }
-                AnimatedVisibility(
-                    visible = emojiSheet,
-                    enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                    exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                ) {
-                    Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    PickerTabButton(
-                        icon = "😀",
-                        title = "Эмодзи",
-                        selected = attachmentTab == 0,
-                        onClick = { attachmentTab = 0 },
-                        modifier = Modifier.weight(1f),
-                        first = true,
-                    )
-                    PickerTabButton(
-                        icon = "🎨",
-                        title = "Стикеры",
-                        selected = attachmentTab == 1,
-                        onClick = { attachmentTab = 1 },
-                        modifier = Modifier.weight(1f),
-                    )
-                    PickerTabButton(
-                        icon = "GIF",
-                        title = "GIF",
-                        selected = attachmentTab == 2,
-                        onClick = { attachmentTab = 2 },
-                        modifier = Modifier.weight(1f),
-                        last = true,
-                    )
-                }
-                // Переключение вкладок: содержимое плавно съезжает в сторону выбранной вкладки.
-                val motion = MaterialTheme.motionScheme
-                AnimatedContent(
-                    targetState = attachmentTab,
-                    transitionSpec = {
-                        val dir = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(motion.defaultSpatialSpec()) { dir * it / 3 } +
-                                fadeIn(motion.defaultEffectsSpec())) togetherWith
-                                (slideOutHorizontally(motion.defaultSpatialSpec()) { -dir * it / 3 } +
-                                        fadeOut(motion.defaultEffectsSpec()))
-                    },
-                    label = "pickerTab",
-                ) { tab ->
-                    when (tab) {
-                        0 -> LazyVerticalGrid(
-                            columns = GridCells.Adaptive(48.dp),
-                            modifier = Modifier.fillMaxWidth().height(320.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        ) {
-                            items(Emojis) { emoji ->
-                                Box(
-                                    Modifier.size(48.dp).clip(CircleShape).clickable { input += emoji },
-                                    contentAlignment = Alignment.Center,
-                                ) { Text(emoji, fontSize = 28.sp) }
-                            }
-                        }
-                        1 -> StickerTab(
-                            viewModel = viewModel,
-                            query = stickerQuery,
-                            onQueryChange = { stickerQuery = it },
-                            onPickFile = { stickerPicker.launch(arrayOf("image/webp", "image/png")) },
-                            onSent = { emojiSheet = false },
-                        )
-                        else -> GifTab(
-                            viewModel = viewModel,
-                            onPickFile = { gifPicker.launch(arrayOf("image/gif", "video/mp4")) },
-                            onSent = { emojiSheet = false },
-                        )
-                    }
-                }
-                        Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))
-                    }
-                }
                 }
             }
         }
+
+        ScrollDownFab(
+            visible = !atBottom,
+            onClick = { scope.launch { listState.animateScrollToItem(0) } },
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = with(density) { bottomBarPx.toDp() } + 12.dp),
+        )
+
+        state.error?.let { err ->
+            ErrorSnack(
+                text = err,
+                onDismiss = viewModel::dismissError,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { bottomBarPx.toDp() } + 12.dp),
+            )
+        }
     }
 
+    // ───── диалоги и панели ─────
     if (pollOpen) {
         PollDialog(
             onDismiss = { pollOpen = false },
-            onSend = { question, options, anonymous, multiple -> viewModel.sendPoll(question, options, anonymous, multiple) },
+            onSend = { q, options, anonymous, multiple ->
+                pollOpen = false
+                viewModel.sendPoll(q, options, anonymous, multiple)
+            },
         )
     }
 
-    composing?.let { p ->
+    pendingMedia?.let { pending ->
         MediaComposerDialog(
-            pending = p,
-            onDismiss = { composing = null },
+            pending = pending,
+            onDismiss = { pendingMedia = null },
             onSend = { path, caption ->
-                composing = null
-                when (p.kind) {
+                pendingMedia = null
+                when (pending.kind) {
                     PendingKind.PHOTO -> viewModel.sendPhoto(path, caption)
                     PendingKind.GIF -> viewModel.sendAnimation(path, caption = caption)
                     PendingKind.VIDEO -> viewModel.sendDocument(path, caption)
@@ -1729,238 +561,540 @@ fun ChatScreen(
             },
         )
     }
-    pendingLocation?.let { loc ->
-        AlertDialog(
-            onDismissRequest = { pendingLocation = null },
-            title = { Text("Отправить геопозицию?") },
-            text = { Text(tr("%.5f, %.5f (точность ~%d м)").format(loc.latitude, loc.longitude, loc.accuracy.toInt())) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.sendLocation(loc.latitude, loc.longitude, loc.accuracy.toDouble())
-                    pendingLocation = null
-                }) { Text("Отправить") }
-            },
-            dismissButton = { TextButton(onClick = { pendingLocation = null }) { Text("Отмена") } },
-        )
+
+    viewer?.let { (items, index) ->
+        PhotoViewer(items = items, startIndex = index, viewModel = viewModel, onDismiss = { viewer = null })
     }
 
-    if (videoRecorderOpen) {
-        VideoNoteRecorderDialog(
-            onSend = { path, seconds, length -> viewModel.sendVideoNote(path, seconds, length) },
-            onDismiss = {
-                videoRecorderOpen = false
-                videoHold = HOLD_NONE
-                videoAuto = false
-            },
-            autoStart = videoAuto,
-            hold = videoHold,
-            camera = cameraPrefs,
-            onCameraUsed = { front -> settings.updateCamera { it.copy(lastFront = front) } },
-        )
-    }
+    if (stickerSet != 0L) StickerSetSheet(setId = stickerSet, viewModel = viewModel, onDismiss = { stickerSet = 0L })
 
-    viewerMedia?.let { media ->
-        // Все фото загруженной части чата от старых к новым; открытое фото — стартовая страница.
-        val gallery = visibleMessages.asReversed()
-            .mapNotNull { it.media }
-            .filter { it.kind == MediaKind.PHOTO && !it.locked }
-        val start = gallery.indexOfFirst { it.fileId == media.fileId }
-        PhotoViewer(
-            items = if (start >= 0) gallery else listOf(media),
-            startIndex = start.coerceAtLeast(0),
-            viewModel = viewModel,
-            onDismiss = { viewerMedia = null },
-        )
-    }
-
-    actionMessage?.let { message ->
-        val sender = message.senderUserId
-        val tw by viewModel.typingWatch.collectAsState()
-        var available by remember(message.id) { mutableStateOf(DefaultReactions) }
-        LaunchedEffect(message.id) {
-            viewModel.availableReactions(message.id).takeIf { it.isNotEmpty() }?.let { available = it }
-        }
+    menuFor?.let { entry ->
+        val m = entry.message
+        val pinned = state.pinned.any { it.id == m.id }
         MessageMenu(
-            message = message,
-            isRead = state.readAt[message.id] != null,
-            canEdit = message.isOutgoing && message.media == null && message.call == null && message.id !in state.deletedIds,
-            canSave = message.media?.kind.let { it == MediaKind.PHOTO || it == MediaKind.VIDEO || it == MediaKind.VIDEO_NOTE || it == MediaKind.ANIMATION || it == MediaKind.STICKER || it == MediaKind.DOCUMENT },
-            canShadowBan = sender != null && !message.isOutgoing,
-            canWatchTyping = state.isGroup && sender != null && !message.isOutgoing,
-            watchingTyping = sender != null && tw.watches(viewModel.chatId, sender),
-            reactions = available,
-            onDismiss = { actionMessage = null },
-            onReact = { viewModel.react(message.id, it) },
-            onReply = { if (editing != null) stopEditing(); replyTo = message },
-            onSave = {
-                val media = message.media ?: return@MessageMenu
-                scope.launch {
-                    val path = viewModel.fileState(media.fileId).first().path
-                    if (path == null) {
-                        viewModel.download(media.fileId)
-                        snackbar.showSnackbar("Файл ещё загружается, попробуйте позже")
-                    } else {
-                        val ok = saveToGallery(context, path, media.name, media.mimeType, media.kind)
-                        snackbar.showSnackbar(if (ok) "Сохранено в галерею" else "Не удалось сохранить")
-                    }
-                }
-            },
-            onExport = {
-                val media = message.media ?: return@MessageMenu
-                scope.launch {
-                    val path = viewModel.fileState(media.fileId).first().path
-                    if (path == null) {
-                        viewModel.download(media.fileId)
-                        snackbar.showSnackbar("Файл ещё загружается, попробуйте позже")
-                    } else {
-                        exportPath = path
-                        exportLauncher.launch(media.name.ifBlank { File(path).name })
-                    }
-                }
-            },
-            onForward = { forwardMessage = message },
-            isPinned = state.pinned.any { it.id == message.id },
-            onPin = {
-                if (state.pinned.any { it.id == message.id }) viewModel.unpin(message.id) else viewModel.pin(message.id)
-            },
-            onEdit = {
-                replyTo = null
-                if (editing == null) draftBeforeEdit = input
-                editing = message
-                input = message.text
-            },
-            onDelete = { deleteMessage = message },
-            onShadowBan = { sender?.let { viewModel.shadowBan(it) } },
-            onToggleTypingWatch = { sender?.let { viewModel.toggleTypingWatch(it) } },
-        )
-    }
-
-    val storageAlert by viewModel.storageAlert.collectAsState()
-    storageAlert?.let { alert ->
-        val usedText = android.text.format.Formatter.formatFileSize(LocalContext.current, alert.usedBytes)
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissStorageAlert() },
-            title = { Text(if (alert.limitReached) "Автозагрузка отключена" else "Много места занято") },
-            text = {
-                Text(
-                    if (alert.limitReached) {
-                        tr("Приложение занимает {0} — это не меньше заданного лимита, поэтому медиа больше не скачивается автоматически. Очистите кэш или измените лимит в «Данные и память».", usedText)
-                    } else {
-                        tr("Приложение занимает {0}. Очистите кэш, чтобы освободить место, или измените порог предупреждения в «Данные и память».", usedText)
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.clearCache()
-                    viewModel.dismissStorageAlert()
-                }) { Text("Очистить кэш") }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.dismissStorageAlert() }) { Text("Позже") } },
-        )
-    }
-
-    deleteMessage?.let { message ->
-        AlertDialog(
-            onDismissRequest = { deleteMessage = null },
-            title = { Text("Удалить сообщение?") },
-            text = { Text("Сообщение будет удалено у всех, если это позволяют права в чате.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics(app.yougram.core.ui.Haptics.Kind.Heavy)
-                    viewModel.delete(message.id)
-                    deleteMessage = null
-                }) { Text("Удалить") }
-            },
-            dismissButton = { TextButton(onClick = { deleteMessage = null }) { Text("Отмена") } },
-        )
-    }
-
-    forwardMessage?.let { message ->
-        val chatList by viewModel.chats.collectAsState()
-        AlertDialog(
-            onDismissRequest = { forwardMessage = null },
-            title = { Text("Переслать в…") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    chatList.forEach { chat ->
-                        Text(
-                            chat.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.forward(message.id, chat.id)
-                                    forwardMessage = null
-                                }
-                                .padding(vertical = 12.dp),
-                        )
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { forwardMessage = null }) { Text("Отмена") } },
-        )
-    }
-
-    editsDialog?.let { records ->
-        AlertDialog(
-            onDismissRequest = { editsDialog = null },
-            title = { Text("История правок") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    records.asReversed().forEach { record ->
-                        Text(
-                            formatTime(record.at),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(record.oldText, modifier = Modifier.padding(bottom = 12.dp))
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { editsDialog = null }) { Text("Закрыть") } },
+            message = m,
+            isRead = (state.readAt[m.id] ?: 0) > 0,
+            canEdit = m.isOutgoing && m.media == null && m.poll == null && !m.isService,
+            canSave = m.media != null,
+            canShadowBan = false,
+            canWatchTyping = false,
+            watchingTyping = false,
+            reactions = QuickReactions,
+            onDismiss = { menuFor = null },
+            onReact = { viewModel.react(m.id, it); menuFor = null },
+            onReply = { mode = ComposerMode.Reply(m); menuFor = null },
+            onSave = { menuFor = null },
+            onForward = { menuFor = null },
+            isPinned = pinned,
+            onPin = { if (pinned) viewModel.unpin(m.id) else viewModel.pin(m.id); menuFor = null },
+            onEdit = { mode = ComposerMode.Edit(m); draft = m.text; menuFor = null },
+            onDelete = { viewModel.delete(m.id); menuFor = null },
+            onShadowBan = { menuFor = null },
+            onToggleTypingWatch = { menuFor = null },
+            chatId = viewModel.chatId,
         )
     }
 }
 
-/** Два соседних сообщения — одна группа: тот же автор и интервал меньше пяти минут. */
-private fun sameGroup(older: MessageItem, newer: MessageItem): Boolean =
-    !older.isService && !newer.isService &&
-            older.isOutgoing == newer.isOutgoing &&
-            older.senderKey == newer.senderKey &&
-            abs(newer.date - older.date) < GroupGapSeconds
+@Composable
+private fun ScrollDownFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = scaleIn(spring(stiffness = 600f)) + fadeIn(),
+        exit = scaleOut() + fadeOut(),
+    ) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = tr("Вниз")) }
+    }
+}
 
-private fun formatTime(date: Int): String =
-    Instant.ofEpochSecond(date.toLong()).atZone(ZoneId.systemDefault()).format(TimeFormatter)
+// ───────────────────────── Top bar ─────────────────────────
 
-private val SenderColors = listOf(
-    Color(0xFFE17076), Color(0xFFEDA86C), Color(0xFFA695E7), Color(0xFF7BC862),
-    Color(0xFF6EC9CB), Color(0xFF65AADD), Color(0xFFEE7AAE),
-)
-
-private fun senderColor(key: Long): Color = SenderColors[Math.floorMod(key, SenderColors.size.toLong()).toInt()]
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatTopBar(
+    title: String,
+    subtitle: String,
+    typing: Boolean,
+    online: Boolean,
+    avatarFileId: Int?,
+    fileState: (Int) -> kotlinx.coroutines.flow.Flow<app.yougram.feature.chat.data.FileState>,
+    showBack: Boolean,
+    onBack: () -> Unit,
+    onTitleClick: () -> Unit,
+    canCall: Boolean,
+    onCall: (Boolean) -> Unit,
+    overflowOpen: Boolean,
+    onOverflow: (Boolean) -> Unit,
+    onSearch: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
+        navigationIcon = {
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Назад"))
+                }
+            }
+        },
+        title = {
+            Row(
+                Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onClick = onTitleClick)
+                    .padding(vertical = 4.dp, horizontal = if (showBack) 0.dp else 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FileAvatar(title = title, fileId = avatarFileId, fileState = fileState, size = 40.dp)
+                Spacer(Modifier.size(12.dp))
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (subtitle.isNotEmpty()) {
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (typing || online) scheme.primary else scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        actions = {
+            if (canCall) {
+                IconButton(onClick = { onCall(false) }) { Icon(Icons.Filled.Call, tr("Позвонить")) }
+                IconButton(onClick = { onCall(true) }) { Icon(Icons.Filled.Videocam, tr("Видеозвонок")) }
+            }
+            Box {
+                IconButton(onClick = { onOverflow(true) }) { Icon(Icons.Filled.MoreVert, tr("Ещё")) }
+                DropdownMenu(
+                    expanded = overflowOpen,
+                    onDismissRequest = { onOverflow(false) },
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Поиск") },
+                        leadingIcon = { Icon(Icons.Filled.Search, null) },
+                        onClick = { onOverflow(false); onSearch() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Профиль") },
+                        onClick = { onOverflow(false); onTitleClick() },
+                    )
+                }
+            }
+        },
+    )
+}
 
 @Composable
-private fun SenderName(key: Long, sender: SenderInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            sender?.name ?: "…",
-            modifier = Modifier.weight(1f, fill = false),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = senderColor(key),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        YougramBadge(key, Modifier.padding(start = 4.dp), size = 14.dp)
-        sender?.username?.let {
+private fun PinnedBar(text: String, count: Int, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick)) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 3.dp, height = 28.dp).clip(CircleShape).background(scheme.primary))
+            Spacer(Modifier.size(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (count > 1) tr("Закреплённое сообщение (%d)", count) else "Закреплённое сообщение",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.primary,
+                )
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(Icons.Filled.PushPin, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+// ───────────────────────── Message list ─────────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MessageList(
+    topPad: androidx.compose.ui.unit.Dp,
+    bottomPad: androidx.compose.ui.unit.Dp,
+    bottomShift: () -> Float,
+    entries: List<ChatEntry>,
+    listState: LazyListState,
+    state: ChatUiState,
+    textSize: Int,
+    bubbleRadius: Int,
+    viewModel: ChatViewModel,
+    senders: Map<Long, app.yougram.feature.chat.data.SenderInfo>,
+    replies: Map<Long, app.yougram.feature.chat.data.ReplyPreview>,
+    onOpenMedia: (List<MediaItem>, Int) -> Unit,
+    onOpenProfile: (Long) -> Unit,
+    onOpenComments: (Long, Long) -> Unit,
+    onLongPress: (ChatEntry) -> Unit,
+    onReact: (Long, String) -> Unit,
+    onReplyTap: (Long) -> Unit,
+    onSwipeReply: (MessageItem) -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        reverseLayout = true,
+        modifier = Modifier.fillMaxSize().graphicsLayer { translationY = -bottomShift() },
+        // reverseLayout: «top» списка — это низ экрана, поэтому отступы поменяны местами в терминах контента.
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = 8.dp, end = 8.dp,
+            top = bottomPad + 8.dp,
+            bottom = topPad + 8.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        items(entries.size, key = { entries[it].key }) { index ->
+            val entry = entries[index]
+            val older = entries.getOrNull(index + 1)      // reverseLayout: следующий в списке — более старый
+            val newer = entries.getOrNull(index - 1)
+            val m = entry.message
+
+            // Разделитель даты показываем над первым сообщением дня (визуально выше → рисуется после в reverse).
+            Column {
+                if (older == null || !sameDay(older.message.date, m.date)) DateChip(m.date)
+
+                if (m.isService) {
+                    ServiceMessage(m.text)
+                } else {
+                    val groupedWithOlder = older != null && !older.message.isService &&
+                            older.message.senderKey == m.senderKey && older.message.isOutgoing == m.isOutgoing &&
+                            sameDay(older.message.date, m.date) && m.date - older.message.date < 300
+                    val groupedWithNewer = newer != null && !newer.message.isService &&
+                            newer.message.senderKey == m.senderKey && newer.message.isOutgoing == m.isOutgoing &&
+                            sameDay(newer.message.date, m.date) && newer.message.date - m.date < 300
+
+                    LaunchedEffect(m.senderKey) { m.senderKey?.let(viewModel::ensureSender) }
+                    LaunchedEffect(m.reply) { m.reply?.let(viewModel::ensureReply) }
+
+                    MessageRow(
+                        entry = entry,
+                        showSender = state.isGroup && !m.isOutgoing && !groupedWithOlder,
+                        sender = m.senderKey?.let { senders[it] },
+                        showAvatar = state.isGroup && !m.isOutgoing && !groupedWithNewer,
+                        tailTop = groupedWithOlder,
+                        tailBottom = groupedWithNewer,
+                        edited = state.edits.containsKey(m.id),
+                        read = (state.readAt[m.id] ?: 0) > 0,
+                        deleted = m.id in state.deletedIds,
+                        textSize = textSize,
+                        radius = bubbleRadius,
+                        replyPreview = m.reply?.let { replies[it.messageId] },
+                        viewModel = viewModel,
+                        onOpenMedia = onOpenMedia,
+                        onOpenProfile = onOpenProfile,
+                        onOpenComments = onOpenComments,
+                        onLongPress = { onLongPress(entry) },
+                        onReact = { emoji -> onReact(m.id, emoji) },
+                        onReplyTap = { m.reply?.messageId?.let(onReplyTap) },
+                        onDoubleTap = { onSwipeReply(m) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MessageRow(
+    entry: ChatEntry,
+    showSender: Boolean,
+    sender: app.yougram.feature.chat.data.SenderInfo?,
+    showAvatar: Boolean,
+    tailTop: Boolean,
+    tailBottom: Boolean,
+    edited: Boolean,
+    read: Boolean,
+    deleted: Boolean,
+    textSize: Int,
+    radius: Int,
+    replyPreview: app.yougram.feature.chat.data.ReplyPreview?,
+    viewModel: ChatViewModel,
+    onOpenMedia: (List<MediaItem>, Int) -> Unit,
+    onOpenProfile: (Long) -> Unit,
+    onOpenComments: (Long, Long) -> Unit,
+    onLongPress: () -> Unit,
+    onReact: (String) -> Unit,
+    onReplyTap: () -> Unit,
+    onDoubleTap: () -> Unit,
+) {
+    val m = entry.message
+    val scheme = MaterialTheme.colorScheme
+    val mine = m.isOutgoing
+    val container = if (mine) scheme.primaryContainer else scheme.surfaceContainerHigh
+    val content = if (mine) scheme.onPrimaryContainer else scheme.onSurface
+    val muted = content.copy(alpha = 0.68f)
+
+    val big = radius.dp
+    val small = 6.dp
+    // «Хвост» — малое скругление у нижнего угла со стороны автора; внутри серии — малое с обеих сторон.
+    val shape: Shape = if (mine) {
+        RoundedCornerShape(
+            topStart = big, bottomStart = big,
+            topEnd = if (tailTop) small else big,
+            bottomEnd = small,
+        ).let { if (m.hasComments) RoundedCornerShape(topStart = big, topEnd = if (tailTop) small else big, bottomStart = small, bottomEnd = small) else it }
+    } else {
+        RoundedCornerShape(
+            topEnd = big, bottomEnd = big,
+            topStart = if (tailTop) small else big,
+            bottomStart = small,
+        ).let { if (m.hasComments) RoundedCornerShape(topEnd = big, topStart = if (tailTop) small else big, bottomEnd = small, bottomStart = small) else it }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = if (tailTop) 0.dp else 6.dp),
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        if (!mine && showAvatar && sender != null) {
+            FileAvatar(
+                title = sender.name,
+                fileId = sender.avatarFileId,
+                fileState = { viewModel.fileState(it) },
+                size = 32.dp,
+                modifier = Modifier.clip(CircleShape).combinedClickable(onClick = { onOpenProfile(sender.key) }),
+            )
+            Spacer(Modifier.size(6.dp))
+        } else if (!mine && viewModel.state.value.isGroup) {
+            Spacer(Modifier.size(38.dp))
+        }
+
+        Column(
+            Modifier.widthIn(max = 320.dp).width(IntrinsicSize.Max),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Surface(
+                color = if (deleted) scheme.errorContainer.copy(alpha = 0.6f) else container,
+                contentColor = content,
+                shape = shape,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .combinedClickable(onClick = {}, onLongClick = onLongPress, onDoubleClick = onDoubleTap),
+            ) {
+                Column(Modifier.padding(vertical = 6.dp, horizontal = 4.dp)) {
+                    if (showSender && sender != null) {
+                        Text(
+                            sender.name,
+                            modifier = Modifier.padding(horizontal = 8.dp).combinedClickable(onClick = { onOpenProfile(sender.key) }),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = scheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    m.forward?.let { f ->
+                        Text(
+                            tr("Переслано от %s", f.hiddenName.ifEmpty { f.signature.ifEmpty { tr("неизвестного") } }),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.tertiary,
+                        )
+                    }
+
+                    if (m.reply != null) {
+                        ReplyQuote(
+                            author = replyPreview?.author.orEmpty(),
+                            text = replyPreview?.text ?: "…",
+                            onClick = onReplyTap,
+                            tint = if (mine) scheme.primary else scheme.secondary,
+                            background = content.copy(alpha = 0.08f),
+                        )
+                    }
+
+                    // Медиа
+                    if (entry.albumMedia.size > 1) {
+                        Box(Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(18.dp))) {
+                            AlbumMedia(entry.albumMedia, viewModel) { clicked ->
+                                onOpenMedia(entry.albumMedia, entry.albumMedia.indexOf(clicked).coerceAtLeast(0))
+                            }
+                        }
+                    } else {
+                        m.media?.let { media ->
+                            val rounded = media.kind == MediaKind.PHOTO || media.kind == MediaKind.VIDEO ||
+                                    media.kind == MediaKind.ANIMATION
+                            Box(Modifier.padding(horizontal = 2.dp).let { if (rounded) it.clip(RoundedCornerShape(18.dp)) else it }) {
+                                MessageMedia(media, viewModel, onOpenPhoto = { onOpenMedia(listOf(it), 0) })
+                            }
+                        }
+                    }
+
+                    m.poll?.let {
+                        PollMessage(
+                            poll = it,
+                            messageId = m.id,
+                            viewModel = viewModel,
+                            canStop = mine,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+
+                    // Текст + время в одну строку, если помещается
+                    val context = LocalContext.current
+                    val annotated = rememberLinkified(
+                        text = m.text,
+                        linkColor = scheme.primary,
+                        onOpen = { openExternally(context, it) },
+                        emojis = m.emojis,
+                        links = m.links,
+                    )
+                    if (m.text.isNotEmpty()) {
+                        Column(Modifier.padding(horizontal = 8.dp)) {
+                            ClickableText(
+                                text = annotated,
+                                style = MaterialTheme.typography.bodyLarge.copy(color = content, fontSize = textSize.sp),
+                                onClick = { offset ->
+                                    annotated.getStringAnnotations(start = offset, end = offset).firstOrNull()
+                                        ?.let { openExternally(context, it.item) }
+                                },
+                            )
+                        }
+                    }
+
+                    if (m.buttons.isNotEmpty()) {
+                        InlineKeyboard(
+                            message = m,
+                            viewModel = viewModel,
+                            mine = mine,
+                            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                        )
+                    }
+
+                    if (m.reactions.isNotEmpty()) {
+                        ReactionsRow(m, onReact, contentColor = content, chosenColor = scheme.primary)
+                    }
+
+                    // Мета-строка
+                    Row(
+                        Modifier.align(Alignment.End).padding(end = 8.dp, top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (edited) Text(tr("изм."), style = MaterialTheme.typography.labelSmall, color = muted)
+                        if (edited) Spacer(Modifier.size(4.dp))
+                        Text(timeOf(m.date), style = MaterialTheme.typography.labelSmall, color = muted)
+                        if (mine) {
+                            Spacer(Modifier.size(4.dp))
+                            Icon(
+                                if (read) Icons.Filled.DoneAll else Icons.Filled.Done,
+                                contentDescription = null,
+                                tint = if (read) scheme.primary else muted,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            if (m.hasComments) {
+                // Кнопка комментариев — продолжение сообщения: тот же цвет, соединённая группа (малые внутренние углы, крупные внешние).
+                val commentsShape = if (mine) {
+                    RoundedCornerShape(topStart = small, topEnd = small, bottomStart = big, bottomEnd = small)
+                } else {
+                    RoundedCornerShape(topStart = small, topEnd = small, bottomStart = small, bottomEnd = big)
+                }
+                Surface(
+                    onClick = { onOpenComments(m.chatId, m.id) },
+                    color = container,
+                    contentColor = content,
+                    shape = commentsShape,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.ChatBubble, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(18.dp))
+                        Text(
+                            if (m.commentCount > 0) {
+                                "${m.commentCount} " + Localization.pluralForm(m.commentCount, tr("комментарий"), tr("комментария"), tr("комментариев"))
+                            } else tr("Оставить комментарий"),
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(start = 8.dp).weight(1f),
+                        )
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = muted, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyQuote(author: String, text: String, onClick: () -> Unit, tint: Color, background: Color) {
+    Row(
+        Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(background)
+            .combinedClickable(onClick = onClick)
+            .padding(end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(width = 3.dp, height = 36.dp).background(tint))
+        Spacer(Modifier.size(8.dp))
+        Column(Modifier.padding(vertical = 4.dp)) {
+            if (author.isNotEmpty()) {
+                Text(author, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun ReactionsRow(m: MessageItem, onReact: (String) -> Unit, contentColor: Color, chosenColor: Color) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        m.reactions.forEach { r ->
+            val bg = if (r.chosen) chosenColor.copy(alpha = 0.22f) else contentColor.copy(alpha = 0.10f)
+            Row(
+                Modifier.clip(CircleShape).background(bg)
+                    .combinedClickable(onClick = { onReact(r.emoji) })
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (r.customEmojiId == 0L) BasicText(r.emoji, style = MaterialTheme.typography.labelLarge)
+                else Icon(Icons.Filled.AddReaction, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    r.count.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (r.chosen) chosenColor else contentColor,
+                    fontWeight = if (r.chosen) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DateChip(date: Int) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f)) {
             Text(
-                "  @$it",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                dayLabel(date),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -1968,14 +1102,11 @@ private fun SenderName(key: Long, sender: SenderInfo?, onClick: () -> Unit, modi
 
 @Composable
 private fun ServiceMessage(text: String) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
-        ) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 24.dp), contentAlignment = Alignment.Center) {
+        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
             Text(
                 text,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -1984,644 +1115,305 @@ private fun ServiceMessage(text: String) {
     }
 }
 
+// ───────────────────────── Composer ─────────────────────────
+
 @Composable
-private fun MessageBubble(
-    message: MessageItem,
-    albumMedia: List<MediaItem>,
-    joinedWithOlder: Boolean,
-    joinedWithNewer: Boolean,
-    viewModel: ChatViewModel,
-    textSize: Int,
-    cornerRadius: Dp,
-    onOpenPhoto: (MediaItem) -> Unit,
-    deleted: Boolean,
-    edits: List<EditRecord>,
-    readAt: Int?,
-    onLongPress: () -> Unit,
-    onShowEdits: () -> Unit,
-    groupChat: Boolean,
-    sender: SenderInfo?,
-    onOpenSender: () -> Unit,
-    forwardFrom: SenderInfo?,
-    reply: ReplyPreview?,
-    onReplyClick: () -> Unit,
-    onReact: (String) -> Unit,
-    onOpenComments: () -> Unit,
-    commentsEnabled: Boolean,
-    ownBubbleColor: Color?,
-    otherBubbleColor: Color?,
-    bubbleOpacity: Float,
-    bubbleBackdrop: BackdropState?,
-    glassSettings: GlassSettings,
-    highlighted: Boolean,
-    searchQuery: String,
+private fun Composer(
+    mode: ComposerMode,
+    draft: String,
+    onDraft: (String) -> Unit,
+    onCancelMode: () -> Unit,
+    paidStars: Long,
+    pickerOpen: Boolean,
+    attachOpen: Boolean = false,
+    onTogglePicker: () -> Unit,
+    onFieldFocus: () -> Unit,
+    onAttach: () -> Unit,
+    onSend: () -> Unit,
 ) {
-    val mine = message.isOutgoing
-    // Текст своих сообщений: белый в тёмной теме, в светлой как раньше.
-    val customBg = if (mine) ownBubbleColor else otherBubbleColor
-    val readableOnCustom = customBg?.let { if (it.luminance() > 0.5f) Color.Black else Color.White }
-    val ownText = readableOnCustom
-        ?: MaterialTheme.colorScheme.onPrimaryContainer
-    val media = message.media
-    val senderKey = message.senderKey
-    // В группах у чужих сообщений показываем автора: аватарка и имя с тегом у первого сообщения серии.
-    val showSenderUi = groupChat && !mine && senderKey != null
-    val showName = showSenderUi && !joinedWithOlder
-    val showAvatar = showSenderUi && !joinedWithOlder
-    // Кружок и стикер показываются без пузыря.
-    val bare = (media?.kind == MediaKind.VIDEO_NOTE || media?.kind == MediaKind.STICKER) && message.text.isEmpty()
-    // Кнопка комментариев прилегает к самому посту — полоса внизу пузыря.
-    val withComments = commentsEnabled && message.hasComments && !bare
+    val scheme = MaterialTheme.colorScheme
+    val hasText = draft.isNotBlank()
+    var videoMode by remember { mutableStateOf(false) }
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    LaunchedEffect(senderKey, showSenderUi) {
-        if (showSenderUi && senderKey != null) viewModel.ensureSender(senderKey)
-    }
-
-    val replyRef = message.reply
-    LaunchedEffect(replyRef) { if (replyRef != null) viewModel.ensureReply(replyRef) }
-
-    // Откуда переслано: имя автора оригинала подгружаем так же, как авторов сообщений.
-    val forward = message.forward
-    val forwardKey = forward?.key
-    LaunchedEffect(forwardKey) { if (forwardKey != null) viewModel.ensureSender(forwardKey) }
-
-    // Expressive-группировка: у склеенных сообщений углы со стороны автора мелкие, у последнего в серии — «хвостик».
-    // Когда приходит новое сообщение, углы предыдущего плавно «перетекают».
-    val motion = MaterialTheme.motionScheme
-    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
-    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
-    val colorSpec: FiniteAnimationSpec<Color> = if (lowTier) tween(250) else motion.defaultEffectsSpec()
-    val inner = minOf(BubbleInner, cornerRadius)
-    val tail = minOf(BubbleTail, cornerRadius)
-    val authorTop by animateDpAsState(if (joinedWithOlder) inner else cornerRadius, cornerSpec, label = "bubbleTop")
-    val authorBottom by animateDpAsState(if (joinedWithNewer) inner else tail, cornerSpec, label = "bubbleBottom")
-    val top = authorTop.coerceAtLeast(0.dp)
-    val bottom = authorBottom.coerceAtLeast(0.dp)
-    val shape = if (mine) {
-        RoundedCornerShape(topStart = cornerRadius, topEnd = top, bottomEnd = bottom, bottomStart = cornerRadius)
-    } else {
-        RoundedCornerShape(topStart = top, topEnd = cornerRadius, bottomEnd = cornerRadius, bottomStart = bottom)
-    }
-
-    // Свои сообщения — primaryContainer, чужие — surfaceContainerHigh; свой цвет из настроек важнее.
-    val baseColor = customBg ?: if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
-    val bubbleColor by animateColorAsState(
-        targetValue = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else baseColor,
-        animationSpec = colorSpec,
-        label = "bubbleHighlight",
-    )
-    val matchColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = if (joinedWithOlder) 2.dp else 12.dp),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Top,
+    Surface(
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+            .let { if (imeVisible || pickerOpen || attachOpen) it else it.windowInsetsPadding(WindowInsets.navigationBars) },
     ) {
-        if (showSenderUi) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .then(
-                        if (showAvatar) {
-                            Modifier.semantics { contentDescription = tr("Профиль: {0}", sender?.name.orEmpty().ifEmpty { tr("отправитель") }) }
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .clickable(enabled = showAvatar, role = Role.Button, onClick = onOpenSender),
+        Column {
+            AnimatedVisibility(
+                visible = mode !is ComposerMode.Idle,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
             ) {
-                if (showAvatar) {
-                    FileAvatar(
-                        title = sender?.name.orEmpty().ifEmpty { "?" },
-                        fileId = sender?.avatarFileId,
-                        fileState = viewModel::fileState,
-                        size = 36.dp,
-                    )
+                val (icon, label, preview) = when (mode) {
+                    is ComposerMode.Reply -> Triple(Icons.AutoMirrored.Filled.Reply, "Ответ", mode.message.summary)
+                    is ComposerMode.Edit -> Triple(Icons.Filled.Edit, "Редактирование", mode.message.text)
+                    ComposerMode.Idle -> Triple(Icons.AutoMirrored.Filled.Reply, "", "")
                 }
-            }
-            Spacer(Modifier.width(8.dp))
-        }
-        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-            if (bare && media != null) {
-                Column(Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) }) {
-                    if (showName && senderKey != null) {
-                        SenderName(senderKey, sender, onOpenSender, Modifier.padding(start = 4.dp, bottom = 4.dp))
-                    }
-                    if (forward != null) {
-                        ForwardHeader(forward, forwardFrom, Modifier.padding(start = 4.dp, bottom = 4.dp))
-                    }
-                    MessageMedia(media, viewModel, onOpenPhoto)
-                }
-            } else {
-                val glassModifier = if (bubbleBackdrop != null) {
-                    Modifier.glass(bubbleBackdrop, glassSettings.copy(opacity = bubbleOpacity), shape, tint = bubbleColor)
-                } else {
-                    Modifier
-                }
-                Surface(
-                    modifier = glassModifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) },
-                    shape = shape,
-                    color = if (bubbleBackdrop != null) Color.Transparent else bubbleColor.copy(alpha = bubbleOpacity),
-                    contentColor = when {
-                        highlighted -> MaterialTheme.colorScheme.onTertiaryContainer
-                        mine || readableOnCustom != null -> ownText
-                        else -> MaterialTheme.colorScheme.onSurface
-                    },
-                ) {
-                    Column(
-                        Modifier
-                            .widthIn(max = if (showSenderUi) 290.dp else 320.dp)
-                            .then(if (withComments) Modifier.width(IntrinsicSize.Max) else Modifier)
-                            // Подпись переносится по ширине медиа, а не растягивает пузырь шире картинки.
-                            .then(
-                                if (media != null && message.text.isNotEmpty() &&
-                                    (media.kind == MediaKind.PHOTO || media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION)
-                                ) Modifier.width(268.dp) else Modifier,
-                            ),
-                    ) {
-                        if (showName && senderKey != null) {
-                            SenderName(
-                                senderKey, sender, onOpenSender,
-                                Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                            )
-                        }
-                        if (forward != null) {
-                            ForwardHeader(
-                                forward,
-                                forwardFrom,
-                                Modifier.padding(start = 16.dp, end = 16.dp, top = if (showName) 2.dp else 8.dp),
-                            )
-                        }
-                        if (replyRef != null) {
-                            ReplyQuote(
-                                preview = reply,
-                                mine = mine,
-                                onClick = onReplyClick,
-                                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
-                            )
-                        }
-                        if (albumMedia.size > 1) {
-                            Box(Modifier.padding(4.dp)) { AlbumMedia(albumMedia, viewModel, onOpenPhoto) }
-                        } else if (media != null) {
-                            Box(Modifier.padding(4.dp)) { MessageMedia(media, viewModel, onOpenPhoto) }
-                        }
-                        message.poll?.let { poll ->
-                            PollMessage(
-                                poll = poll,
-                                messageId = message.id,
-                                viewModel = viewModel,
-                                canStop = mine,
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
-                            )
-                        }
-                        if (message.text.isNotEmpty() && message.poll == null) {
-                            val linked = rememberLinkified(
-                                message.text,
-                                when {
-                                    mine -> ownText
-                                    customBg != null -> app.yougram.core.ui.theme.ensureContrast(MaterialTheme.colorScheme.primary, customBg, 4.5f)
-                                    else -> MaterialTheme.colorScheme.primary
-                                },
-                                LocalOpenLink.current,
-                                LocalOpenUsername.current,
-                                message.emojis,
-                                links = message.links,
-                            )
-                            val emojiSize = (textSize * 1.25f).sp
-                            val inline = rememberEmojiInlineContent(message.emojis, viewModel, emojiSize, viewModel.animateEmoji)
-                            val shown = remember(linked, searchQuery, matchColor) {
-                                linked.highlightMatches(searchQuery, matchColor)
-                            }
-                            Text(
-                                shown,
-                                inlineContent = inline,
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = textSize.sp,
-                                    lineHeight = (textSize * 1.4f).sp,
-                                ),
-                            )
-                        }
-                        // Время у каждого сообщения внутри пузыря, справа внизу.
-                        MessageFooter(
-                            message = message,
-                            mine = mine,
-                            deleted = deleted,
-                            edits = edits,
-                            readAt = readAt,
-                            onShowEdits = onShowEdits,
-                            modifier = Modifier.align(Alignment.End).padding(start = 16.dp, end = 14.dp, top = 2.dp, bottom = if (withComments) 6.dp else 8.dp),
-                        )
-                        if (message.buttons.isNotEmpty()) {
-                            InlineKeyboard(message, viewModel, Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp))
-                        }
-                        if (withComments) {
-                            CommentsButton(
-                                count = message.commentCount,
-                                onClick = onOpenComments,
-                                attached = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                }
-            }
-            // У кружка пузыря нет — время выводим под ним.
-            if (bare) {
-                MessageFooter(
-                    message = message,
-                    mine = mine,
-                    deleted = deleted,
-                    edits = edits,
-                    readAt = readAt,
-                    onShowEdits = onShowEdits,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                )
-            }
-            if (message.reactions.isNotEmpty()) {
-                ReactionRow(message.reactions, onReact, viewModel, Modifier.padding(top = 4.dp))
-            }
-            if (commentsEnabled && message.hasComments && bare) {
-                CommentsButton(
-                    count = message.commentCount,
-                    onClick = onOpenComments,
-                    attached = false,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Строка под сообщением: время, «прочитано», «изменено», «удалено». */
-@Composable
-private fun MessageFooter(
-    message: MessageItem,
-    mine: Boolean,
-    deleted: Boolean,
-    edits: List<EditRecord>,
-    readAt: Int?,
-    onShowEdits: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // Цвет считаем от цвета содержимого пузыря, чтобы время и галочки читались на любом фоне.
-    val content = LocalContentColor.current
-    val muted = content.copy(alpha = 0.7f)
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        if (edits.isNotEmpty()) {
-            Text(
-                "изменено · ",
-                modifier = Modifier.clickable(onClick = onShowEdits),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (mine) content else MaterialTheme.colorScheme.primary,
-            )
-        }
-        if (deleted) {
-            Text("удалено · ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-        }
-        if (message.paidMessageStars > 0) {
-            // Платное сообщение: отправитель заплатил звёздами.
-            Icon(Icons.Filled.Star, contentDescription = tr("Платное сообщение"), tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
-            Text(" ${message.paidMessageStars} · ", style = MaterialTheme.typography.labelSmall, color = muted)
-        }
-        Text(formatTime(message.date), style = MaterialTheme.typography.labelSmall, color = muted)
-        if (mine) {
-            Spacer(Modifier.width(4.dp))
-            if (readAt != null) {
-                Icon(
-                    Icons.Filled.DoneAll,
-                    contentDescription = tr("Прочитано"),
-                    tint = if (mine) content else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                Icon(
-                    Icons.Filled.Done,
-                    contentDescription = tr("Отправлено"),
-                    tint = muted,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Строка «Переслано от …» над пересланным сообщением: автор оригинала (пользователь, канал, скрытый отправитель). */
-@Composable
-private fun ForwardHeader(forward: ForwardRef, info: SenderInfo?, modifier: Modifier = Modifier) {
-    val content = LocalContentColor.current
-    val name = when {
-        forward.hiddenName.isNotEmpty() -> forward.hiddenName
-        info != null -> info.name
-        else -> "…"
-    }
-    val signature = forward.signature.takeIf { it.isNotBlank() }
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = content.copy(alpha = 0.7f))) { append(tr("Переслано от ")) }
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(name) }
-            if (signature != null) withStyle(SpanStyle(color = content.copy(alpha = 0.7f))) { append(" · $signature") }
-        },
-        modifier = modifier,
-        style = MaterialTheme.typography.labelLarge,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/** Насколько надо потянуть сообщение влево, чтобы свайп сработал как «ответить». */
-private val SwipeReplyThreshold = 64.dp
-
-/**
- * Свайп сообщения влево — ответить на него. Пузырь едет за пальцем, справа проявляется значок ответа;
- * когда тянем дальше порога, срабатывает отклик, а при отпускании вызывается [onReply]. Вертикальная прокрутка не мешает.
- */
-@Composable
-private fun SwipeToReply(
-    onReply: () -> Unit,
-    onThreshold: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val thresholdPx = with(LocalDensity.current) { SwipeReplyThreshold.toPx() }
-    val maxPx = thresholdPx * 1.4f
-    val scope = rememberCoroutineScope()
-    val currentReply by rememberUpdatedState(onReply)
-    val currentThreshold by rememberUpdatedState(onThreshold)
-    var drag by remember { mutableFloatStateOf(0f) }
-    var armed by remember { mutableStateOf(false) }
-    var settle by remember { mutableStateOf<Job?>(null) }
-    val progress = (-drag / thresholdPx).coerceIn(0f, 1f)
-
-    fun springBack() {
-        settle?.cancel()
-        settle = scope.launch { animate(drag, 0f, animationSpec = spring()) { value, _ -> drag = value } }
-    }
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .pointerInput(thresholdPx) {
-                detectHorizontalDragGestures(
-                    onDragStart = {
-                        settle?.cancel()
-                        armed = false
-                    },
-                    onDragEnd = {
-                        if (armed) currentReply()
-                        armed = false
-                        springBack()
-                    },
-                    onDragCancel = {
-                        armed = false
-                        springBack()
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        drag = (drag + dragAmount).coerceIn(-maxPx, 0f)
-                        val reached = -drag >= thresholdPx
-                        if (reached && !armed) currentThreshold()
-                        armed = reached
-                    },
-                )
-            },
-    ) {
-        if (progress > 0f) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
-                    .size(36.dp)
-                    .graphicsLayer {
-                        alpha = progress
-                        scaleX = 0.6f + 0.4f * progress
-                        scaleY = 0.6f + 0.4f * progress
-                    }
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = if (armed) 0.9f else 0.45f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Reply,
-                    contentDescription = tr("Ответить"),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        Box(Modifier.offset { IntOffset(drag.roundToInt(), 0) }) { content() }
-    }
-}
-
-/** Цитата оригинала над текстом ответа; тап прокручивает к оригиналу. */
-@Composable
-private fun ReplyQuote(
-    preview: ReplyPreview?,
-    mine: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val accent = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
-    Row(
-        modifier
-            .widthIn(min = 120.dp)
-            .height(IntrinsicSize.Min)
-            .clip(MaterialTheme.shapes.small)
-            .background(accent.copy(alpha = 0.16f))
-            .clickable(onClick = onClick),
-    ) {
-        Box(
-            Modifier
-                .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
-                .width(3.dp)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(accent),
-        )
-        Column(Modifier.padding(start = 8.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
-            Text(
-                preview?.author.orEmpty().ifEmpty { "Ответ" },
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = accent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                preview?.text ?: "…",
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-/** Реакции чипами под сообщением; тап ставит или снимает свою. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ReactionRow(
-    reactions: List<ReactionItem>,
-    onReact: (String) -> Unit,
-    viewModel: ChatViewModel,
-    modifier: Modifier = Modifier,
-) {
-    FlowRow(
-        modifier.widthIn(max = 320.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
-        val motion = MaterialTheme.motionScheme
-        val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else motion.fastSpatialSpec()
-        val colorSpec: FiniteAnimationSpec<Color> = if (lowTier) snap() else motion.defaultEffectsSpec()
-        reactions.forEach { r ->
-            key(r.emoji) {
-                // Выбранная реакция — акцентная «таблетка», остальные — квадрат со скруглением.
-                val container by animateColorAsState(
-                    if (r.chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    colorSpec,
-                    label = "reactionContainer",
-                )
-                val corner by animateDpAsState(if (r.chosen) 16.dp else 10.dp, cornerSpec, label = "reactionCorner")
-                val content = if (r.chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                 Row(
-                    Modifier
-                        .heightIn(min = 32.dp)
-                        .clip(RoundedCornerShape(corner.coerceAtLeast(0.dp)))
-                        .background(container)
-                        .clickable { onReact(r.emoji) }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (r.customEmojiId != 0L) {
-                        Box(Modifier.size(20.dp)) {
-                            CustomEmojiView(
-                                r.customEmojiId,
-                                viewModel,
-                                animated = viewModel.animateEmoji && !lowTier,
-                                allowVideo = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.High,
-                                fallbackSize = 16.sp,
-                            )
-                        }
-                    } else {
-                        Text(r.emoji, fontSize = 14.sp)
+                    Icon(icon, null, tint = scheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.size(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+                        Text(preview, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        r.count.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = content,
-                    )
+                    IconButton(onClick = onCancelMode) { Icon(Icons.Filled.Close, tr("Отмена")) }
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                FilledIconButton(
+                    onClick = onAttach,
+                    modifier = Modifier.size(ComposerHeight),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black.copy(alpha = 0.5f),
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Icon(Icons.Filled.AttachFile, tr("Прикрепить"))
+                }
+
+                Spacer(Modifier.size(8.dp))
+
+                TextField(
+                    value = draft,
+                    onValueChange = onDraft,
+                    modifier = Modifier.weight(1f).heightIn(min = ComposerHeight).onFocusChanged { if (it.isFocused) onFieldFocus() },
+                    placeholder = {
+                        Text(if (paidStars > 0) tr("Сообщение · %d ★", paidStars) else "Сообщение")
+                    },
+                    shape = RoundedCornerShape(28.dp),
+                    maxLines = 6,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Black.copy(alpha = 0.5f),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.5f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedPlaceholderColor = Color.White.copy(alpha = 0.6f),
+                        unfocusedPlaceholderColor = Color.White.copy(alpha = 0.6f),
+                        focusedLeadingIconColor = Color.White.copy(alpha = 0.7f),
+                        unfocusedLeadingIconColor = Color.White.copy(alpha = 0.7f),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
+                    leadingIcon = {
+                        IconButton(onClick = onTogglePicker) {
+                            AnimatedContent(
+                                targetState = pickerOpen,
+                                transitionSpec = {
+                                    (fadeIn(tween(160, delayMillis = 70)) + scaleIn(spring(0.6f, 500f), initialScale = 0.5f))
+                                        .togetherWith(fadeOut(tween(70)) + scaleOut(tween(70), targetScale = 0.5f))
+                                        .using(SizeTransform(clip = false))
+                                },
+                                label = "pickerToggleIcon",
+                            ) { open ->
+                                Icon(
+                                    if (open) Icons.Filled.Keyboard else Icons.Filled.EmojiEmotions,
+                                    tr(if (open) "Клавиатура" else "Эмодзи"),
+                                )
+                            }
+                        }
+                    },
+                )
+
+                Spacer(Modifier.size(8.dp))
+
+                // Отправить / голосовое / кружок. Переключение голосовое ↔ кружок — как у тайлов быстрых настроек:
+                // круг превращается в скруглённый квадрат (пружина), цвет перетекает, иконка гаснет и появляется заново.
+                val kind = when {
+                    hasText && mode is ComposerMode.Edit -> ComposerButtonKind.Confirm
+                    hasText -> ComposerButtonKind.Send
+                    videoMode -> ComposerButtonKind.Round
+                    else -> ComposerButtonKind.Voice
+                }
+                // Форма кнопки: голосовое — «печенье» с 12 волнами, кружок — скруглённый квадрат, отправка — круг.
+                // Между формами кнопка плавно перетекает (Morph) на пружине.
+                val shapeOf = { k: ComposerButtonKind ->
+                    when (k) {
+                        ComposerButtonKind.Voice -> MaterialShapes.Cookie9Sided
+                        ComposerButtonKind.Round -> MaterialShapes.Square
+                        else -> MaterialShapes.Circle
+                    }
+                }
+                var shapeFrom by remember { mutableStateOf(shapeOf(kind)) }
+                var shapeTo by remember { mutableStateOf(shapeOf(kind)) }
+                val shapeProgress = remember { Animatable(1f) }
+                LaunchedEffect(kind) {
+                    val target = shapeOf(kind)
+                    if (target !== shapeTo) {
+                        shapeFrom = shapeTo
+                        shapeTo = target
+                        shapeProgress.snapTo(0f)
+                        shapeProgress.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 380f))
+                    }
+                }
+                val morph = remember(shapeFrom, shapeTo) { Morph(shapeFrom.normalized(), shapeTo.normalized()) }
+                val buttonShape = MorphShape(morph, shapeProgress.value)
+                val container by animateColorAsState(
+                    targetValue = scheme.primary,
+                    animationSpec = tween(140),
+                    label = "composerContainer",
+                )
+                val onContainer by animateColorAsState(
+                    targetValue = scheme.onPrimary,
+                    animationSpec = tween(140),
+                    label = "composerContent",
+                )
+
+                FilledIconButton(
+                    onClick = { if (hasText) onSend() else videoMode = !videoMode },
+                    modifier = Modifier.size(ComposerHeight),
+                    shape = buttonShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = container,
+                        contentColor = onContainer,
+                    ),
+                ) {
+                    // Fade-through: старая иконка быстро гаснет, новая появляется чуть позже, без сдвига.
+                    AnimatedContent(
+                        targetState = kind,
+                        transitionSpec = {
+                            (fadeIn(tween(160, delayMillis = 90)) + scaleIn(tween(160, delayMillis = 90), initialScale = 0.78f))
+                                .togetherWith(fadeOut(tween(90)) + scaleOut(tween(90), targetScale = 0.78f))
+                                .using(SizeTransform(clip = false))
+                        },
+                        label = "composerIcon",
+                    ) { k ->
+                        Icon(
+                            when (k) {
+                                ComposerButtonKind.Confirm -> Icons.Filled.Check
+                                ComposerButtonKind.Send -> Icons.AutoMirrored.Filled.Send
+                                ComposerButtonKind.Round -> Icons.Filled.Videocam
+                                ComposerButtonKind.Voice -> Icons.Filled.Mic
+                            },
+                            contentDescription = tr(
+                                when (k) {
+                                    ComposerButtonKind.Confirm, ComposerButtonKind.Send -> "Отправить"
+                                    ComposerButtonKind.Round -> "Видеосообщение"
+                                    ComposerButtonKind.Voice -> "Голосовое сообщение"
+                                },
+                            ),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** Кнопка вкладки в группе: внутренние углы мелкие, у выбранной — круглые (форма «перетекает»). */
 @Composable
-private fun PickerTabButton(
-    icon: String,
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    first: Boolean = false,
-    last: Boolean = false,
-) {
-    val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
-    val cornerSpec: FiniteAnimationSpec<Dp> = if (lowTier) snap() else MaterialTheme.motionScheme.fastSpatialSpec()
-    val inner by animateDpAsState(if (selected) 24.dp else 8.dp, cornerSpec, label = "tabInner")
-    val outer = 24.dp
-    val i = inner.coerceAtLeast(0.dp)
-    val shape = RoundedCornerShape(
-        topStart = if (first) outer else i,
-        bottomStart = if (first) outer else i,
-        topEnd = if (last) outer else i,
-        bottomEnd = if (last) outer else i,
-    )
-    Surface(
-        onClick = onClick,
-        modifier = modifier.semantics { this.selected = selected },
-        shape = shape,
-        color = pickerChipColor(selected),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+private fun JoinBar(channel: Boolean, joining: Boolean, onJoin: () -> Unit) {
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(12.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(icon)
-            Spacer(Modifier.width(6.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge)
-        }
-    }
-}
-
-/** Кнопка-иконка внутри поля ввода: круглая область нажатия 40 dp, описание для TalkBack. */
-@Composable
-private fun InputAction(icon: ImageVector, description: String, tint: Color, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.animation.Crossfade(targetState = icon, label = "inputActionIcon") { current ->
-            Icon(current, contentDescription = description, tint = tint, modifier = Modifier.size(24.dp))
+            FilledTonalButton(onClick = onJoin, enabled = !joining) {
+                Text(if (channel) "Подписаться" else "Вступить")
+            }
         }
     }
 }
 
 @Composable
-private fun StickerPickerItem(sticker: StickerItem, viewModel: ChatViewModel, onClick: () -> Unit) {
-    val state by viewModel.fileState(sticker.fileId).collectAsState(FileState())
-    LaunchedEffect(sticker.fileId) { viewModel.download(sticker.fileId, 8) }
-    val bitmap = rememberFileBitmap(state.path, 256)
-    Box(
-        Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        bitmap?.let { Image(it, null, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit) }
-            ?: LoadingIndicator(Modifier.size(24.dp))
+private fun ReadOnlyBar() {
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Писать сообщения здесь нельзя",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
-private val Emojis = ("😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😛 😜 🤪 😎 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 😶 😐 😑 😬 🙄 😯 😴 🤤 😷 🤒 🤕 🤢 🤮 🤧 😈 👿 💀 👻 👽 🤖 💩 " +
-        "👍 👎 👌 ✌️ 🤞 🤟 🤘 👈 👉 👆 👇 ✋ 👋 👏 🙌 🙏 💪 🤝 ✍️ 💅 " +
-        "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 🔥 ✨ ⭐ 🌟 💥 💯 ✅ ❌ ❓ ❗ " +
-        "🎉 🎊 🎁 🎂 🍕 🍔 🍟 🍺 🍻 ☕ 🍷 ⚽ 🏀 🎮 🎵 🎧 📱 💻 📷 🚗 ✈️ 🌍 🌹 🌞 🌙 ⚡ 🌈").split(" ")
-
-/** Копирует выбранный пользователем файл в кэш под его настоящим именем и возвращает путь (TDLib нужен обычный путь). */
-private suspend fun copyToCache(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
-    runCatching {
-        val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getString(0) else null
-        } ?: "file_${System.currentTimeMillis()}"
-        val dir = File(context.cacheDir, "uploads/${System.currentTimeMillis()}").apply { mkdirs() }
-        val file = File(dir, name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
-        context.contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyTo(it) } }
-            ?: return@runCatching null
-        file.absolutePath
-    }.getOrNull()
+@Composable
+private fun ErrorSnack(text: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(3500)
+        onDismiss()
+    }
+    Surface(
+        modifier = modifier.padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        shadowElevation = 6.dp,
+    ) {
+        Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
-/** Прозрачность «таблетки» поля ввода: 0 — полностью прозрачная, 1 — непрозрачная. */
-private const val InputFieldAlpha = 0.5f
+// ───────────────────────── Helpers ─────────────────────────
 
-/**
- * Состояние поля ввода. Внутри — TextFieldValue (чтобы не ломать композицию клавиатуры при наборе),
- * снаружи — обычная строка: присваивание строки ставит курсор в конец.
- */
-private class InputHolder {
-    var value by mutableStateOf(TextFieldValue(""))
+private fun sameDay(a: Int, b: Int): Boolean {
+    val ca = Calendar.getInstance().apply { timeInMillis = a * 1000L }
+    val cb = Calendar.getInstance().apply { timeInMillis = b * 1000L }
+    return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
 }
 
-private operator fun InputHolder.getValue(thisRef: Any?, property: KProperty<*>): String = value.text
+private fun timeOf(date: Int): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(date * 1000L))
 
-private operator fun InputHolder.setValue(thisRef: Any?, property: KProperty<*>, newText: String) {
-    if (newText != value.text) value = TextFieldValue(newText, TextRange(newText.length))
+private fun dayLabel(date: Int): String {
+    val now = Calendar.getInstance()
+    val d = Calendar.getInstance().apply { timeInMillis = date * 1000L }
+    val sameYear = now.get(Calendar.YEAR) == d.get(Calendar.YEAR)
+    val diff = now.get(Calendar.DAY_OF_YEAR) - d.get(Calendar.DAY_OF_YEAR)
+    return when {
+        sameYear && diff == 0 -> tr("Сегодня")
+        sameYear && diff == 1 -> tr("Вчера")
+        else -> SimpleDateFormat(if (sameYear) "d MMMM" else "d MMMM yyyy", Locale.getDefault()).format(d.time)
+    }
+}
+
+/** Копирует выбранный через SAF файл в кэш приложения: TDLib принимает только обычные пути. */
+private suspend fun copyToCache(context: android.content.Context, uri: Uri): File? =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                ?: "file_${System.currentTimeMillis()}"
+            val dir = File(context.cacheDir, "outgoing").apply { mkdirs() }
+            val out = File(dir, "${System.currentTimeMillis()}_$name")
+            context.contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+            out.takeIf { it.exists() && it.length() > 0 }
+        }.getOrNull()
+    }
+
+/** Shape из [Morph] (полигоны нормализованы в единичный квадрат): контур на [progress] масштабируется под размер. */
+private class MorphShape(private val morph: Morph, private val progress: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density,
+    ): androidx.compose.ui.graphics.Outline {
+        val path = androidx.compose.ui.graphics.Path()
+        val w = size.width
+        val h = size.height
+        var first = true
+        for (c in morph.asCubics(progress)) {
+            if (first) {
+                path.moveTo(c.anchor0X * w, c.anchor0Y * h)
+                first = false
+            }
+            path.cubicTo(c.control0X * w, c.control0Y * h, c.control1X * w, c.control1Y * h, c.anchor1X * w, c.anchor1Y * h)
+        }
+        path.close()
+        return androidx.compose.ui.graphics.Outline.Generic(path)
+    }
 }

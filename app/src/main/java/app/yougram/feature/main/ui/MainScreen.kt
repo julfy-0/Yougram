@@ -7,7 +7,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -83,6 +86,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import app.yougram.core.ui.theme.FontRole
+import app.yougram.core.ui.theme.withRole
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.launch
@@ -98,6 +103,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import app.yougram.core.ui.shape.LocalShapeBag
@@ -141,7 +147,12 @@ import app.yougram.feature.contacts.ui.ContactsViewModel
 import app.yougram.feature.settings.AccountManagerContent
 import app.yougram.feature.settings.LocalOpenAccountManager
 import app.yougram.feature.settings.SettingsPage
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.foundation.layout.fillMaxHeight
 import app.yougram.feature.settings.SettingsPageContent
+import app.yougram.feature.settings.extras.PluginStoreSearch
 import app.yougram.feature.settings.SettingsSearchResults
 import app.yougram.feature.settings.about.UpdateGlassBar
 import app.yougram.feature.splash.ui.halloweenFall
@@ -324,9 +335,13 @@ fun MainScreen(
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     // Контент заезжает под панели, поэтому отступы берём с запасом на высоту панелей.
+    // На подстраницах настроек навбара нет: отступ снизу нужен только там, где снизу своя панель.
+    val bareSettingsSubpage = tab == MainTab.Settings && settingsPage !in setOf(
+        SettingsPage.Home, SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager, SettingsPage.Update, SettingsPage.Assistant,
+    )
     val contentPadding = PaddingValues(
         top = topInset + TopBarContentHeight + 8.dp,
-        bottom = bottomInset + BottomBarHeight + 24.dp,
+        bottom = bottomInset + (if (bareSettingsSubpage) 16.dp else BottomBarHeight + 24.dp),
     )
 
     // Папки — часть верхней панели (только на вкладке «Чаты»), поэтому списку чатов нужен отступ больше.
@@ -459,18 +474,25 @@ fun MainScreen(
                 targetState = screen,
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
-                    // Вперёд: вкладка правее или более глубокий подэкран; назад — наоборот.
-                    val forward = if (initialState.first == targetState.first) {
-                        targetState.second.ordinal > initialState.second.ordinal
+                    // «Новые» ↔ «Все» в магазине плагинов: без сдвига, поле поиска остаётся на месте.
+                    val bothStore = initialState.first == MainTab.Settings && targetState.first == MainTab.Settings &&
+                            initialState.second in PluginStorePages && targetState.second in PluginStorePages
+                    if (bothStore) {
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
                     } else {
-                        targetState.first.ordinal > initialState.first.ordinal
+                        // Вперёд: вкладка правее или более глубокий подэкран; назад — наоборот.
+                        val forward = if (initialState.first == targetState.first) {
+                            targetState.second.ordinal > initialState.second.ordinal
+                        } else {
+                            targetState.first.ordinal > initialState.first.ordinal
+                        }
+                        val dir = if (forward) 1 else -1
+                        (
+                                slideInHorizontally(screenSlide) { dir * it } + fadeIn(screenFade)
+                                ).togetherWith(
+                                slideOutHorizontally(screenSlide) { -dir * it / 3 } + fadeOut(fastFade),
+                            )
                     }
-                    val dir = if (forward) 1 else -1
-                    (
-                            slideInHorizontally(screenSlide) { dir * it } + fadeIn(screenFade)
-                            ).togetherWith(
-                            slideOutHorizontally(screenSlide) { -dir * it / 3 } + fadeOut(fastFade),
-                        )
                 },
                 label = "mainScreen",
             ) { (currentTab, currentPage) ->
@@ -582,67 +604,79 @@ fun MainScreen(
             animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f),
             label = "topbar-blur",
         )
-        GlassTopBar(
-            title = if (inSettingsSubpage) settingsPage.title else tab.title,
-            roundedTitle = tab == MainTab.Settings,
-            searching = searching,
-            searchHint = when (tab) {
-                MainTab.Chats -> "Чаты, контакты, сообщения"
-                MainTab.Contacts -> "Поиск контактов"
-                MainTab.Calls -> "Поиск звонков"
-                MainTab.Settings -> "Поиск по настройкам"
-            },
-            query = query,
-            onQueryChange = { query = it },
-            onCloseSearch = {
-                searching = false
-                query = ""
-            },
-            onBack = if (inSettingsSubpage) {
-                { goBack() }
-            } else null,
-            folders = if (showFolders) folders else emptyList(),
-            folderUnread = folderUnread,
-            selectionCount = if (selectionActive) selection.size else 0,
-            selectionAllMuted = selectedChats.isNotEmpty() && selectedChats.all { it.muted },
-            selectionAllPinned = selectedChats.isNotEmpty() && selectedChats.all { (folderId ?: 0) in it.pinnedLists },
-            onClearSelection = chatListViewModel::clearSelection,
-            onMuteSelected = chatListViewModel::muteSelected,
-            onArchiveSelected = chatListViewModel::archiveSelected,
-            onDeleteSelected = { confirmDelete = true },
-            onPinSelected = chatListViewModel::pinSelected,
-            plateAvailable = plateChatId != null,
-            plateHasImage = plateChatId != null && plateStamps.containsKey(plateChatId),
-            onPickPlate = {
-                platePicker.launch(
-                    androidx.activity.result.PickVisualMediaRequest(
-                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
-                    ),
-                )
-            },
-            onRemovePlate = {
-                plateChatId?.let { plateStore.removeImage(it) }
-                chatListViewModel.clearSelection()
-            },
-            canReadAll = tab == MainTab.Chats && allChats.any { it.unreadCount > 0 },
-            onReadAll = chatListViewModel::markAllRead,
-            selectedFolder = folderId,
-            onSelectFolder = chatListViewModel::selectFolder,
-            stories = if (showStories) storyRefs else emptyList(),
-            onOpenStory = onOpenStories,
-            onAddStory = { onOpenStories(0L, 0) },
-            searchOnTop = chatPrefs.searchOnTop,
-            onSearch = { searching = true },
-            backdrop = backdrop,
-            glass = glass,
-            topInset = topInset,
-            progress = { barsProgress.value },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                // Пока открыт менеджер аккаунтов, верхняя панель размывается.
-                .blur(topBarBlur, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle)
-                .graphicsLayer { alpha = 1f - 0.35f * (topBarBlur.value / 20f) },
-        )
+        val assistantOpen = tab == MainTab.Settings && settingsPage == SettingsPage.Assistant
+        if (assistantOpen) {
+            // Страница ИИ-ассистента: шапка как в обычном чате (аватарка, имя, статус).
+            app.yougram.feature.assistant.ui.AssistantTopBar(
+                assistant = container.assistant,
+                backdrop = backdrop,
+                glass = glass,
+                topInset = topInset,
+                onBack = { goBack() },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        } else
+            GlassTopBar(
+                title = if (inSettingsSubpage) settingsPage.title else tab.title,
+                roundedTitle = tab == MainTab.Settings,
+                searching = searching,
+                searchHint = when (tab) {
+                    MainTab.Chats -> "Чаты, контакты, сообщения"
+                    MainTab.Contacts -> "Поиск контактов"
+                    MainTab.Calls -> "Поиск звонков"
+                    MainTab.Settings -> "Поиск по настройкам"
+                },
+                query = query,
+                onQueryChange = { query = it },
+                onCloseSearch = {
+                    searching = false
+                    query = ""
+                },
+                onBack = if (inSettingsSubpage) {
+                    { goBack() }
+                } else null,
+                folders = if (showFolders) folders else emptyList(),
+                folderUnread = folderUnread,
+                selectionCount = if (selectionActive) selection.size else 0,
+                selectionAllMuted = selectedChats.isNotEmpty() && selectedChats.all { it.muted },
+                selectionAllPinned = selectedChats.isNotEmpty() && selectedChats.all { (folderId ?: 0) in it.pinnedLists },
+                onClearSelection = chatListViewModel::clearSelection,
+                onMuteSelected = chatListViewModel::muteSelected,
+                onArchiveSelected = chatListViewModel::archiveSelected,
+                onDeleteSelected = { confirmDelete = true },
+                onPinSelected = chatListViewModel::pinSelected,
+                plateAvailable = plateChatId != null,
+                plateHasImage = plateChatId != null && plateStamps.containsKey(plateChatId),
+                onPickPlate = {
+                    platePicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        ),
+                    )
+                },
+                onRemovePlate = {
+                    plateChatId?.let { plateStore.removeImage(it) }
+                    chatListViewModel.clearSelection()
+                },
+                canReadAll = tab == MainTab.Chats && allChats.any { it.unreadCount > 0 },
+                onReadAll = chatListViewModel::markAllRead,
+                selectedFolder = folderId,
+                onSelectFolder = chatListViewModel::selectFolder,
+                stories = if (showStories) storyRefs else emptyList(),
+                onOpenStory = onOpenStories,
+                onAddStory = { onOpenStories(0L, 0) },
+                searchOnTop = chatPrefs.searchOnTop,
+                onSearch = { searching = true },
+                backdrop = backdrop,
+                glass = glass,
+                topInset = topInset,
+                progress = { barsProgress.value },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    // Пока открыт менеджер аккаунтов, верхняя панель размывается.
+                    .blur(topBarBlur, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle)
+                    .graphicsLayer { alpha = 1f - 0.35f * (topBarBlur.value / 20f) },
+            )
 
         if (confirmDelete) {
             AlertDialog(
@@ -680,7 +714,8 @@ fun MainScreen(
             )
         } else {
             // Пока открыт менеджер аккаунтов, навбар уезжает вниз за край экрана.
-            val navHidden = accountSheetOpen && tab == MainTab.Settings
+            val navHidden = (accountSheetOpen && tab == MainTab.Settings) ||
+                    (tab == MainTab.Settings && settingsPage != SettingsPage.Home)
             val navProgress by animateFloatAsState(
                 targetValue = if (navHidden) 0f else 1f,
                 animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
@@ -701,6 +736,28 @@ fun MainScreen(
                 glass = glass,
                 bottomInset = bottomInset,
                 progress = { navProgress },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+
+        // Страницы плагинов: вместо навбара — своя панель («Новые / Все / Менеджер») с той же анимацией, что у обычного навбара.
+        val pluginsBarShown = tab == MainTab.Settings && settingsPage in setOf(
+            SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager,
+        )
+        LaunchedEffect(pluginsBarShown) { if (!pluginsBarShown) PluginStoreSearch.query = "" }
+        val pluginsBarProgress by animateFloatAsState(
+            targetValue = if (pluginsBarShown) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
+            label = "plugins-bar",
+        )
+        if (pluginsBarProgress > 0.001f || pluginsBarShown) {
+            PluginsGlassBar(
+                selected = settingsPage,
+                onSelect = { settingsPage = it },
+                backdrop = backdrop,
+                glass = glass,
+                bottomInset = bottomInset,
+                progress = { pluginsBarProgress },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -905,12 +962,27 @@ private fun GlassTopBar(
                             }
                             Spacer(Modifier.width(16.dp))
                         }
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleLargeEmphasized.let {
-                                if (roundedTitle) it.copy(fontFamily = app.yougram.core.ui.theme.RoundedTitleFamily) else it
+                        AnimatedContent(
+                            targetState = title,
+                            transitionSpec = {
+                                (fadeIn(tween(320, delayMillis = 60)) togetherWith fadeOut(tween(220)))
+                                    .using(SizeTransform(clip = false))
                             },
-                        )
+                            label = "topBarTitle",
+                        ) { shownTitle ->
+                            // Старая надпись размывается и тает, новая проявляется из размытия.
+                            val titleBlur by transition.animateDp(
+                                transitionSpec = { tween(320) },
+                                label = "topBarTitleBlur",
+                            ) { state -> if (state == EnterExitState.Visible) 0.dp else 14.dp }
+                            Text(
+                                shownTitle,
+                                modifier = Modifier.blur(titleBlur, BlurredEdgeTreatment.Unbounded),
+                                style = MaterialTheme.typography.titleLargeEmphasized.let {
+                                    if (roundedTitle) it.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(tr(shownTitle))) else it
+                                },
+                            )
+                        }
                         if (onBack == null && (searchOnTop || canReadAll)) Spacer(Modifier.weight(1f))
                         if (canReadAll && onBack == null) {
                             ExpressiveIconButton(onClick = onReadAll) {
@@ -1017,7 +1089,13 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text, style = MaterialTheme.typography.labelLargeEmphasized, maxLines = 1)
+            Text(
+                text,
+                style = MaterialTheme.typography.labelLargeEmphasized.let {
+                    if (selected) it.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(tr(text))) else it
+                },
+                maxLines = 1,
+            )
             if (unread > 0) {
                 Surface(
                     shape = CircleShape,
@@ -1050,7 +1128,8 @@ private val NavPadHorizontal = 8.dp
 private fun NavTabs(order: List<MainTab>, selected: MainTab, onSelect: (MainTab) -> Unit, chatsUnread: Int) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelLargeEmphasized
+    // Меряем ровно ту строку и тем шрифтом, которыми подпись рисуется (перевод + роль Navbar), иначе она обрезается.
+    val baseLabelStyle = MaterialTheme.typography.labelLargeEmphasized
     Row(
         Modifier.padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
         horizontalArrangement = Arrangement.spacedBy(NavGap),
@@ -1058,7 +1137,10 @@ private fun NavTabs(order: List<MainTab>, selected: MainTab, onSelect: (MainTab)
     ) {
         order.forEach { tab ->
             // Дополнительная ширина под подпись: сама подпись + правый отступ 8 dp.
-            val px = remember(tab, labelStyle) { measurer.measure(tab.title, labelStyle, maxLines = 1).size.width }
+            val title = tr(tab.title)
+            // Кириллица — в Nunito (в Google Sans Flex её нет), остальное — Google Sans Flex со скруглением.
+            val labelStyle = baseLabelStyle.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(title)).withRole(FontRole.Navbar)
+            val px = remember(title, labelStyle) { measurer.measure(title, labelStyle, maxLines = 1).size.width }
             val extra = with(density) { px.toDp() } + 8.dp
             NavTab(
                 tab,
@@ -1153,6 +1235,123 @@ private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle,
     }
 }
 
+private val PluginStorePages = setOf(SettingsPage.Plugins, SettingsPage.PluginsNew)
+
+private class PluginBarTab(val page: SettingsPage, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+/** Нижняя панель страниц плагинов: та же «таблетка» и та же пружинная анимация вкладок, что у основного навбара. */
+@Composable
+private fun PluginsGlassBar(
+    selected: SettingsPage,
+    onSelect: (SettingsPage) -> Unit,
+    backdrop: BackdropState,
+    glass: GlassSettings,
+    bottomInset: Dp,
+    progress: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    val tabs = remember {
+        listOf(
+            PluginBarTab(SettingsPage.PluginsNew, "Новые", Icons.Filled.NewReleases),
+            PluginBarTab(SettingsPage.Plugins, "Все", Icons.Filled.Storefront),
+            PluginBarTab(SettingsPage.PluginManager, "Менеджер", Icons.Filled.Extension),
+        )
+    }
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val baseLabelStyle = MaterialTheme.typography.labelLargeEmphasized
+    Row(
+        modifier
+            .offset {
+                val distance = (BottomBarHeight + BottomBarMargin + bottomInset).roundToPx()
+                IntOffset(0, (distance * (1f - progress())).roundToInt())
+            }
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val barTint = androidx.compose.ui.graphics.lerp(
+            MaterialTheme.colorScheme.surface,
+            androidx.compose.ui.graphics.Color.White,
+            0.10f,
+        )
+        Box(
+            Modifier
+                .height(BottomBarHeight)
+                .glass(backdrop, glass, CircleShape, barTint)
+                .clip(CircleShape),
+        ) {
+            Row(
+                Modifier.align(Alignment.Center).padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
+                horizontalArrangement = Arrangement.spacedBy(NavGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEach { tab ->
+                    val title = tr(tab.title)
+                    val labelStyle = baseLabelStyle.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(title)).withRole(FontRole.Navbar)
+                    val px = remember(title, labelStyle) { measurer.measure(title, labelStyle, maxLines = 1).size.width }
+                    val extra = with(density) { px.toDp() } + 8.dp
+                    PluginBarTabItem(tab, selected = tab.page == selected, extra = extra, style = labelStyle, onClick = { onSelect(tab.page) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PluginBarTabItem(tab: PluginBarTab, selected: Boolean, extra: Dp, style: TextStyle, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val frac by animateFloatAsState(
+        if (selected) 1f else 0f,
+        spring(dampingRatio = 0.72f, stiffness = 650f),
+        label = "pluginNavFrac",
+    )
+    val textAlpha by animateFloatAsState(
+        if (selected) 1f else 0f,
+        tween(200, easing = FastOutSlowInEasing),
+        label = "pluginNavTextAlpha",
+    )
+    val container by animateColorAsState(
+        if (selected) scheme.primaryContainer else scheme.primaryContainer.copy(alpha = 0f),
+        tween(160),
+        label = "pluginNavContainer",
+    )
+    val content by animateColorAsState(
+        if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        tween(160),
+        label = "pluginNavContent",
+    )
+    Box(
+        Modifier
+            .width(NavSlot + extra * frac.coerceIn(0f, 1.12f))
+            .height(NavSlot)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics { this.selected = selected },
+    ) {
+        Row(
+            Modifier.align(Alignment.CenterStart).wrapContentWidth(Alignment.Start, unbounded = true),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(NavSlot), contentAlignment = Alignment.Center) {
+                Icon(tab.icon, contentDescription = if (selected) null else tab.title, tint = content, modifier = Modifier.size(24.dp))
+            }
+            if (selected || frac > 0.001f) {
+                Text(
+                    tab.title,
+                    modifier = Modifier.graphicsLayer { alpha = textAlpha },
+                    color = content,
+                    maxLines = 1,
+                    softWrap = false,
+                    style = style,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun GlassBottomBar(
     order: List<MainTab>,
@@ -1179,11 +1378,17 @@ private fun GlassBottomBar(
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Цвет стекла навбара: на пару тонов светлее поверхности (как у верхней панели).
+        val barTint = androidx.compose.ui.graphics.lerp(
+            MaterialTheme.colorScheme.surface,
+            androidx.compose.ui.graphics.Color.White,
+            0.10f,
+        )
         // Стеклянная «таблетка» по ширине вкладок: стекло даёт Modifier.glass.
         Box(
             Modifier
                 .height(BottomBarHeight)
-                .glass(backdrop, glass, CircleShape)
+                .glass(backdrop, glass, CircleShape, barTint)
                 .clip(CircleShape),
         ) {
             Box(Modifier.align(Alignment.Center)) { NavTabs(order, selected, onSelect, chatsUnread) }
@@ -1193,7 +1398,7 @@ private fun GlassBottomBar(
         if (showSearch) Box(
             Modifier
                 .size(BottomBarHeight * SearchButtonScale)
-                .glass(backdrop, glass, SearchButtonShape)
+                .glass(backdrop, glass, SearchButtonShape, barTint)
                 .clip(SearchButtonShape)
                 .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
             contentAlignment = Alignment.Center,

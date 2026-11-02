@@ -1,4 +1,4 @@
-// JNI-хост нативных плагинов Yougram (SDK 2.0): dlopen(), события, хуки, вызовы хоста из плагина.
+// JNI-хост нативных плагинов Yougram (SDK 2.2): dlopen(), события, хуки, вызовы хоста из плагина.
 // Без STL. Все строки-payload ходят через JNI как byte[] (чистый UTF-8, эмодзи не ломаются).
 #include <android/log.h>
 #include <dlfcn.h>
@@ -224,9 +224,9 @@ JNIEXPORT jstring JNICALL Java_app_yougram_plugin_NativePluginManager_nativeLoad
             } else if (!api) {
                 dlclose(handle);
                 result = fail(env, "yougram_plugin_entry вернула null");
-            } else if (api->api_version < 1 || api->api_version > YG_PLUGIN_API_VERSION) {
+            } else if (api->api_version != YG_PLUGIN_API_VERSION) {
                 dlclose(handle);
-                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна 1..%u)",
+                result = fail(env, "Версия SDK плагина %u не поддерживается (нужна %u)",
                               static_cast<unsigned>(api->api_version), static_cast<unsigned>(YG_PLUGIN_API_VERSION));
             } else {
                 auto* plugin = static_cast<Plugin*>(calloc(1, sizeof(Plugin)));

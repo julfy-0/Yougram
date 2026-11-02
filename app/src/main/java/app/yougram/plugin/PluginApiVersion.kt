@@ -1,10 +1,17 @@
 package app.yougram.plugin
 
-/** Версия API плагинов. Манифест с тем же major и minor не выше хостового считается совместимым. */
+/**
+ * Версия API плагинов. Хост — 2.2; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
+ * Принимается major 2 и minor от [MIN_MINOR] до [MINOR].
+ */
 object PluginApiVersion {
     const val MAJOR = 2
-    const val MINOR = 0
-    const val CURRENT = "2.0"
+    const val MINOR = 2
+    const val CURRENT = "2.2"
+
+    /** Самая старая поддерживаемая версия. */
+    const val MIN_MINOR = 1
+    const val MIN = "2.1"
 
     fun parse(value: String): Pair<Int, Int>? {
         val parts = value.trim().split('.')
@@ -14,9 +21,9 @@ object PluginApiVersion {
         return Pair(major, minor)
     }
 
-    /** 1.x (старые плагины) и 2.0..2.[MINOR]. */
+    /** Только 2.[MIN_MINOR]..2.[MINOR]: 1.x и 2.0 отклоняются, версии новее хоста тоже. */
     fun isSupported(value: String): Boolean {
         val (major, minor) = parse(value) ?: return false
-        return major in 1 until MAJOR || (major == MAJOR && minor <= MINOR)
+        return major == MAJOR && minor in MIN_MINOR..MINOR
     }
 }

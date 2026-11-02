@@ -2,6 +2,7 @@ package app.yougram.feature.settings.component
 
 import app.yougram.core.i18n.tr
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,7 +61,11 @@ internal fun SettingsPageColumn(contentPadding: PaddingValues, content: @Composa
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        content()
+        // Появление и исчезновение блоков, смена высоты — плавно, а не рывком.
+        Column(
+            Modifier.fillMaxWidth().animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntSize>()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) { content() }
         Spacer(Modifier.height(16.dp))
     }
 }

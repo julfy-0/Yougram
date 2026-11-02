@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -19,12 +21,25 @@ fun FileAvatar(
     title: String,
     fileId: Int?,
     fileState: (Int) -> Flow<FileState>,
+    modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     shape: Shape = CircleShape,
+    borderWidth: Dp = 0.dp,
+    borderColor: Color = Color.Unspecified,
+    enablePressScale: Boolean = true,
 ) {
     val pathFlow = remember(fileId) {
         if (fileId == null) flowOf<String?>(null) else fileState(fileId).map { it.path }
     }
     val path by pathFlow.collectAsState(initial = null)
-    Avatar(title = title, path = path, size = size, shape = shape)
+    Avatar(
+        title = title,
+        path = path,
+        modifier = modifier,
+        size = size,
+        shape = shape,
+        borderWidth = borderWidth,
+        borderColor = borderColor,
+        enablePressScale = enablePressScale,
+    )
 }

@@ -3,7 +3,14 @@
 package app.yougram.feature.settings
 
 import app.yougram.core.i18n.tr
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -78,15 +85,38 @@ fun AccountManagerContent(
     var removeTarget by remember { mutableStateOf<AccountEntry?>(null) }
     val scheme = MaterialTheme.colorScheme
 
+    // Свайп вниз за верхнюю часть (заголовок) закрывает меню: панель едет за пальцем, при отпускании
+    // либо закрывается (достаточно далеко или быстро), либо пружинит обратно.
+    val scope = rememberCoroutineScope()
+    val dragY = remember { Animatable(0f) }
+    val dismissDistance = with(LocalDensity.current) { 96.dp.toPx() }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer { translationY = dragY.value }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Заголовок: крупный акцентный текст слева, круглая «тональная» кнопка закрытия справа.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, delta ->
+                            change.consume()
+                            // Вверх не тянем, только вниз.
+                            scope.launch { dragY.snapTo((dragY.value + delta).coerceAtLeast(0f)) }
+                        },
+                        onDragEnd = {
+                            if (dragY.value > dismissDistance) onDismiss()
+                            else scope.launch { dragY.animateTo(0f) }
+                        },
+                        onDragCancel = { scope.launch { dragY.animateTo(0f) } },
+                    )
+                }
+                .padding(start = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {

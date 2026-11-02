@@ -95,6 +95,7 @@ fun PrimeEasterEgg(onDismiss: () -> Unit) {
                 style = TextStyle(
                     color = Color.White,
                     fontSize = 64.sp,
+                    fontFamily = androidx.compose.material3.MaterialTheme.typography.bodyLarge.fontFamily,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 6.sp,
                     shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 4f), 16f),
