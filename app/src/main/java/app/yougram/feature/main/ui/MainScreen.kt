@@ -159,7 +159,10 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.foundation.layout.fillMaxHeight
 import app.yougram.feature.settings.SettingsPageContent
+import app.yougram.feature.settings.extras.PluginStoreChipsHeight
 import app.yougram.feature.settings.extras.PluginStoreSearch
+import app.yougram.feature.settings.extras.PluginStoreSearchHeight
+import app.yougram.feature.settings.extras.PluginStoreTopBar
 import app.yougram.feature.settings.SettingsSearchResults
 import app.yougram.feature.settings.about.UpdateGlassBar
 import app.yougram.feature.splash.ui.halloweenFall
@@ -346,8 +349,14 @@ fun MainScreen(
     val bareSettingsSubpage = tab == MainTab.Settings && settingsPage !in setOf(
         SettingsPage.Home, SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager, SettingsPage.Update, SettingsPage.Assistant,
     )
+    // Магазин плагинов: поиск и категории живут в верхней панели, контент опускается ниже них.
+    val storePage = tab == MainTab.Settings && settingsPage in PluginStorePages
+    val storeBarTarget = if (storePage) {
+        PluginStoreSearchHeight + (if (PluginStoreSearch.categories.size > 1) PluginStoreChipsHeight else 0.dp)
+    } else 0.dp
+    val storeBar by animateDpAsState(storeBarTarget, label = "storeBar")
     val contentPadding = PaddingValues(
-        top = topInset + TopBarContentHeight + 8.dp,
+        top = topInset + TopBarContentHeight + 8.dp + storeBar,
         bottom = bottomInset + (if (bareSettingsSubpage) 16.dp else BottomBarHeight + 24.dp),
     )
 
@@ -487,18 +496,21 @@ fun MainScreen(
                     if (bothStore) {
                         fadeIn(tween(200)) togetherWith fadeOut(tween(200))
                     } else {
-                        // Вперёд: вкладка правее или более глубокий подэкран; назад — наоборот.
-                        val forward = if (initialState.first == targetState.first) {
-                            targetState.second.ordinal > initialState.second.ordinal
+                        // Открытие (другая вкладка или более глубокий подэкран) — справа налево,
+                        // закрытие (подэкран выше по иерархии) — слева направо.
+                        val open = if (initialState.first == targetState.first) {
+                            targetState.second.depth() >= initialState.second.depth()
                         } else {
-                            targetState.first.ordinal > initialState.first.ordinal
+                            true
                         }
-                        val dir = if (forward) 1 else -1
-                        (
-                                slideInHorizontally(screenSlide) { dir * it } + fadeIn(screenFade)
+                        val spec = (
+                                slideInHorizontally(screenSlide) { if (open) it else -it / 3 } + fadeIn(screenFade)
                                 ).togetherWith(
-                                slideOutHorizontally(screenSlide) { -dir * it / 3 } + fadeOut(fastFade),
+                                slideOutHorizontally(screenSlide) { if (open) -it / 3 else it } + fadeOut(fastFade),
                             )
+                        // Закрываемый экран уезжает поверх родительского, а не прячется под ним.
+                        spec.targetContentZIndex = if (open) 1f else -1f
+                        spec
                     }
                 },
                 label = "mainScreen",
@@ -674,6 +686,8 @@ fun MainScreen(
                 onAddStory = { onOpenStories(0L, 0) },
                 searchOnTop = chatPrefs.searchOnTop,
                 onSearch = { searching = true },
+                storeBarHeight = storeBar,
+                storeContent = if (storePage) ({ PluginStoreTopBar() }) else null,
                 backdrop = backdrop,
                 glass = glass,
                 topInset = topInset,
@@ -751,7 +765,12 @@ fun MainScreen(
         val pluginsBarShown = tab == MainTab.Settings && settingsPage in setOf(
             SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager,
         )
-        LaunchedEffect(pluginsBarShown) { if (!pluginsBarShown) PluginStoreSearch.query = "" }
+        LaunchedEffect(pluginsBarShown) {
+            if (!pluginsBarShown) {
+                PluginStoreSearch.query = ""
+                PluginStoreSearch.category = null
+            }
+        }
         val pluginsBarProgress by animateFloatAsState(
             targetValue = if (pluginsBarShown) 1f else 0f,
             animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
@@ -833,6 +852,8 @@ private fun GlassTopBar(
     topInset: Dp,
     progress: () -> Float,
     modifier: Modifier = Modifier,
+    storeBarHeight: Dp = 0.dp,
+    storeContent: (@Composable () -> Unit)? = null,
 ) {
     val motion = MaterialTheme.motionScheme
     val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
@@ -855,7 +876,8 @@ private fun GlassTopBar(
             .height(
                 topInset + TopBarContentHeight +
                         (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
-                        (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
+                        (if (folders.isNotEmpty()) FolderBarHeight else 0.dp) +
+                        storeBarHeight,
             )
             .glassTopBar(backdrop, glass)
             // Хэллоуинские частички: только в верхней панели, под её содержимым.
@@ -1025,6 +1047,16 @@ private fun GlassTopBar(
                 onSelect = onSelectFolder,
                 modifier = Modifier.align(Alignment.BottomStart),
             )
+        }
+        // Магазин плагинов: поиск и категории под заголовком.
+        if (storeContent != null) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(storeBarHeight)
+                    .graphicsLayer { alpha = progress() },
+            ) { storeContent() }
         }
     }
 }
@@ -1442,4 +1474,15 @@ private fun GlassBottomBar(
             Icon(Icons.Filled.Search, contentDescription = tr("Поиск"), modifier = Modifier.size(20.dp))
         }
     }
+}
+
+/** Глубина страницы настроек: Home = 0, подстраница = 1 + глубина родителя. */
+private fun SettingsPage.depth(): Int {
+    var d = 0
+    var p = this
+    while (p != SettingsPage.Home && d < 8) {
+        d++
+        p = p.parent
+    }
+    return d
 }

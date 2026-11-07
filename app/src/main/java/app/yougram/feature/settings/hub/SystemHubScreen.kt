@@ -5,6 +5,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.runtime.Composable
 import app.yougram.feature.settings.SettingsPage
 import app.yougram.feature.settings.component.SectionLabel
@@ -21,7 +23,13 @@ fun SystemHubScreen(contentPadding: PaddingValues, onNavigate: (SettingsPage) ->
         SectionLabel("Данные и ресурсы")
         SettingGroup {
             item { SettingRow("Данные и память", subtitle = "Кэш, автозагрузка медиа", icon = Icons.Filled.PieChart, onClick = { onNavigate(SettingsPage.DataStorage) }) }
+            item { SettingRow("Использование сети", subtitle = "Трафик по Wi-Fi, мобильной сети и звонкам", icon = Icons.Filled.DataUsage, onClick = { onNavigate(SettingsPage.NetworkUsage) }) }
             item { SettingRow("Энергосбережение", subtitle = "Экономия заряда", icon = Icons.Filled.BatterySaver, onClick = { onNavigate(SettingsPage.PowerSaving) }) }
+        }
+
+        SectionLabel("Контент")
+        SettingGroup {
+            item { SettingRow("Стикеры и реакции", subtitle = "Наборы, архив, популярные, быстрая реакция", icon = Icons.Filled.EmojiEmotions, onClick = { onNavigate(SettingsPage.Stickers) }) }
         }
 
         SectionLabel("Общее")

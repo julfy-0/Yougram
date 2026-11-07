@@ -357,6 +357,12 @@ fun YougramNavHost(container: AppContainer) {
                 composable(
                     route = ROUTE_STORIES,
                     arguments = listOf(navArgument("chatId") { type = NavType.LongType }, navArgument("storyId") { type = NavType.IntType }),
+                    enterTransition = {
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
+                    },
                 ) { entry ->
                     val chatId = entry.arguments?.getLong("chatId") ?: 0L
                     val storyId = entry.arguments?.getInt("storyId") ?: 0

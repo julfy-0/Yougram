@@ -144,6 +144,9 @@ enum class SettingsPage(val title: String) {
     Privacy("Безопасность"),
     Notifications("Уведомления"),
     DataStorage("Данные и память"),
+    NetworkUsage("Использование сети"),
+    Stickers("Стикеры и реакции"),
+    NotificationExceptions("Исключения уведомлений"),
     Plugins("Плагины"),
     PluginsNew("Новые плагины"),
     PluginManager("Менеджер плагинов"),
@@ -175,7 +178,8 @@ enum class SettingsPage(val title: String) {
     val parent: SettingsPage
         get() = when (this) {
             Blocked, Websites -> Privacy
-            DataStorage, Language, PowerSaving -> SystemHub
+            NotificationExceptions -> Notifications
+            DataStorage, NetworkUsage, Stickers, Language, PowerSaving -> SystemHub
             CreateGroup, CreateChannel -> CreateHub
             Ghost, Spy, MessageFilters -> Extras
             SharedFilters, ShadowBan -> MessageFilters

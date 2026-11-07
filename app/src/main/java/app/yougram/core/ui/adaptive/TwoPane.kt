@@ -3,6 +3,8 @@ package app.yougram.core.ui.adaptive
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +90,7 @@ fun TwoPaneShell(
     val motion = MaterialTheme.motionScheme
     val fadeInSpec = motion.defaultEffectsSpec<Float>()
     val fadeOutSpec = motion.fastEffectsSpec<Float>()
+    val slideSpec = motion.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
     Row(Modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -111,7 +114,12 @@ fun TwoPaneShell(
             AnimatedContent(
                 targetState = detail,
                 modifier = Modifier.fillMaxSize(),
-                transitionSpec = { fadeIn(fadeInSpec) togetherWith fadeOut(fadeOutSpec) },
+                transitionSpec = {
+                    // Открытие — справа налево, закрытие (возврат к заглушке) — слева направо.
+                    val dir = if (targetState != null) 1 else -1
+                    (slideInHorizontally(slideSpec) { dir * it / 3 } + fadeIn(fadeInSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { -dir * it / 3 } + fadeOut(fadeOutSpec))
+                },
                 label = "detailPane",
             ) { route ->
                 if (route == null) DetailPlaceholder() else detailPane(route)

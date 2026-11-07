@@ -44,8 +44,11 @@ import app.yougram.feature.settings.general.ArchiveScreen
 import app.yougram.feature.settings.general.CreateChatScreen
 import app.yougram.feature.settings.general.DataStorageScreen
 import app.yougram.feature.settings.general.LanguageScreen
+import app.yougram.feature.settings.general.NetworkUsageScreen
+import app.yougram.feature.settings.general.NotificationExceptionsScreen
 import app.yougram.feature.settings.general.NotificationsScreen
 import app.yougram.feature.settings.general.PowerSavingScreen
+import app.yougram.feature.settings.general.StickersScreen
 import app.yougram.feature.settings.hub.AppearanceChatsScreen
 import app.yougram.feature.settings.hub.CreateHubScreen
 import app.yougram.feature.settings.hub.SecurityPrivacyScreen
@@ -112,8 +115,11 @@ fun SettingsPageContent(
         SettingsPage.Privacy -> SecurityPrivacyScreen(details, container.appLock, container.settings, contentPadding, onNavigate)
         SettingsPage.Blocked -> BlockedScreen(details, contentPadding)
         SettingsPage.Websites -> WebsitesScreen(details, contentPadding)
-        SettingsPage.Notifications -> NotificationsScreen(container.settings, contentPadding)
+        SettingsPage.Notifications -> NotificationsScreen(container.settings, contentPadding, onNavigate)
+        SettingsPage.NotificationExceptions -> NotificationExceptionsScreen(container.chatRepository, container.telegram.client, contentPadding, onOpenChat)
         SettingsPage.DataStorage -> DataStorageScreen(details, container.settings, contentPadding)
+        SettingsPage.Stickers -> StickersScreen(container.telegram.client, contentPadding)
+        SettingsPage.NetworkUsage -> NetworkUsageScreen(container.telegram.client, contentPadding)
         SettingsPage.Plugins -> PluginStoreScreen(container.plugins, contentPadding)
         SettingsPage.PluginsNew -> PluginStoreScreen(container.plugins, contentPadding, newOnly = true)
         SettingsPage.PluginManager -> PluginsScreen(container.plugins, contentPadding)

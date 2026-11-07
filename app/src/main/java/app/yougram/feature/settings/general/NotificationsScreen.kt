@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.feature.settings.component.ChoiceDialog
 import app.yougram.feature.settings.component.ConfirmDialog
+import androidx.compose.material.icons.filled.NotificationsOff
 import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
@@ -39,7 +40,11 @@ private fun enabledLabel(enabled: Boolean) = if (enabled) "Включены" els
 private enum class NotificationDialog { CallVibration, Ringtone, Repeat, Reset }
 
 @Composable
-fun NotificationsScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
+fun NotificationsScreen(
+    settings: SettingsRepository,
+    contentPadding: PaddingValues,
+    onNavigate: (app.yougram.feature.settings.SettingsPage) -> Unit = {},
+) {
     val n by settings.notifications.collectAsState()
     var dialog by remember { mutableStateOf<NotificationDialog?>(null) }
 
@@ -51,6 +56,18 @@ fun NotificationsScreen(settings: SettingsRepository, contentPadding: PaddingVal
             item { SwitchRow("Каналы", n.channels, { v -> settings.updateNotifications { it.copy(channels = v) } }, subtitle = enabledLabel(n.channels), icon = Icons.Filled.Campaign) }
             item { SwitchRow("Истории", n.stories, { v -> settings.updateNotifications { it.copy(stories = v) } }, subtitle = enabledLabel(n.stories), icon = Icons.Filled.AutoStories) }
             item { SwitchRow("Реакции", n.reactions, { v -> settings.updateNotifications { it.copy(reactions = v) } }, subtitle = enabledLabel(n.reactions), icon = Icons.Filled.Favorite) }
+        }
+
+        SectionLabel("Исключения")
+        SettingGroup {
+            item {
+                app.yougram.feature.settings.component.SettingRow(
+                    "Исключения уведомлений",
+                    subtitle = "Чаты с особыми настройками: личные, группы, каналы",
+                    icon = Icons.Filled.NotificationsOff,
+                    onClick = { onNavigate(app.yougram.feature.settings.SettingsPage.NotificationExceptions) },
+                )
+            }
         }
 
         SectionLabel("Звонки")

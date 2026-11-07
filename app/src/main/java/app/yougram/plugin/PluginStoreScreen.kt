@@ -2,6 +2,14 @@
 
 package app.yougram.feature.settings.extras
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.filled.Check
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
@@ -100,6 +108,52 @@ import kotlinx.coroutines.withContext
 /** Текст поиска магазина живёт вне экрана, чтобы не сбрасываться при переходе «Новые» ↔ «Все». */
 object PluginStoreSearch {
     var query by mutableStateOf("")
+
+    /** Выбранная категория и список доступных категорий: показываются в верхней панели главного экрана. */
+    var category by mutableStateOf<String?>(null)
+    var categories by mutableStateOf<List<String>>(emptyList())
+}
+
+/** Высота строки поиска и ряда категорий в верхней панели магазина. */
+val PluginStoreSearchHeight = 64.dp
+val PluginStoreChipsHeight = 48.dp
+
+/** Поиск и категории магазина плагинов — содержимое верхней панели (под заголовком). */
+@Composable
+fun PluginStoreTopBar() {
+    val query = PluginStoreSearch.query
+    val categories = PluginStoreSearch.categories
+    val category = PluginStoreSearch.category
+    Column(Modifier.fillMaxWidth()) {
+        TextField(
+            value = query,
+            onValueChange = { PluginStoreSearch.query = it },
+            placeholder = { Text("Поиск плагинов") },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            singleLine = true,
+            shape = CircleShape,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        if (categories.size > 1) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().height(PluginStoreChipsHeight),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                item { CategoryChip(tr("Все"), category == null) { PluginStoreSearch.category = null } }
+                items(categories) { c ->
+                    CategoryChip(c, category == c) { PluginStoreSearch.category = if (category == c) null else c }
+                }
+            }
+        }
+    }
 }
 
 private sealed interface Catalog {
@@ -118,7 +172,7 @@ fun PluginStoreScreen(manager: NativePluginManager, contentPadding: PaddingValue
     var catalog by remember { mutableStateOf<Catalog>(Catalog.Loading) }
     var reload by remember { mutableStateOf(0) }
     val query = PluginStoreSearch.query
-    var category by remember { mutableStateOf<String?>(null) }
+    val category = PluginStoreSearch.category
     var details by remember { mutableStateOf<StorePlugin?>(null) }
     var pending by remember { mutableStateOf<PendingPlugin?>(null) }
     var pendingDelete by remember { mutableStateOf<StorePlugin?>(null) }
@@ -167,6 +221,10 @@ fun PluginStoreScreen(manager: NativePluginManager, contentPadding: PaddingValue
 
     val items = (catalog as? Catalog.Ready)?.items.orEmpty()
     val categories = items.map { it.category }.distinct()
+    LaunchedEffect(categories) {
+        PluginStoreSearch.categories = categories
+        if (PluginStoreSearch.category?.let { it !in categories } == true) PluginStoreSearch.category = null
+    }
     val filtered = items.filter { p ->
         (category == null || p.category == category) &&
                 (query.isBlank() || p.name.contains(query, true) || p.description.contains(query, true) || p.author.contains(query, true))
@@ -187,33 +245,6 @@ fun PluginStoreScreen(manager: NativePluginManager, contentPadding: PaddingValue
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        item("search") {
-            TextField(
-                value = query,
-                onValueChange = { PluginStoreSearch.query = it },
-                placeholder = { Text("Поиск плагинов") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                singleLine = true,
-                shape = CircleShape,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            )
-        }
-        if (categories.size > 1) {
-            item("chips") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                    item {
-                        CategoryChip(tr("Все"), category == null) { category = null }
-                    }
-                    items(categories) { c -> CategoryChip(c, category == c) { category = if (category == c) null else c } }
-                }
-            }
-        }
 
         when (val c = catalog) {
             Catalog.Loading -> item("loading") {
@@ -236,15 +267,15 @@ fun PluginStoreScreen(manager: NativePluginManager, contentPadding: PaddingValue
             is Catalog.Ready -> {
                 if (visible.isEmpty()) {
                     item("empty") {
-                        EmptyStore(if (items.isEmpty()) "Пока ничего нет" else "Ничего не найдено")
+                        Box(Modifier.animateItem()) { EmptyStore(if (items.isEmpty()) "Пока ничего нет" else "Ничего не найдено") }
                     }
                 }
                 if (updates.isNotEmpty()) {
-                    item("h-upd") { StoreHeader(tr("Обновления")) }
+                    item("h-upd") { Box(Modifier.animateItem()) { StoreHeader(tr("Обновления")) } }
                     storeGroup(updates, installed.associate { it.manifest.id to it.manifest.version }, progress, ratings, { details = it }, ::install, { pendingDelete = it })
                 }
                 if (rest.isNotEmpty()) {
-                    item("h-all") { StoreHeader(if (newOnly) tr("Новые поступления") else if (updates.isEmpty()) tr("Все плагины") else tr("Остальные")) }
+                    item("h-all") { Box(Modifier.animateItem()) { StoreHeader(if (newOnly) tr("Новые поступления") else if (updates.isEmpty()) tr("Все плагины") else tr("Остальные")) } }
                     storeGroup(rest, installed.associate { it.manifest.id to it.manifest.version }, progress, ratings, { details = it }, ::install, { pendingDelete = it })
                 }
             }
@@ -381,12 +412,35 @@ private fun StoreHeader(text: String) {
 
 @Composable
 private fun CategoryChip(title: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) {
-        Text(title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge)
+    val scheme = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    // Цвет и текст плавно перетекают, а на выбранной категории раскрывается галочка.
+    val container by animateColorAsState(
+        if (selected) scheme.primaryContainer else scheme.surfaceContainerHighest,
+        motion.defaultEffectsSpec(),
+        label = "chipContainer",
+    )
+    val content by animateColorAsState(
+        if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+        motion.defaultEffectsSpec(),
+        label = "chipContent",
+    )
+    Surface(onClick = onClick, shape = CircleShape, color = container, contentColor = content) {
+        Row(
+            Modifier
+                .animateContentSize(motion.defaultSpatialSpec())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn(motion.defaultEffectsSpec()) + expandHorizontally(motion.defaultSpatialSpec()),
+                exit = fadeOut(motion.defaultEffectsSpec()) + shrinkHorizontally(motion.defaultSpatialSpec()),
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.padding(end = 6.dp).size(16.dp))
+            }
+            Text(title, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -408,6 +462,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.storeGroup(
     val connected = list.size > 2
     itemsIndexed(list, key = { _, p -> p.id }) { index, p ->
         StoreCard(
+            modifier = Modifier.animateItem(),
             shape = if (connected) segmentShape(index, list.size) else StoreCardShape,
             gap = if (connected) 0.dp else 6.dp,
             plugin = p,
@@ -423,6 +478,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.storeGroup(
 
 @Composable
 private fun StoreCard(
+    modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape,
     gap: androidx.compose.ui.unit.Dp,
     plugin: StorePlugin,
@@ -438,7 +494,7 @@ private fun StoreCard(
         onClick = onOpen,
         shape = shape,
         color = plateColor(PlateArea.Settings),
-        modifier = Modifier.fillMaxWidth().padding(bottom = gap),
+        modifier = modifier.fillMaxWidth().padding(bottom = gap),
     ) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
