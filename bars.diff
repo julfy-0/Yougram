@@ -1,0 +1,130 @@
+--- orig/app/src/main/java/app/yougram/feature/main/ui/MainScreen.kt	2026-11-04 18:52:35.445286495 +0000
++++ new/app/src/main/java/app/yougram/feature/main/ui/MainScreen.kt	2026-11-04 18:52:57.334653572 +0000
+@@ -195,6 +195,11 @@
+ private val BottomBarHeight = 64.dp
+ private val BottomBarMargin = 8.dp
+ 
++/** Скругление панелей: верхняя — по нижним углам, нижняя — по верхним. */
++private val BarCorner = 24.dp
++private val TopBarShape = RoundedCornerShape(bottomStart = BarCorner, bottomEnd = BarCorner)
++private val BottomBarShape = RoundedCornerShape(topStart = BarCorner, topEnd = BarCorner)
++
+ /** Кнопка поиска: квадрат со скруглёнными углами. */
+ private val SearchButtonShape = RoundedCornerShape(13.dp)
+ /** Кнопка поиска внизу меньше «таблетки» на 30%. */
+@@ -843,6 +848,8 @@
+         if (lowTier) tween(SearchAnimationMillis, delayMillis = 60) else motion.defaultEffectsSpec()
+     val searchFadeOut: FiniteAnimationSpec<Float> =
+         if (lowTier) tween(SearchAnimationMillis / 2) else motion.fastEffectsSpec()
++    // Для не-прямоугольной формы glass() сам не высветляет панель, поэтому тон тот же, что был у RectangleShape (+10% белого).
++    val topBarTint = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, Color.White, 0.10f)
+     Box(
+         modifier
+             // Уезжает вверх только строка с заголовком: стекло под статус-баром и папки остаются.
+@@ -856,7 +863,7 @@
+                         (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
+                         (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
+             )
+-            .glass(backdrop, glass, RectangleShape)
++            .glass(backdrop, glass, TopBarShape, topBarTint)
+             // Хэллоуинские частички: только в верхней панели, под её содержимым.
+             .halloweenFall(speedScale = 3f),
+     ) {
+@@ -1295,28 +1302,27 @@
+     val density = LocalDensity.current
+     val measurer = rememberTextMeasurer()
+     val baseLabelStyle = MaterialTheme.typography.labelLargeEmphasized
++    val barTint = androidx.compose.ui.graphics.lerp(
++        MaterialTheme.colorScheme.surface,
++        androidx.compose.ui.graphics.Color.White,
++        0.10f,
++    )
++    // Панель во всю ширину, прижата к низу (над полосой системной навигации), верхние углы скруглены.
+     Row(
+         modifier
+             .offset {
+-                val distance = (BottomBarHeight + BottomBarMargin + bottomInset).roundToPx()
++                val distance = (BottomBarHeight + BottomBarMargin * 2 + bottomInset).roundToPx()
+                 IntOffset(0, (distance * (1f - progress())).roundToInt())
+             }
+             .fillMaxWidth()
+-            .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
++            // Стекло под системной панелью навигации рисует отдельная полоса ниже, поэтому панель заканчивается над ней.
++            .padding(bottom = bottomInset)
++            .glass(backdrop, glass, BottomBarShape, barTint)
++            .padding(start = 12.dp, end = 12.dp, top = BottomBarMargin, bottom = BottomBarMargin),
+         horizontalArrangement = Arrangement.Center,
+         verticalAlignment = Alignment.CenterVertically,
+     ) {
+-        val barTint = androidx.compose.ui.graphics.lerp(
+-            MaterialTheme.colorScheme.surface,
+-            androidx.compose.ui.graphics.Color.White,
+-            0.10f,
+-        )
+-        Box(
+-            Modifier
+-                .height(BottomBarHeight)
+-                .glass(backdrop, glass, CircleShape, barTint)
+-                .clip(CircleShape),
+-        ) {
++        Box(Modifier.height(BottomBarHeight)) {
+             Row(
+                 Modifier.align(Alignment.Center).padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
+                 horizontalArrangement = Arrangement.spacedBy(NavGap),
+@@ -1401,40 +1407,39 @@
+     progress: () -> Float,
+     modifier: Modifier = Modifier,
+ ) {
++    // Цвет стекла навбара: на пару тонов светлее поверхности (как у верхней панели).
++    val barTint = androidx.compose.ui.graphics.lerp(
++        MaterialTheme.colorScheme.surface,
++        androidx.compose.ui.graphics.Color.White,
++        0.10f,
++    )
++    // Панель во всю ширину, прижата к низу (над полосой системной навигации), верхние углы скруглены.
+     Row(
+         modifier
+             // Уезжает вниз на всю свою высоту вместе с отступами.
+             .offset {
+-                val distance = (BottomBarHeight + BottomBarMargin + bottomInset).roundToPx()
++                val distance = (BottomBarHeight + BottomBarMargin * 2 + bottomInset).roundToPx()
+                 IntOffset(0, (distance * (1f - progress())).roundToInt())
+             }
+             .fillMaxWidth()
+-            .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
++            // Стекло под системной панелью навигации рисует отдельная полоса ниже, поэтому панель заканчивается над ней.
++            .padding(bottom = bottomInset)
++            .glass(backdrop, glass, BottomBarShape, barTint)
++            .padding(start = 12.dp, end = 12.dp, top = BottomBarMargin, bottom = BottomBarMargin),
+         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+         verticalAlignment = Alignment.CenterVertically,
+     ) {
+-        // Цвет стекла навбара: на пару тонов светлее поверхности (как у верхней панели).
+-        val barTint = androidx.compose.ui.graphics.lerp(
+-            MaterialTheme.colorScheme.surface,
+-            androidx.compose.ui.graphics.Color.White,
+-            0.10f,
+-        )
+-        // Стеклянная «таблетка» по ширине вкладок: стекло даёт Modifier.glass.
+-        Box(
+-            Modifier
+-                .height(BottomBarHeight)
+-                .glass(backdrop, glass, CircleShape, barTint)
+-                .clip(CircleShape),
+-        ) {
++        // Вкладки лежат прямо на панели: выбранная подсвечивается собственной заливкой (NavTab).
++        Box(Modifier.height(BottomBarHeight)) {
+             Box(Modifier.align(Alignment.Center)) { NavTabs(order, selected, onSelect, chatsUnread) }
+         }
+ 
+-        // Отдельная кнопка поиска справа, той же высоты, что и «таблетка».
++        // Кнопка поиска справа: плитка тоном выше панели (вложенное стекло внутри панели не нужно).
+         if (showSearch) Box(
+             Modifier
+                 .size(BottomBarHeight * SearchButtonScale)
+-                .glass(backdrop, glass, SearchButtonShape, barTint)
+                 .clip(SearchButtonShape)
++                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f))
+                 .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
+             contentAlignment = Alignment.Center,
+         ) {

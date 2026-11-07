@@ -70,6 +70,9 @@
     "О себе": "Acerca de mí",
     "О приложении": "Acerca de la app",
     "Обновление": "Actualización",
+    "Обновления": "Actualizaciones",
+    "Удалить фото профиля": "Eliminar foto de perfil",
+    "Безопасность": "Seguridad",
     "Очистить кэш": "Borrar caché",
     "Очистить": "Borrar",
     "Добавить аккаунт": "Añadir cuenta",
@@ -92,6 +95,12 @@
     "Стикеры и эмодзи": "Stickers y emojis",
     "Всплывающие окна": "Ventanas emergentes",
     "Панели": "Paneles",
-    "Выкл.": "Desactivado"
+    "Выкл.": "Desactivado",
+    "Что очистить?": "¿Qué quieres borrar?",
+    "Выбрать все": "Seleccionar todo",
+    "Документы": "Documentos",
+    "Видео": "Vídeos",
+    "Музыка": "Música",
+    "Будет освобождено: {0}": "Se liberarán: {0}"
   }
 }

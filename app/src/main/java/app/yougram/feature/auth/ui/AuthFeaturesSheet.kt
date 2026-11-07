@@ -56,7 +56,7 @@ private val features = listOf(
     ),
     AuthFeature(
         Icons.Filled.Extension,
-        "Плагины на C++",
+        "Плагины",
         "Магазин плагинов с установкой в одно касание. Плагины расширяют клиент тем, чего нет в Telegram.",
     ),
     AuthFeature(

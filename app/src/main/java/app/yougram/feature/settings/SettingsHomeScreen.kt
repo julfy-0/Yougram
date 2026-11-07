@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,7 +42,6 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Campaign
@@ -75,6 +75,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import app.yougram.core.ui.component.LoadingIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonGroupDefaults
 import app.yougram.core.ui.component.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -140,7 +141,7 @@ enum class SettingsPage(val title: String) {
     HomeLayoutEditor("Порядок вкладок"),
     Appearance("Внешний вид и чаты"),
     Account("Аккаунт"),
-    Privacy("Безопасность и конфиденциальность"),
+    Privacy("Безопасность"),
     Notifications("Уведомления"),
     DataStorage("Данные и память"),
     Plugins("Плагины"),
@@ -238,6 +239,7 @@ fun SettingsHomeScreen(
                 download = { id, priority -> viewModel.download(id, priority) },
                 onDismiss = { showAvatars = false },
                 allowSave = true,
+                onDelete = { viewModel.deleteAvatar(it) },
             )
         }
         ProfileHeader(
@@ -248,6 +250,7 @@ fun SettingsHomeScreen(
             // Тап по аватару — просмотр (если фото нет, сразу выбор нового), значок камеры — смена.
             onOpenAvatar = { if (state.avatars.isNotEmpty()) showAvatars = true else changeAvatar() },
             onChangeAvatar = changeAvatar,
+            onEditProfile = { onNavigate(SettingsPage.Account) },
             onOpenAccountManager = openAccountManager,
             onOpenProfile = { state.profile?.id?.let(onOpenProfile) },
         )
@@ -262,11 +265,11 @@ fun SettingsHomeScreen(
         }
 
         // «О приложении» и обновление — сразу под профилем, в одной группе.
-        SectionLabel("Обновления и ПО")
+        SectionLabel("Обновление")
         val openUpdate = { onNavigate(SettingsPage.Update) }
         SettingGroup {
             item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
-            item { SettingRow("Плагины", subtitle = "Плагины на C++", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
+            item { SettingRow("Плагины", subtitle = "Оформление, безопасность и т.д.", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
             if (app.yougram.plugin.PluginUi.SETTINGS_UPDATE !in pluginHidden) item {
                 when (val u = update) {
                     UpdateState.Idle, UpdateState.Checking -> SettingRow(
@@ -274,7 +277,7 @@ fun SettingsHomeScreen(
                         onClick = openUpdate,
                     )
                     UpdateState.UpToDate -> SettingRow(
-                        title = "Установлена последняя версия", icon = Icons.Filled.SystemUpdate,
+                        title = "Обновления", icon = Icons.Filled.SystemUpdate,
                         value = "Открыть", onClick = openUpdate,
                     )
                     is UpdateState.Available -> SettingRow(
@@ -351,7 +354,7 @@ internal fun homeEntries(devices: String?, language: String?): List<HomeEntry> =
     HomeEntry("appearance", "Внешний вид и чаты", "Тема, панели, настройки чатов, папки", Icons.Filled.Tune, null, SettingsPage.Appearance),
     HomeEntry("client", "Настройки клиента", "Призрак, шпион, фильтры и др.", Icons.Filled.VisibilityOff, null, SettingsPage.Extras),
     HomeEntry("account", "Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, null, SettingsPage.Account),
-    HomeEntry("security", "Безопасность и конфиденциальность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
+    HomeEntry("security", "Безопасность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, null, SettingsPage.Privacy),
     HomeEntry("devices", "Устройства", "Активные сеансы", Icons.Filled.Laptop, devices, SettingsPage.Devices),
     HomeEntry("create", "Создать / Добавить", "Группа, канал, аккаунт", Icons.Filled.Add, null, SettingsPage.CreateHub),
     HomeEntry("archive", "Архивы", "Архивные чаты", Icons.Filled.Archive, null, SettingsPage.Archive),
@@ -374,6 +377,7 @@ private fun ProfileHeader(
     settings: SettingsRepository,
     onOpenAvatar: () -> Unit,
     onChangeAvatar: () -> Unit,
+    onEditProfile: () -> Unit,
     onOpenAccountManager: () -> Unit,
     onOpenProfile: () -> Unit,
 ) {
@@ -388,95 +392,135 @@ private fun ProfileHeader(
         color = scheme.primaryContainer,
         contentColor = scheme.onPrimaryContainer,
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Родитель не обрезаем: иначе бейдж камеры в углу срезается формой аватара.
-            Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
-                // Аватар целиком заполняет «звезду» (Cookie9Sided), без ореола и круглой вставки.
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .clip(MaterialShapes.Cookie9Sided.toShape())
-                        .clickable(role = Role.Button, onClickLabel = "Открыть аватар", onClick = onOpenAvatar),
-                ) {
-                    FileAvatar(
-                        title = profile?.name.orEmpty(),
-                        fileId = profile?.avatarFileId,
-                        fileState = viewModel::fileState,
-                        size = 116.dp,
-                        shape = MaterialShapes.Cookie9Sided.toShape(),
-                    )
-                }
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(scheme.primary)
-                        .clickable(role = Role.Button, onClickLabel = "Изменить аватар", onClick = onChangeAvatar),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (state.avatarUpdating) {
-                        LoadingIndicator(Modifier.size(18.dp), color = scheme.onPrimary)
-                    } else {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = tr("Изменить аватар"), tint = scheme.onPrimary, modifier = Modifier.size(18.dp))
+        Box {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Родитель не обрезаем: иначе бейдж камеры в углу срезается формой аватара.
+                Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                    // Аватар целиком заполняет «звезду» (Cookie9Sided), без ореола и круглой вставки.
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .clip(MaterialShapes.Cookie9Sided.toShape())
+                            .clickable(role = Role.Button, onClickLabel = "Открыть аватар", onClick = onOpenAvatar),
+                    ) {
+                        FileAvatar(
+                            title = profile?.name.orEmpty(),
+                            fileId = profile?.avatarFileId,
+                            fileState = viewModel::fileState,
+                            size = 116.dp,
+                            shape = MaterialShapes.Cookie9Sided.toShape(),
+                        )
                     }
-                }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        profile?.name.orEmpty(),
-                        style = MaterialTheme.typography.titleLargeEmphasized,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
-                    )
-                    if (premium) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            Modifier.size(24.dp).clip(CircleShape).background(scheme.tertiaryContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.Star,
-                                contentDescription = "Premium",
-                                tint = scheme.onTertiaryContainer,
-                                modifier = Modifier.size(16.dp),
-                            )
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = (-4).dp, y = (-2).dp)
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(scheme.primary)
+                            .clickable(role = Role.Button, onClickLabel = "Изменить аватар", onClick = onChangeAvatar),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (state.avatarUpdating) {
+                            LoadingIndicator(Modifier.size(18.dp), color = scheme.onPrimary)
+                        } else {
+                            Icon(Icons.Filled.CameraAlt, contentDescription = tr("Изменить аватар"), tint = scheme.onPrimary, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
-                val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
-                val phone = profile?.phone?.takeIf { it.isNotEmpty() }?.let { if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else it }
-                val username = profile?.username?.let { if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else "@$it" }
-                val contacts = listOfNotNull(phone, username).joinToString(" • ")
-                if (contacts.isNotEmpty()) {
-                    Text(
-                        contacts,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                // Кнопка Expressive: форма перетекает при нажатии.
-                androidx.compose.material3.Button(
-                    onClick = onOpenAccountManager,
-                    modifier = Modifier.padding(top = 10.dp).heightIn(min = 44.dp),
-                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
-                ) {
-                    Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(tr("Аккаунты ({0})", accounts.size), style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 1)
-                    Spacer(Modifier.width(2.dp))
-                    Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            profile?.name.orEmpty(),
+                            style = MaterialTheme.typography.titleLargeEmphasized,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
+                        )
+                        if (premium) {
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                Modifier.size(24.dp).clip(CircleShape).background(scheme.tertiaryContainer),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Star,
+                                    contentDescription = "Premium",
+                                    tint = scheme.onTertiaryContainer,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                    val hideOwn = app.yougram.core.ui.rememberOwnContactsHidden()
+                    val phone = profile?.phone?.takeIf { it.isNotEmpty() }?.let { if (hideOwn) app.yougram.core.ui.OWN_PHONE_MASK else it }
+                    val username = profile?.username?.let { if (hideOwn) app.yougram.core.ui.OWN_USERNAME_MASK else "@$it" }
+                    val contacts = listOfNotNull(phone, username).joinToString(" • ")
+                    if (contacts.isNotEmpty()) {
+                        Text(
+                            contacts,
+                            modifier = Modifier.clickable(role = Role.Button, onClickLabel = "Открыть профиль", onClick = onOpenProfile),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // Связанная группа Expressive (connected button group): «Аккаунты» + «Изменить профиль».
+                    // Внешние углы полностью скруглены, внутренние (стык) маленькие, зазор между кнопками 2dp;
+                    // при нажатии кнопка перетекает в «таблетку».
+                    val groupOuter = 22.dp
+                    val groupInner = 4.dp
+                    Row(
+                        modifier = Modifier.padding(top = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                    ) {
+                        androidx.compose.material3.Button(
+                            onClick = onOpenAccountManager,
+                            modifier = Modifier.weight(1f, fill = false).height(44.dp),
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(
+                                shape = RoundedCornerShape(
+                                    topStart = groupOuter, bottomStart = groupOuter,
+                                    topEnd = groupInner, bottomEnd = groupInner,
+                                ),
+                                pressedShape = CircleShape,
+                            ),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+                        ) {
+                            Icon(Icons.Filled.SwitchAccount, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                tr("Аккаунты ({0})", accounts.size),
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
+                        // Быстрый вход в редактирование: имя, «О себе», username, день рождения, телефон.
+                        androidx.compose.material3.Button(
+                            onClick = onEditProfile,
+                            // Квадрат 1:1, высота равна высоте кнопки «Аккаунты» (44dp).
+                            modifier = Modifier.size(44.dp),
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(
+                                shape = RoundedCornerShape(
+                                    topStart = groupInner, bottomStart = groupInner,
+                                    topEnd = groupOuter, bottomEnd = groupOuter,
+                                ),
+                                pressedShape = CircleShape,
+                            ),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = tr("Изменить профиль"), modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
             }
         }
@@ -523,6 +567,26 @@ class SettingsHomeViewModel(private val repository: ChatRepository) : ViewModel(
                 _state.update { it.copy(avatarUpdating = false, error = e.message) }
             } finally {
                 java.io.File(path).delete()
+            }
+        }
+    }
+
+    fun deleteAvatar(item: app.yougram.feature.chat.data.MediaItem? = null) {
+        viewModelScope.launch {
+            _state.update { it.copy(avatarUpdating = true) }
+            try {
+                if (item != null) repository.deleteProfilePhoto(item) else repository.deleteCurrentProfilePhoto()
+                val history = repository.ownAvatarHistory()
+                _state.update { st ->
+                    st.copy(
+                        avatars = history,
+                        // Пустая история — аватарки нет; иначе показываем следующую по очереди.
+                        profile = st.profile?.copy(avatarFileId = history.firstOrNull()?.fileId),
+                        avatarUpdating = false,
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(avatarUpdating = false, error = e.message) }
             }
         }
     }

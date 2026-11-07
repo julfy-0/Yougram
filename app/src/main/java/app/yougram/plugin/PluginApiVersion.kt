@@ -1,13 +1,13 @@
 package app.yougram.plugin
 
 /**
- * Версия API плагинов. Хост — 2.2; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
+ * Версия API плагинов. Хост — 2.3; плагины старее 2.1 (включая 1.x и 2.0) не устанавливаются и не загружаются.
  * Принимается major 2 и minor от [MIN_MINOR] до [MINOR].
  */
 object PluginApiVersion {
     const val MAJOR = 2
-    const val MINOR = 2
-    const val CURRENT = "2.2"
+    const val MINOR = 3
+    const val CURRENT = "2.3"
 
     /** Самая старая поддерживаемая версия. */
     const val MIN_MINOR = 1

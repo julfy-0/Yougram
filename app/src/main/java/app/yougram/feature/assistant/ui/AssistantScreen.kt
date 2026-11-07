@@ -19,8 +19,16 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import app.yougram.core.settings.GlassSettings
+import app.yougram.core.ui.component.CookieSendButton
+import app.yougram.core.ui.component.ChatBarFieldColor
+import app.yougram.core.ui.component.ChatBarFieldCorner
+import app.yougram.core.ui.component.ChatBarHintColor
+import app.yougram.core.ui.component.ChatBarTextColor
 import app.yougram.core.ui.glass.BackdropState
+import app.yougram.core.ui.glass.BottomBarShape
+import app.yougram.core.ui.glass.barTint
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -187,7 +195,6 @@ fun AssistantScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.navigationBars)
                 .imePadding(),
         ) {
             val selected by assistant.models.selected.collectAsState()
@@ -195,13 +202,13 @@ fun AssistantScreen(
                 !assistant.supported -> Notice("Ассистент работает только на 64-битных устройствах.", top)
                 else -> when (val s = model) {
                     is AiModelState.Ready -> Chat(assistant, top, chatPrefs.textSize, chatPrefs.bubbleRadius, chatPrefs.ownBubbleColor, chatPrefs.otherBubbleColor, chatPrefs.bubbleOpacity, onNavigate) { confirmImport = true }
-                    is AiModelState.Downloading -> Column(Modifier.padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    is AiModelState.Downloading -> Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Загрузка ${selected.title}… ${(s.progress * 100).toInt()}% (${s.downloaded / 1_000_000} из ${s.total / 1_000_000} МБ)")
                         app.yougram.core.ui.component.LinearWavyProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth(), thick = true)
                         TextButton(onClick = assistant::cancelDownload) { Text("Отмена") }
                     }
                     else -> Column(
-                        Modifier.verticalScroll(rememberScrollState()).padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
+                        Modifier.windowInsetsPadding(WindowInsets.navigationBars).verticalScroll(rememberScrollState()).padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         ModelPicker(selected, assistant.models, assistant::select)
@@ -210,7 +217,7 @@ fun AssistantScreen(
                         } else {
                             Text("Модель работает на устройстве, без интернета. Её нужно один раз скачать (около ${selected.approxSizeMb} МБ) — лучше по Wi-Fi.")
                             if (s is AiModelState.Error) Text(s.message, color = MaterialTheme.colorScheme.error)
-                            Button(onClick = assistant::download) { Text(if (s is AiModelState.Error) "Повторить" else "Скачать модель") }
+                            Button(onClick = assistant::download, modifier = Modifier.fillMaxWidth()) { Text(if (s is AiModelState.Error) "Повторить" else "Скачать модель") }
                         }
                     }
                 }
@@ -286,7 +293,7 @@ private fun ModelPicker(selected: AiModel, manager: AiModelManager, onSelect: (A
 
 @Composable
 private fun Notice(text: String, top: androidx.compose.ui.unit.Dp) =
-    Text(text, modifier = Modifier.padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp))
+    Text(text, modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp))
 
 @Composable
 private fun ColumnScope.Chat(
@@ -332,53 +339,45 @@ private fun ColumnScope.Chat(
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
 
-    // Нижняя панель как в Gemini: овальное поле + круглая кнопка отправки.
+    // Нижняя панель как в чатах: на всю ширину, скруглена сверху, тёмное поле-«таблетка» и кнопка-«печенье».
     val active = busy || input.isNotBlank()
-    val sendContainer by animateColorAsState(
-        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-        MaterialTheme.motionScheme.defaultEffectsSpec(), label = "sendContainer",
-    )
-    val sendContent by animateColorAsState(
-        if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        MaterialTheme.motionScheme.defaultEffectsSpec(), label = "sendContent",
-    )
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .background(barTint(), BottomBarShape)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
         Surface(
             modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(ChatBarFieldCorner),
+            color = ChatBarFieldColor,
         ) {
             Box(
                 Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (input.isEmpty()) {
-                    Text("Сообщение", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Сообщение", style = MaterialTheme.typography.bodyLarge, color = ChatBarHintColor)
                 }
                 BasicTextField(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 5,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = ChatBarTextColor),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 )
             }
         }
-        Spacer(Modifier.width(10.dp))
-        Surface(
-            modifier = Modifier.size(56.dp),
-            shape = CircleShape,
-            color = sendContainer,
-            contentColor = sendContent,
+        Spacer(Modifier.width(8.dp))
+        CookieSendButton(
+            active = active,
+            size = 56.dp,
             onClick = { if (busy) assistant.stop() else if (input.isNotBlank()) { assistant.send(input); input = "" } },
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(if (busy) Icons.Filled.Stop else Icons.AutoMirrored.Filled.Send, tr("Отправить"))
-            }
+            Icon(if (busy) Icons.Filled.Stop else Icons.AutoMirrored.Filled.Send, tr("Отправить"))
         }
     }
 }
@@ -470,7 +469,7 @@ fun AssistantTopBar(
         modifier
             .fillMaxWidth()
             .height(topInset + 64.dp)
-            .glass(backdrop, glass, RectangleShape),
+            .glassTopBar(backdrop, glass),
     ) {
         Row(
             Modifier.padding(top = topInset).height(64.dp).fillMaxWidth().padding(start = 4.dp, end = 4.dp),

@@ -70,6 +70,9 @@
     "О себе": "O mnie",
     "О приложении": "O aplikacji",
     "Обновление": "Aktualizacja",
+    "Обновления": "Aktualizacje",
+    "Удалить фото профиля": "Usuń zdjęcie profilu",
+    "Безопасность": "Bezpieczeństwo",
     "Очистить кэш": "Wyczyść pamięć podręczną",
     "Очистить": "Wyczyść",
     "Добавить аккаунт": "Dodaj konto",
@@ -92,6 +95,12 @@
     "Стикеры и эмодзи": "Naklejki i emoji",
     "Всплывающие окна": "Wyskakujące okna",
     "Панели": "Panele",
-    "Выкл.": "Wył."
+    "Выкл.": "Wył.",
+    "Что очистить?": "Co wyczyścić?",
+    "Выбрать все": "Zaznacz wszystko",
+    "Документы": "Dokumenty",
+    "Видео": "Wideo",
+    "Музыка": "Muzyka",
+    "Будет освобождено: {0}": "Zwolni się: {0}"
   }
 }

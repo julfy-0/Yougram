@@ -26,6 +26,8 @@ import app.yougram.core.i18n.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 
@@ -43,6 +45,8 @@ fun TelegramSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.clip(app.yougram.core.ui.glass.TopBarShape),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = app.yougram.core.ui.glass.barTint()),
                 title = { Text("Telegram") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

@@ -58,6 +58,8 @@ data class ChatUiState(
     val joining: Boolean = false,
     /** Сообщения, удалённые в Telegram, но сохранённые режимом шпиона. */
     val deletedIds: Set<Long> = emptySet(),
+    /** Сообщения, которые прямо сейчас «растворяются» перед удалением (анимация). */
+    val vanishingIds: Set<Long> = emptySet(),
     /** История правок: id сообщения -> прежние версии текста (от старых к новым). */
     val edits: Map<Long, List<EditRecord>> = emptyMap(),
     /** Когда собеседник прочитал исходящее сообщение (unix, сек). */
@@ -444,6 +446,7 @@ class ChatViewModel(
                     s.copy(
                         messages = s.messages.filterNot { it.id in event.removedIds },
                         deletedIds = s.deletedIds + event.keptIds,
+                        vanishingIds = s.vanishingIds - event.removedIds,
                     )
                 }
             }
@@ -637,7 +640,23 @@ class ChatViewModel(
         if (trimmed.isNotEmpty()) action { repository.editText(chatId, messageId, trimmed) }
     }
 
-    fun delete(messageId: Long) = action { repository.deleteMessage(chatId, messageId) }
+    /** Удаление с анимацией: сперва пузырь плавно растворяется, затем сообщение уходит и список сдвигается. */
+    fun delete(messageId: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(vanishingIds = it.vanishingIds + messageId) }
+            delay(VANISH_MS.toLong())
+            try {
+                repository.deleteMessage(chatId, messageId)
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        vanishingIds = it.vanishingIds - messageId,
+                        error = e.message ?: tr("Не удалось выполнить действие"),
+                    )
+                }
+            }
+        }
+    }
 
     fun pin(messageId: Long) = action("Сообщение закреплено") { repository.pinMessage(chatId, messageId) }
 
@@ -665,6 +684,9 @@ class ChatViewModel(
             }
         }
     }
+
+    /** Публичная ссылка на сообщение; null — недоступна (приватный чат и т.п.). */
+    suspend fun messageLink(messageId: Long): String? = repository.messageLink(chatId, messageId)
 
     fun forward(messageId: Long, toChatId: Long) =
         action(tr("Сообщение переслано")) { repository.forwardMessage(toChatId, chatId, messageId) }
@@ -695,6 +717,25 @@ class ChatViewModel(
         sendMedia { repository.sendPhotoAlbum(chatId, paths, caption) }
 
     fun sendDocument(path: String, caption: String = "") = sendMedia { repository.sendDocument(chatId, path, caption) }
+
+    /** Несколько файлов разом: пачками по 10 (лимит Telegram на альбом), по порядку выбора. */
+    fun sendDocuments(paths: List<String>) = sendMedia {
+        paths.chunked(10).forEach { chunk ->
+            if (chunk.size == 1) repository.sendDocument(chatId, chunk[0]) else repository.sendDocumentAlbum(chatId, chunk)
+        }
+    }
+
+    /** Несколько фото разом: альбомами по 10. */
+    fun sendPhotos(paths: List<String>) = sendMedia {
+        paths.chunked(10).forEach { chunk ->
+            if (chunk.size == 1) repository.sendPhoto(chatId, chunk[0]) else repository.sendPhotoAlbum(chatId, chunk)
+        }
+    }
+
+    /** Несколько гифок разом: каждая отдельным сообщением. */
+    fun sendAnimations(paths: List<String>) = sendMedia {
+        paths.forEach { repository.sendAnimation(chatId, it) }
+    }
 
     fun sendPoll(question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
         sendMedia { repository.sendPoll(chatId, question, options, anonymous, multiple) }
@@ -793,6 +834,9 @@ class ChatViewModel(
 
     companion object {
         private const val HISTORY_TIMEOUT_MS = 12_000L
+
+        /** Длительность растворения пузыря перед удалением, мс. */
+        const val VANISH_MS = 220
         private const val MAX_JUMP_ROUNDS = 30
 
         fun factory(

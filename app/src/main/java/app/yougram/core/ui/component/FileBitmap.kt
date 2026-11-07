@@ -30,8 +30,14 @@ private fun decode(path: String, maxSide: Int): Bitmap? {
 /** Декодирует картинку из файла с уменьшением до maxSide и кэширует результат. */
 @Composable
 fun rememberFileBitmap(path: String?, maxSide: Int): ImageBitmap? {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, path, maxSide) {
-        value = if (path == null) null else withContext(Dispatchers.IO) { decode(path, maxSide)?.asImageBitmap() }
+    // Уже декодированное берём из кэша сразу, без пустого кадра при прокрутке туда-обратно.
+    val bitmap by produceState<ImageBitmap?>(
+        initialValue = path?.let { cache.get("$maxSide:$it")?.asImageBitmap() },
+        path, maxSide,
+    ) {
+        if (path == null) { value = null; return@produceState }
+        if (value != null) return@produceState
+        value = withContext(Dispatchers.IO) { decode(path, maxSide)?.asImageBitmap() }
     }
     return bitmap
 }

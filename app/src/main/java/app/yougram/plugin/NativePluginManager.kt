@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * Хост нативных (C++) плагинов, API 2.2 (принимаются плагины 2.1 и 2.2). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
+ * Хост нативных (C++) плагинов, API 2.3 (принимаются плагины 2.1–2.3). Плагин — .so с экспортом `yougram_plugin_entry` (см. cpp/include/yougram_plugin.h),
  * упакованный в .ygplugin (zip: manifest.json + lib/<abi>/<entry>). Загрузка и вызовы — через JNI (yougram_plugin_host).
  *
  * ВАЖНО: нативный код не изолирован — он работает с правами приложения и может его уронить.

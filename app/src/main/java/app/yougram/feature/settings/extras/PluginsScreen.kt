@@ -26,6 +26,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -59,6 +60,7 @@ import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
 import app.yougram.feature.settings.component.SettingsFootnote
 import app.yougram.feature.settings.component.SettingsPageColumn
+import app.yougram.feature.settings.component.segmentShape
 import app.yougram.plugin.InstalledPlugin
 import app.yougram.plugin.NativePluginManager
 import app.yougram.plugin.SuspiciousPluginException
@@ -106,7 +108,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         SettingGroup {
             item {
                 SettingRow(
-                    title = "Плагины на C++",
+                    title = "Плагины",
                     subtitle = tr("Нативные плагины (.so) через JNI · API {0} · {1}", NativePluginManager.API_VERSION, Build.SUPPORTED_ABIS.first()),
                     icon = Icons.Filled.Code,
                     value = if (NativePluginManager.hostAvailable) "хост активен" else "хост недоступен",
@@ -116,14 +118,20 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
 
         SectionLabel("Установленные")
         if (plugins.isEmpty()) EmptyPluginsCard()
-        plugins.forEach { plugin ->
-            key(plugin.manifest.id) {
-                PluginCard(
-                    plugin = plugin,
-                    onToggle = { manager.setEnabled(plugin.manifest.id, it) },
-                    onSettings = { settingsFor = plugin },
-                    onDelete = { pendingDelete = plugin },
-                )
+        // Больше двух плагинов — связанная группа (крайние углы крупные, внутренние малые, зазор 2dp);
+        // один или два остаются отдельными карточками.
+        val connected = plugins.size > 2
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (connected) 2.dp else 8.dp)) {
+            plugins.forEachIndexed { index, plugin ->
+                key(plugin.manifest.id) {
+                    PluginCard(
+                        plugin = plugin,
+                        shape = if (connected) segmentShape(index, plugins.size) else CardShape,
+                        onToggle = { manager.setEnabled(plugin.manifest.id, it) },
+                        onSettings = { settingsFor = plugin },
+                        onDelete = { pendingDelete = plugin },
+                    )
+                }
             }
         }
 
@@ -147,9 +155,9 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
         }
         SettingsFootnote(
             tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
-                tr("Ставьте только плагины, которым доверяете."),
+                    tr("Ставьте только плагины, которым доверяете."),
         )
-        SettingsFootnote("SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
+        SettingsFootnote("SDK 2.3: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
     }
 
     if (confirmInstall) {
@@ -159,7 +167,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             text = {
                 Text(
                     tr("Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ") +
-                        tr("Устанавливайте только из источников, которым доверяете."),
+                            tr("Устанавливайте только из источников, которым доверяете."),
                 )
             },
             confirmButton = {
@@ -211,7 +219,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
 
 /** Иконка плагина из его пакета (manifest.json -> "icon"); null, если её нет или файл некорректен. */
 @Composable
-private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.graphics.ImageBitmap? =
+private fun rememberPluginIcon(plugin: InstalledPlugin): PluginIcon? =
     androidx.compose.runtime.remember(plugin.directory, plugin.manifest.icon) {
         val name = plugin.manifest.icon
         if (name.isBlank()) return@remember null
@@ -219,7 +227,7 @@ private fun rememberPluginIcon(plugin: InstalledPlugin): androidx.compose.ui.gra
             val dir = plugin.directory.canonicalFile
             val f = java.io.File(dir, name).canonicalFile
             if (!f.path.startsWith(dir.path + java.io.File.separator) || !f.isFile || f.length() > 512 * 1024) null
-            else android.graphics.BitmapFactory.decodeFile(f.path)?.asImageBitmap()
+            else decodePluginIcon(f.readBytes())
         }.getOrNull()
     }
 
@@ -229,6 +237,7 @@ private val CardShape = RoundedCornerShape(28.dp)
 @Composable
 private fun PluginCard(
     plugin: InstalledPlugin,
+    shape: androidx.compose.ui.graphics.Shape,
     onToggle: (Boolean) -> Unit,
     onSettings: () -> Unit,
     onDelete: () -> Unit,
@@ -239,7 +248,7 @@ private fun PluginCard(
     val dim = if (plugin.enabled || plugin.error != null) 1f else 0.6f
     Surface(
         onClick = onSettings,
-        shape = CardShape,
+        shape = shape,
         color = plateColor(PlateArea.Settings),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -294,13 +303,13 @@ private fun PluginCard(
 }
 
 @Composable
-private fun PluginCardIcon(name: String, bitmap: ImageBitmap?, modifier: Modifier = Modifier) {
+private fun PluginCardIcon(name: String, icon: PluginIcon?, modifier: Modifier = Modifier) {
     Box(
         modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center,
     ) {
-        if (bitmap != null) {
-            Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (icon != null) {
+            PluginIconImage(icon, Modifier.fillMaxSize())
         } else {
             Text(
                 name.take(1).uppercase(),

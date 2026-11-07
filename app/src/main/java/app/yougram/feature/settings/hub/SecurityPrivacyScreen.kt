@@ -12,7 +12,7 @@ import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.privacy.PrivacyScreen
 import app.yougram.feature.settings.privacy.SecurityScreen
 
-/** Одна страница «Безопасность и конфиденциальность»: приватность аккаунта и защита приложения подряд. */
+/** Одна страница «Безопасность»: приватность аккаунта и защита приложения подряд. */
 @Composable
 fun SecurityPrivacyScreen(
     details: SettingsDetailsViewModel,

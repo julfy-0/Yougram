@@ -14,6 +14,7 @@ import app.yougram.feature.calls.data.CallLog
 import app.yougram.feature.calls.data.CallManager
 import app.yougram.feature.chat.data.ChatRepository
 import app.yougram.feature.chat.data.SpyStore
+import app.yougram.feature.groupadmin.data.GroupAdminRepository
 import app.yougram.feature.notifications.ConnectionService
 import app.yougram.feature.notifications.NotificationCenter
 import app.yougram.feature.security.data.AppLock
@@ -71,6 +72,7 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
     val telegram = TelegramClient(context.applicationContext, appScope, accountManager.activeAccountId.value)
     val authRepository = AuthRepository(telegram)
     val stories = StoriesRepository(telegram, appScope)
+    val groupAdmin = GroupAdminRepository(telegram)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
 
     /** API плагинов: команды, пункты меню, хуки. UI читает pluginApi.commands / pluginApi.actions. */

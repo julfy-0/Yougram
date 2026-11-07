@@ -17,6 +17,7 @@ import app.yougram.core.settings.PlateArea
 import app.yougram.core.ui.glass.LocalGlass
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.plateColor
 import app.yougram.core.ui.glass.rememberBackdropState
 import app.yougram.feature.settings.component.segmentShape
@@ -214,7 +215,7 @@ fun ForumTopicsScreen(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(barHeight)
-                .glass(backdrop, glass, RectangleShape),
+                .glassTopBar(backdrop, glass),
         ) {
             Row(
                 Modifier

@@ -18,9 +18,12 @@ import app.yougram.feature.account.data.SessionItem
 import app.yougram.feature.account.data.StorageInfo
 import app.yougram.feature.account.data.WebsiteItem
 import app.yougram.feature.badge.data.YougramBadge
+import app.yougram.feature.chat.data.CacheCategory
 import app.yougram.feature.chat.data.ChatFolderItem
 import app.yougram.feature.chat.data.ChatRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,10 +43,14 @@ data class DetailsState(
     /** Код для смены почты отправлен, ждём ввод. */
     val emailCodeSent: Boolean = false,
     val storage: StorageInfo? = null,
+    /** Размер кэша по категориям; null — ещё считается. */
+    val cacheSizes: Map<CacheCategory, Long>? = null,
     /** Каналы, которые можно выбрать личным; null — ещё не загружено. */
     val personalChats: List<PersonalChatOption>? = null,
     /** Код для смены номера отправлен, ждём ввод. */
     val phoneCodeSent: Boolean = false,
+    /** Есть ли у профиля аватарка (для кнопки «Удалить фото профиля»). */
+    val hasAvatar: Boolean = false,
     val error: String? = null,
     /** Короткое сообщение об успехе (показывается тостом и сбрасывается). */
     val notice: String? = null,
@@ -81,6 +88,18 @@ class SettingsDetailsViewModel(
     }
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
+
+    fun loadAvatarState() = launchCatching {
+        val history = chats.ownAvatarHistory()
+        _state.update { it.copy(hasAvatar = history.isNotEmpty()) }
+    }
+
+    /** Удаляет текущую аватарку; предыдущая (если есть) становится текущей. */
+    fun deleteAvatar() = launchCatching {
+        chats.deleteCurrentProfilePhoto()
+        val history = chats.ownAvatarHistory()
+        _state.update { it.copy(hasAvatar = history.isNotEmpty()) }
+    }
 
     fun loadAccount() = launchCatching {
         val info = account.loadAccount()
@@ -263,12 +282,44 @@ class SettingsDetailsViewModel(
         _state.update { it.copy(storage = info) }
     }
 
-    fun clearCache() = launchCatching {
+    /** Считает, сколько занимает кэш каждой категории (для диалога очистки). */
+    fun loadCacheSizes() {
+        sizesJob?.cancel()
+        _state.update { it.copy(cacheSizes = null) }
+        sizesJob = viewModelScope.launch {
+            // Размеры нужны только для подписей в диалоге: при сбое ошибку не показываем, а ставим прочерки.
+            val sizes = try {
+                chats.cacheSizes()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyMap()
+            }
+            _state.update { it.copy(cacheSizes = sizes) }
+        }
+    }
+
+    private var sizesJob: Job? = null
+
+    /** Очищает выбранные категории; по умолчанию — всё. */
+    fun clearCache(categories: Set<CacheCategory> = CacheCategory.entries.toSet()) = launchCatching {
+        // TDLib обрывает запрос («Request aborted»), если рядом идёт другой подсчёт статистики, поэтому ждём его конца.
+        sizesJob?.join()
         // Через ChatRepository: заодно сбрасывает предупреждение о заполненной памяти и чистит кэш самого приложения.
-        val freed = chats.clearCache()
+        val freed = try {
+            chats.clearCache(categories)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (e.message?.contains("aborted", ignoreCase = true) != true) throw e
+            // Запрос оборвали параллельным подсчётом — повторяем один раз.
+            delay(500)
+            chats.clearCache(categories)
+        }
         _state.update {
             it.copy(
                 storage = account.loadStorage(),
+                cacheSizes = null,
                 notice = app.yougram.core.i18n.tr("Кэш очищен, освобождено {0}", sizeText(freed)),
             )
         }

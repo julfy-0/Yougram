@@ -80,6 +80,7 @@ class AuthViewModel(
                 _ui.update { Ui() }
                 onDone()
             } catch (e: Exception) {
+                android.util.Log.w("YougramAuth", "auth request failed: ${e.message}")
                 _ui.update { Ui(error = humanize(e.message)) }
             }
         }

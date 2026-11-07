@@ -1,10 +1,10 @@
 {
   "id": "com.yougram.example.hello",
   "name": "Hello World",
-  "version": "2.2.0",
-  "api": "2.2",
+  "version": "2.3.0",
+  "api": "2.3",
   "author": "Yougram Example",
-  "description": "Встроенный пример C++ плагина (SDK 2.2): команда /ping отвечает текстом из настроек.",
+  "description": "Встроенный пример C++ плагина (SDK 2.3): команда /ping отвечает текстом из настроек.",
   "entry": "libyg_example_hello.so",
   "icon": "icon.png",
   "bundled": true,

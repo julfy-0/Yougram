@@ -166,7 +166,7 @@ private fun GlassButton(backdrop: BackdropState, size: Dp, onClick: () -> Unit, 
  * Тап — показать/скрыть управление, двойной тап слева/справа — ±10 с, скорость — чип справа сверху.
  */
 @Composable
-fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
+fun VideoViewerDialog(path: String, onDismiss: () -> Unit, onError: () -> Unit = onDismiss) {
     val player = remember(path) { MediaPlayer() }
     val backdrop = rememberBackdropState()
     var prepared by remember { mutableStateOf(false) }
@@ -264,7 +264,7 @@ fun VideoViewerDialog(path: String, onDismiss: () -> Unit) {
                                             controls = true
                                         }
                                         player.setOnErrorListener { _, _, _ ->
-                                            onDismiss()
+                                            onError()
                                             true
                                         }
                                         player.prepareAsync()

@@ -6,18 +6,29 @@
 
 package app.yougram.feature.chat.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
@@ -40,13 +51,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.tappableElement
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -100,10 +114,20 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.blur
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -111,19 +135,28 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.animation.core.animateFloatAsState
+import app.yougram.core.ui.DeviceTier
+import app.yougram.core.ui.rememberDeviceTier
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.yougram.core.di.AppContainer
@@ -139,6 +172,7 @@ import app.yougram.core.ui.component.rememberLinkified
 import app.yougram.core.ui.glass.LocalGlass
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.rememberBackdropState
 import app.yougram.core.ui.rememberHaptics
 import androidx.compose.runtime.mutableIntStateOf
@@ -158,6 +192,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val QuickReactions = listOf("👍", "❤️", "🔥", "😂", "😮", "😢", "👎")
 
@@ -203,6 +238,12 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
     val state by viewModel.state.collectAsState()
+    // Секретный чат: пока он открыт, окна приложения защищены от скриншотов и записи экрана.
+    val secretChat = state.isSecret
+    DisposableEffect(secretChat) {
+        if (secretChat) app.yougram.core.ui.SecureScreen.enter()
+        onDispose { if (secretChat) app.yougram.core.ui.SecureScreen.leave() }
+    }
     val prefs by settings.chatPrefs.collectAsState()
     val senders by viewModel.senders.collectAsState()
     val replies by viewModel.replies.collectAsState()
@@ -210,11 +251,19 @@ fun ChatScreen(
     val typingWatch by viewModel.typingWatch.collectAsState()
 
     val listState = rememberLazyListState()
-    val entries = remember(state.messages) { state.messages.groupAlbums() }
+    val entryCache = remember { HashMap<Long, ChatEntry>() }
+    val entries = remember(state.messages) {
+        state.messages.groupAlbums(entryCache).also { list ->
+            entryCache.clear()
+            list.forEach { entryCache[it.key] = it }
+        }
+    }
 
     var mode by remember { mutableStateOf<ComposerMode>(ComposerMode.Idle) }
     var draft by remember { mutableStateOf("") }
     var menuFor by remember { mutableStateOf<ChatEntry?>(null) }
+    var menuAnchor by remember { mutableStateOf<MessageAnchor?>(null) }
+    LaunchedEffect(menuFor) { if (menuFor == null) menuAnchor = null }
     var attachOpen by remember { mutableStateOf(false) }
     // Панель эмодзи / стикеров / GIF.
     var pickerOpen by remember { mutableStateOf(false) }
@@ -228,6 +277,117 @@ fun ChatScreen(
     var viewer by remember { mutableStateOf<Pair<List<MediaItem>, Int>?>(null) }
     var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }
     var stickerSet by remember { mutableLongStateOf(0L) }
+
+    // ── Голосовые: зажатие микрофона, свайп вверх — закреп, влево — отмена ──
+    val voiceRecorder = remember { VoiceRecorder(context) }
+    var voiceHold by remember { mutableStateOf(HOLD_NONE) } // HOLD_ACTIVE при удержании, HOLD_LOCKED после свайпа вверх
+    var voiceSeconds by remember { mutableIntStateOf(0) }
+    // Голосовое, запущенное кнопкой в панели вложений: не привязано к пальцу, Pill сразу с кнопками.
+    var voiceTapMode by remember { mutableStateOf(false) }
+    val voiceDragging = voiceHold == HOLD_ACTIVE || voiceHold == HOLD_LOCKED || voiceHold == HOLD_CANCELLED
+
+    // ── Кружки: полноэкранная запись (разрешения камеры и микрофона запрошены до показа) ──
+    var roundOpen by remember { mutableStateOf(false) }
+    var roundHold by remember { mutableStateOf(HOLD_NONE) } // зажатие кнопки кружка
+    var roundAuto by remember { mutableStateOf(false) } // окно открыто зажатием: запись стартует сама
+    val cameraPrefs by settings.camera.collectAsState()
+
+    /** Завершение записи: `send` — отправить результат, иначе отменить и удалить файл. */
+    val finishVoice = { send: Boolean ->
+        if (voiceHold != HOLD_NONE) {
+            val hold = voiceHold
+            voiceHold = HOLD_NONE
+            voiceTapMode = false
+            if (hold != HOLD_CANCELLED && send) {
+                voiceRecorder.stop()?.let { (path, seconds) ->
+                    scope.launch { viewModel.sendVoice(path, seconds) }
+                    haptics(Haptics.Kind.Confirm)
+                }
+            } else voiceRecorder.cancel()
+        }
+    }
+
+    var startVoiceRef: () -> Unit = {}
+    val voicePermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            // После выдачи разрешения пальца уже нет: пойдёт запись с Pill-кнопками (как из панели вложений).
+            voiceTapMode = true
+            startVoiceRef.invoke()
+        } else {
+            Toast.makeText(context, tr("Нужен доступ к микрофону"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Нажатие на микрофон: старт записи. Если запись уже идёт — ничего не делаем (Pill ею управляет).
+    val startVoiceTap = {
+        if (voiceHold == HOLD_NONE) {
+            val mic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (!mic) {
+                voicePermissions.launch(Manifest.permission.RECORD_AUDIO)
+            } else if (voiceRecorder.start()) {
+                focusManager.clearFocus()
+                keyboard?.hide()
+                voiceSeconds = 0
+                voiceHold = HOLD_ACTIVE
+                haptics(Haptics.Kind.Tick)
+            }
+        }
+    }
+    startVoiceRef = startVoiceTap
+
+    val roundPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[Manifest.permission.RECORD_AUDIO] != false && result[Manifest.permission.CAMERA] != false) {
+            roundOpen = true
+        } else {
+            Toast.makeText(context, tr("Нужны доступ к камере и микрофону"), Toast.LENGTH_SHORT).show()
+        }
+    }
+    // Открыть запись кружка, сначала запросив CAMERA и RECORD_AUDIO.
+    val openRound = {
+        val needed = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        val granted = needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        roundAuto = false
+        roundHold = HOLD_NONE
+        if (granted) roundOpen = true else roundPermissions.launch(needed)
+    }
+    // Зажатие кнопки кружка: сразу открываем окно и пишем. Если разрешений нет — просим, дальше обычное окно.
+    val onRoundHoldStart = {
+        val needed = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        val granted = needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (granted) {
+            focusManager.clearFocus()
+            keyboard?.hide()
+            roundAuto = true
+            roundHold = HOLD_ACTIVE
+            roundOpen = true
+            haptics(Haptics.Kind.Tick)
+        } else {
+            roundAuto = false
+            roundHold = HOLD_NONE
+            roundPermissions.launch(needed)
+        }
+    }
+    val onRoundHoldDrag = { dx: Float, dy: Float ->
+        if (roundHold == HOLD_ACTIVE) {
+            when {
+                dy < -(48 * context.resources.displayMetrics.density) -> { roundHold = HOLD_LOCKED; haptics(Haptics.Kind.Confirm) }
+                dx < -(96 * context.resources.displayMetrics.density) -> { roundHold = HOLD_CANCELLED; haptics(Haptics.Kind.Reject) }
+            }
+        }
+    }
+    val onRoundHoldRelease = {
+        if (roundHold == HOLD_ACTIVE) roundHold = HOLD_RELEASED
+    }
+
+    LaunchedEffect(voiceDragging) { // таймер и автоотправка на пределе длины (60 с)
+        if (voiceDragging) {
+            while (voiceHold != HOLD_NONE && voiceHold != HOLD_CANCELLED) {
+                kotlinx.coroutines.delay(1000)
+                voiceSeconds++
+                if (voiceSeconds >= 60) finishVoice(true)
+            }
+        }
+    }
 
     val isDirect = !threadMode && !state.isGroup && !state.isChannel && !state.isSecret && viewModel.chatId > 0L
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
@@ -255,22 +415,36 @@ fun ChatScreen(
         if (atBottom || entries.firstOrNull()?.message?.isOutgoing == true) listState.animateScrollToItem(0)
     }
 
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
+    // Файлы: можно выбрать сразу несколько — уходят вместе (альбомами документов по 10).
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            val copy = copyToCache(context, uri) ?: return@launch
-            viewModel.sendDocument(copy.path)
+            val paths = uris.mapNotNull { copyToCache(context, it)?.path }
+            if (paths.isNotEmpty()) viewModel.sendDocuments(paths)
         }
     }
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
+    // Фото/скриншоты: одно — через редактор с подписью, несколько — сразу альбомом.
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            val copy = copyToCache(context, uri) ?: return@launch
-            val mime = context.contentResolver.getType(uri).orEmpty()
-            when {
-                mime == "image/gif" -> pendingMedia = PendingMedia(copy.path, PendingKind.GIF)
-                mime.startsWith("video/") -> pendingMedia = PendingMedia(copy.path, PendingKind.VIDEO)
-                else -> pendingMedia = PendingMedia(copy.path, PendingKind.PHOTO)
+            if (uris.size == 1) {
+                val uri = uris.first()
+                val copy = copyToCache(context, uri) ?: return@launch
+                val mime = context.contentResolver.getType(uri).orEmpty()
+                when {
+                    mime == "image/gif" -> pendingMedia = PendingMedia(copy.path, PendingKind.GIF)
+                    mime.startsWith("video/") -> pendingMedia = PendingMedia(copy.path, PendingKind.VIDEO)
+                    else -> pendingMedia = PendingMedia(copy.path, PendingKind.PHOTO)
+                }
+            } else {
+                val gifs = mutableListOf<String>()
+                val photos = mutableListOf<String>()
+                uris.forEach { uri ->
+                    val path = copyToCache(context, uri)?.path ?: return@forEach
+                    if (context.contentResolver.getType(uri) == "image/gif") gifs += path else photos += path
+                }
+                if (photos.isNotEmpty()) viewModel.sendPhotos(photos)
+                if (gifs.isNotEmpty()) viewModel.sendAnimations(gifs)
             }
         }
     }
@@ -287,12 +461,45 @@ fun ChatScreen(
     val backdrop = rememberBackdropState()
     val glass = LocalGlass.current
     val density = LocalDensity.current
+
+    // Пороги свайпов записи в пикселях: вверх — 48.dp (закреп), влево — 96.dp (отмена).
+    val voiceLockPx = with(density) { 48.dp.toPx() }
+    val voiceCancelPx = with(density) { 96.dp.toPx() }
+    // Свайп во время записи: вверх — закрепить (палец можно убрать), влево — подготовить отмену.
+    val onVoiceDrag = { dx: Float, dy: Float ->
+        if (voiceHold == HOLD_ACTIVE) {
+            when {
+                dy < -voiceLockPx -> {
+                    voiceHold = HOLD_LOCKED
+                    haptics(Haptics.Kind.Confirm)
+                }
+                dx < -voiceCancelPx -> {
+                    voiceHold = HOLD_CANCELLED
+                    haptics(Haptics.Kind.Reject)
+                }
+            }
+        }
+    }
+    // Палец отпущен: обычное удержание — отправить, закреплённое — продолжаем, отмена — скрыть и удалить.
+    val onVoiceRelease = {
+        when (voiceHold) {
+            HOLD_ACTIVE -> finishVoice(true)
+            HOLD_CANCELLED -> finishVoice(false)
+            else -> Unit // после закрепа запись продолжается: завершает Pill или повторное нажатие микрофона
+        }
+    }
     var topBarPx by remember { mutableIntStateOf(0) }
     var bottomBarPx by remember { mutableIntStateOf(0) }
     // Высота выдвижных панелей (эмодзи / вложения): список едет вместе с ними через translationY, без перекомпоновки.
     var panelPx by remember { mutableIntStateOf(0) }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).imePadding()) {
+    // Размытие чата, пока открыто меню сообщения (внутри приложения — не зависит от системного blur окон).
+    val menuBlur by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (menuFor != null) 24.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(220),
+        label = "menuBlur",
+    )
+    Box(Modifier.fillMaxSize().blur(menuBlur).background(MaterialTheme.colorScheme.surface).imePadding()) {
         // Источник размытия: фон, обои и список. Панели внутрь класть нельзя — они лежат сверху отдельными слоями.
         // Фон должен быть внутри источника (после backdropSource): иначе размытая копия прозрачная и под панелями виден чёткий список.
         Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.surface)) {
@@ -333,9 +540,10 @@ fun ChatScreen(
                         senders = senders,
                         replies = replies,
                         onOpenMedia = { items, index -> viewer = items to index },
-                        onOpenProfile = onOpenProfile,
+                        // Автор-пользователь: сначала создаём личный чат, иначе кнопка «Чат» в профиле даёт «Chat not found».
+                        onOpenProfile = { key -> viewModel.openSender(key, onOpenProfile) },
                         onOpenComments = onOpenComments,
-                        onLongPress = { menuFor = it },
+                        onLongPress = { e, a -> menuAnchor = a; menuFor = e },
                         onReact = { id, emoji -> viewModel.react(id, emoji); haptics(Haptics.Kind.Click) },
                         onReplyTap = { viewModel.jumpTo(it) },
                         onSwipeReply = { mode = ComposerMode.Reply(it); haptics(Haptics.Kind.Tick) },
@@ -345,10 +553,12 @@ fun ChatScreen(
 
         }
 
-        // Верхняя стеклянная панель (шапка + закреп).
+        val chatBarTint = app.yougram.core.ui.glass.barTint()
+
+        // Верхняя стеклянная панель (шапка + закреп): скруглена снизу.
         Column(
             Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                .glass(backdrop, glass, RectangleShape)
+                .glassTopBar(backdrop, glass, tint = chatBarTint)
                 .onSizeChanged { topBarPx = it.height },
         ) {
             ChatTopBar(
@@ -378,11 +588,11 @@ fun ChatScreen(
 
         }
 
-        // Нижняя стеклянная панель (поле ввода / вступить / только чтение).
+        // Нижняя стеклянная панель (поле ввода / вступить / только чтение): скруглена сверху.
         Box(
             Modifier.align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .glass(backdrop, glass, RectangleShape)
+                .glass(backdrop, glass, app.yougram.core.ui.glass.BottomBarShape, tint = chatBarTint)
                 .onSizeChanged { bottomBarPx = it.height },
         ) {
             when {
@@ -395,6 +605,18 @@ fun ChatScreen(
                 !state.canSendMessages -> ReadOnlyBar()
 
                 else -> Column {
+                    // Пилюля записи голосового: вместо поля ввода — индикатор, таймер и кнопки завершения.
+                    AnimatedVisibility(visible = voiceDragging, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                        VoiceRecordingBar(
+                            seconds = voiceSeconds,
+                            locked = voiceHold == HOLD_LOCKED || voiceHold == HOLD_CANCELLED,
+                            tapMode = voiceTapMode,
+                            cancelled = voiceHold == HOLD_CANCELLED,
+                            onSend = { finishVoice(true) },
+                            onCancel = { finishVoice(false) },
+                        )
+                    }
+
                     Composer(
                         mode = mode,
                         draft = draft,
@@ -406,6 +628,14 @@ fun ChatScreen(
                         paidStars = state.paidMessageStars,
                         pickerOpen = pickerOpen,
                         attachOpen = attachOpen,
+                        voiceRecording = voiceDragging,
+                        onVoicePress = startVoiceTap,
+                        onVoiceDrag = onVoiceDrag,
+                        onVoiceRelease = onVoiceRelease,
+                        onRoundClick = openRound,
+                        onRoundHoldStart = onRoundHoldStart,
+                        onRoundHoldDrag = onRoundHoldDrag,
+                        onRoundHoldRelease = onRoundHoldRelease,
                         onTogglePicker = {
                             if (pickerOpen) {
                                 pickerOpen = false
@@ -509,8 +739,12 @@ fun ChatScreen(
                                     onMedia = { attachOpen = false; pickMedia.launch("image/*") },
                                     onPoll = { attachOpen = false; pollOpen = true },
                                     onLocation = { attachOpen = false },
-                                    onVoice = { attachOpen = false },
-                                    onRound = { attachOpen = false },
+                                    onVoice = {
+                                        attachOpen = false
+                                        voiceTapMode = true
+                                        startVoiceTap()
+                                    },
+                                    onRound = { attachOpen = false; openRound() },
                                 )
                                 Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
                             }
@@ -537,6 +771,22 @@ fun ChatScreen(
     }
 
     // ───── диалоги и панели ─────
+    if (roundOpen) {
+        VideoNoteRecorderDialog(
+            onSend = { path, seconds, length ->
+                roundOpen = false
+                roundHold = HOLD_NONE
+                roundAuto = false
+                scope.launch { viewModel.sendVideoNote(path, seconds, length) }
+                haptics(Haptics.Kind.Confirm)
+            },
+            onDismiss = { roundOpen = false; roundHold = HOLD_NONE; roundAuto = false },
+            autoStart = roundAuto,
+            hold = roundHold,
+            camera = cameraPrefs,
+        )
+    }
+
     if (pollOpen) {
         PollDialog(
             onDismiss = { pollOpen = false },
@@ -591,9 +841,24 @@ fun ChatScreen(
             onDelete = { viewModel.delete(m.id); menuFor = null },
             onShadowBan = { menuFor = null },
             onToggleTypingWatch = { menuFor = null },
+            onCopy = if (m.text.isNotEmpty()) ({ copyToClipboard(context, m.text); menuFor = null }) else null,
+            onCopyLink = {
+                menuFor = null
+                scope.launch {
+                    val link = viewModel.messageLink(m.id)
+                    if (link != null) copyToClipboard(context, link)
+                    else Toast.makeText(context, tr("Ссылка недоступна"), Toast.LENGTH_SHORT).show()
+                }
+            },
             chatId = viewModel.chatId,
+            anchor = menuAnchor,
         )
     }
+}
+
+private fun copyToClipboard(context: android.content.Context, text: String) {
+    val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+    cm?.setPrimaryClip(android.content.ClipData.newPlainText("YouGram", text))
 }
 
 @Composable
@@ -742,31 +1007,53 @@ private fun MessageList(
     onOpenMedia: (List<MediaItem>, Int) -> Unit,
     onOpenProfile: (Long) -> Unit,
     onOpenComments: (Long, Long) -> Unit,
-    onLongPress: (ChatEntry) -> Unit,
+    onLongPress: (ChatEntry, MessageAnchor) -> Unit,
     onReact: (Long, String) -> Unit,
     onReplyTap: (Long) -> Unit,
     onSwipeReply: (MessageItem) -> Unit,
 ) {
+    val motion = MaterialTheme.motionScheme
+    val lowTier = rememberDeviceTier() == DeviceTier.Low
     LazyColumn(
         state = listState,
         reverseLayout = true,
         modifier = Modifier.fillMaxSize().graphicsLayer { translationY = -bottomShift() },
-        // reverseLayout: «top» списка — это низ экрана, поэтому отступы поменяны местами в терминах контента.
+        // contentPadding физический и при reverseLayout не меняется местами: top — у верхней панели, bottom — у нижней.
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = 8.dp, end = 8.dp,
-            top = bottomPad + 8.dp,
-            bottom = topPad + 8.dp,
+            top = topPad + 8.dp,
+            bottom = bottomPad + 8.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items(entries.size, key = { entries[it].key }) { index ->
+        items(
+            count = entries.size,
+            key = { entries[it].key },
+            // Тип контента: Compose переиспользует разметку пузырей одного вида, а не пересобирает с нуля.
+            contentType = {
+                val e = entries[it]
+                when {
+                    e.message.isService -> 0
+                    e.albumMedia.size > 1 -> 1
+                    e.message.media != null -> 2
+                    else -> 3
+                }
+            },
+        ) { index ->
             val entry = entries[index]
             val older = entries.getOrNull(index + 1)      // reverseLayout: следующий в списке — более старый
             val newer = entries.getOrNull(index - 1)
             val m = entry.message
 
             // Разделитель даты показываем над первым сообщением дня (визуально выше → рисуется после в reverse).
-            Column {
+            // animateItem: удалённое сообщение плавно гаснет, а соседние мягко сдвигаются на его место.
+            Column(
+                if (lowTier) Modifier else Modifier.animateItem(
+                    fadeInSpec = motion.defaultEffectsSpec(),
+                    placementSpec = motion.defaultSpatialSpec(),
+                    fadeOutSpec = motion.fastEffectsSpec(),
+                ),
+            ) {
                 if (older == null || !sameDay(older.message.date, m.date)) DateChip(m.date)
 
                 if (m.isService) {
@@ -792,6 +1079,7 @@ private fun MessageList(
                         edited = state.edits.containsKey(m.id),
                         read = (state.readAt[m.id] ?: 0) > 0,
                         deleted = m.id in state.deletedIds,
+                        vanishing = m.id in state.vanishingIds,
                         textSize = textSize,
                         radius = bubbleRadius,
                         replyPreview = m.reply?.let { replies[it.messageId] },
@@ -799,10 +1087,11 @@ private fun MessageList(
                         onOpenMedia = onOpenMedia,
                         onOpenProfile = onOpenProfile,
                         onOpenComments = onOpenComments,
-                        onLongPress = { onLongPress(entry) },
+                        onLongPress = { a -> onLongPress(entry, a) },
                         onReact = { emoji -> onReact(m.id, emoji) },
                         onReplyTap = { m.reply?.messageId?.let(onReplyTap) },
                         onDoubleTap = { onSwipeReply(m) },
+                        onSwipeReply = { onSwipeReply(m) },
                     )
                 }
             }
@@ -822,6 +1111,7 @@ private fun MessageRow(
     edited: Boolean,
     read: Boolean,
     deleted: Boolean,
+    vanishing: Boolean,
     textSize: Int,
     radius: Int,
     replyPreview: app.yougram.feature.chat.data.ReplyPreview?,
@@ -829,10 +1119,11 @@ private fun MessageRow(
     onOpenMedia: (List<MediaItem>, Int) -> Unit,
     onOpenProfile: (Long) -> Unit,
     onOpenComments: (Long, Long) -> Unit,
-    onLongPress: () -> Unit,
+    onLongPress: (MessageAnchor) -> Unit,
     onReact: (String) -> Unit,
     onReplyTap: () -> Unit,
     onDoubleTap: () -> Unit,
+    onSwipeReply: () -> Unit,
 ) {
     val m = entry.message
     val scheme = MaterialTheme.colorScheme
@@ -843,6 +1134,25 @@ private fun MessageRow(
 
     val big = radius.dp
     val small = 6.dp
+
+    // ── Свайп сообщения: быстрый ответ как в Telegram ──
+    // Исходящее сдвигается влево, входящее — вправо: в сторону автора. Перешли порог — нацепился «реплай».
+    val replyThreshold = with(LocalDensity.current) { 64.dp.toPx() }
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
+    var swipeArmed by remember { mutableStateOf(false) }
+    var swipeSettle by remember { mutableIntStateOf(0) }
+    val swipeDir = if (mine) -1f else 1f
+    LaunchedEffect(swipeSettle) {
+        if (swipeSettle > 0 && swipeOffset != 0f) {
+            animate(
+                initialValue = swipeOffset,
+                targetValue = 0f,
+                animationSpec = spring(stiffness = 450f, dampingRatio = 0.85f),
+            ) { value, _ -> swipeOffset = value }
+            swipeArmed = false
+        }
+    }
+
     // «Хвост» — малое скругление у нижнего угла со стороны автора; внутри серии — малое с обеих сторон.
     val shape: Shape = if (mine) {
         RoundedCornerShape(
@@ -858,8 +1168,49 @@ private fun MessageRow(
         ).let { if (m.hasComments) RoundedCornerShape(topEnd = big, topStart = if (tailTop) small else big, bottomEnd = small, bottomStart = small) else it }
     }
 
+    // Растворение при удалении: пузырь чуть уменьшается к стороне автора, гаснет и уезжает за край.
+    val vanish by animateFloatAsState(
+        targetValue = if (vanishing) 1f else 0f,
+        animationSpec = tween(ChatViewModel.VANISH_MS, easing = FastOutSlowInEasing),
+        label = "vanish",
+    )
+    // Снимок сообщения для меню: при долгом тапе оно рисуется чётко поверх размытого фона.
+    val captureLayer = rememberGraphicsLayer()
+    val coordsRef = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    var capturing by remember { mutableStateOf(false) }
+    val captureScope = rememberCoroutineScope()
+    val fireLongPress: () -> Unit = {
+        captureScope.launch {
+            // Слой пишется только на время снимка: в обычной отрисовке лишней работы нет.
+            capturing = true
+            withFrameNanos { }
+            withFrameNanos { }
+            val bmp = runCatching { captureLayer.toImageBitmap() }.getOrNull()
+            capturing = false
+            val pos = coordsRef[0]?.takeIf { it.isAttached }?.positionOnScreen()
+            onLongPress(
+                MessageAnchor(
+                    pos ?: androidx.compose.ui.geometry.Offset.Zero,
+                    captureLayer.size,
+                    if (pos != null) bmp else null,
+                ),
+            )
+        }
+    }
     Row(
-        Modifier.fillMaxWidth().padding(top = if (tailTop) 0.dp else 6.dp),
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                if (vanish > 0f) {
+                    alpha = 1f - vanish
+                    val k = 1f - 0.12f * vanish
+                    scaleX = k
+                    scaleY = k
+                    transformOrigin = TransformOrigin(if (mine) 1f else 0f, 0.5f)
+                    translationX = (if (mine) 1f else -1f) * 24.dp.toPx() * vanish
+                }
+            }
+            .padding(top = if (tailTop) 0.dp else 6.dp),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom,
     ) {
@@ -877,127 +1228,183 @@ private fun MessageRow(
         }
 
         Column(
-            Modifier.widthIn(max = 320.dp).width(IntrinsicSize.Max),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Surface(
-                color = if (deleted) scheme.errorContainer.copy(alpha = 0.6f) else container,
-                contentColor = content,
-                shape = shape,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(shape)
-                    .combinedClickable(onClick = {}, onLongClick = onLongPress, onDoubleClick = onDoubleTap),
-            ) {
-                Column(Modifier.padding(vertical = 6.dp, horizontal = 4.dp)) {
-                    if (showSender && sender != null) {
-                        Text(
-                            sender.name,
-                            modifier = Modifier.padding(horizontal = 8.dp).combinedClickable(onClick = { onOpenProfile(sender.key) }),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = scheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    m.forward?.let { f ->
-                        Text(
-                            tr("Переслано от %s", f.hiddenName.ifEmpty { f.signature.ifEmpty { tr("неизвестного") } }),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.tertiary,
-                        )
-                    }
-
-                    if (m.reply != null) {
-                        ReplyQuote(
-                            author = replyPreview?.author.orEmpty(),
-                            text = replyPreview?.text ?: "…",
-                            onClick = onReplyTap,
-                            tint = if (mine) scheme.primary else scheme.secondary,
-                            background = content.copy(alpha = 0.08f),
-                        )
-                    }
-
-                    // Медиа
-                    if (entry.albumMedia.size > 1) {
-                        Box(Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(18.dp))) {
-                            AlbumMedia(entry.albumMedia, viewModel) { clicked ->
-                                onOpenMedia(entry.albumMedia, entry.albumMedia.indexOf(clicked).coerceAtLeast(0))
-                            }
-                        }
+            Modifier
+                .widthIn(max = 320.dp)
+                .width(IntrinsicSize.Max)
+                .onGloballyPositioned { coordsRef[0] = it }
+                .drawWithContent {
+                    if (capturing) {
+                        captureLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(captureLayer)
                     } else {
-                        m.media?.let { media ->
-                            val rounded = media.kind == MediaKind.PHOTO || media.kind == MediaKind.VIDEO ||
-                                    media.kind == MediaKind.ANIMATION
-                            Box(Modifier.padding(horizontal = 2.dp).let { if (rounded) it.clip(RoundedCornerShape(18.dp)) else it }) {
-                                MessageMedia(media, viewModel, onOpenPhoto = { onOpenMedia(listOf(it), 0) })
+                        drawContent()
+                    }
+                },
+            verticalArrangement = Arrangement.spacedBy(if (m.hasComments) 0.dp else 2.dp),
+        ) {
+            Box(
+                Modifier.fillMaxWidth(),
+                contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart,
+            ) {
+                // Подсказка за пузырём: стрелка реплая проявляется по мере свайпа.
+                Icon(
+                    Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = tr("Ответить"),
+                    tint = scheme.primary,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .graphicsLayer {
+                            val t = (swipeOffset / replyThreshold).coerceIn(0f, 1f)
+                            alpha = t
+                            scaleX = 0.6f + 0.4f * t
+                            scaleY = 0.6f + 0.4f * t
+                        },
+                )
+                Surface(
+                    color = if (deleted) scheme.errorContainer.copy(alpha = 0.6f) else container,
+                    contentColor = content,
+                    shape = shape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset((swipeOffset * swipeDir).roundToInt(), 0) }
+                        .clip(shape)
+                        .longPressFirst(m.id, fireLongPress)
+                        .combinedClickable(onClick = {}, onDoubleClick = onDoubleTap)
+                        .pointerInput(m.id, swipeDir) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    swipeSettle++
+                                    if (swipeArmed) {
+                                        swipeArmed = false
+                                        onSwipeReply()
+                                    }
+                                },
+                                onDragCancel = { swipeSettle++ },
+                            ) { change, amount ->
+                                change.consume()
+                                swipeOffset = (swipeOffset + amount * swipeDir).coerceAtLeast(0f)
+                                swipeArmed = swipeArmed || swipeOffset >= replyThreshold
+                            }
+                        },
+                ) {
+                    Column(Modifier.padding(top = 6.dp, bottom = if (m.hasComments) 2.dp else 6.dp, start = 4.dp, end = 4.dp)) {
+                        if (showSender && sender != null) {
+                            Text(
+                                sender.name,
+                                modifier = Modifier.padding(horizontal = 8.dp).combinedClickable(onClick = { onOpenProfile(sender.key) }),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = scheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+
+                        m.forward?.let { f ->
+                            Text(
+                                tr("Переслано от %s", f.hiddenName.ifEmpty { f.signature.ifEmpty { tr("неизвестного") } }),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = scheme.tertiary,
+                            )
+                        }
+
+                        if (m.reply != null) {
+                            ReplyQuote(
+                                author = replyPreview?.author.orEmpty(),
+                                text = replyPreview?.text ?: "…",
+                                onClick = onReplyTap,
+                                tint = if (mine) scheme.primary else scheme.secondary,
+                                background = content.copy(alpha = 0.08f),
+                            )
+                        }
+
+                        // Медиа
+                        if (entry.albumMedia.size > 1) {
+                            Box(Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(18.dp))) {
+                                AlbumMedia(entry.albumMedia, viewModel) { clicked ->
+                                    onOpenMedia(entry.albumMedia, entry.albumMedia.indexOf(clicked).coerceAtLeast(0))
+                                }
+                            }
+                        } else {
+                            m.media?.let { media ->
+                                val rounded = media.kind == MediaKind.PHOTO || media.kind == MediaKind.VIDEO ||
+                                        media.kind == MediaKind.ANIMATION
+                                Box(Modifier.padding(horizontal = 2.dp).let { if (rounded) it.clip(RoundedCornerShape(18.dp)) else it }) {
+                                    MessageMedia(media, viewModel, onOpenPhoto = { onOpenMedia(listOf(it), 0) })
+                                }
                             }
                         }
-                    }
 
-                    m.poll?.let {
-                        PollMessage(
-                            poll = it,
-                            messageId = m.id,
-                            viewModel = viewModel,
-                            canStop = mine,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-                    }
-
-                    // Текст + время в одну строку, если помещается
-                    val context = LocalContext.current
-                    val annotated = rememberLinkified(
-                        text = m.text,
-                        linkColor = scheme.primary,
-                        onOpen = { openExternally(context, it) },
-                        emojis = m.emojis,
-                        links = m.links,
-                    )
-                    if (m.text.isNotEmpty()) {
-                        Column(Modifier.padding(horizontal = 8.dp)) {
-                            ClickableText(
-                                text = annotated,
-                                style = MaterialTheme.typography.bodyLarge.copy(color = content, fontSize = textSize.sp),
-                                onClick = { offset ->
-                                    annotated.getStringAnnotations(start = offset, end = offset).firstOrNull()
-                                        ?.let { openExternally(context, it.item) }
-                                },
+                        m.poll?.let {
+                            PollMessage(
+                                poll = it,
+                                messageId = m.id,
+                                viewModel = viewModel,
+                                canStop = mine,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
-                    }
 
-                    if (m.buttons.isNotEmpty()) {
-                        InlineKeyboard(
-                            message = m,
-                            viewModel = viewModel,
-                            mine = mine,
-                            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                        // Текст + время в одну строку, если помещается
+                        val context = LocalContext.current
+                        val annotated = rememberLinkified(
+                            text = m.text,
+                            linkColor = scheme.primary,
+                            onOpen = { openExternally(context, it) },
+                            emojis = m.emojis,
+                            links = m.links,
                         )
-                    }
+                        if (m.text.isNotEmpty()) {
+                            Column(Modifier.padding(horizontal = 8.dp)) {
+                                ClickableText(
+                                    text = annotated,
+                                    style = MaterialTheme.typography.bodyLarge.copy(color = content, fontSize = textSize.sp),
+                                    onClick = { offset ->
+                                        annotated.getStringAnnotations(start = offset, end = offset).firstOrNull()
+                                            ?.let { openExternally(context, it.item) }
+                                    },
+                                )
+                            }
+                        }
 
-                    if (m.reactions.isNotEmpty()) {
-                        ReactionsRow(m, onReact, contentColor = content, chosenColor = scheme.primary)
-                    }
-
-                    // Мета-строка
-                    Row(
-                        Modifier.align(Alignment.End).padding(end = 8.dp, top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (edited) Text(tr("изм."), style = MaterialTheme.typography.labelSmall, color = muted)
-                        if (edited) Spacer(Modifier.size(4.dp))
-                        Text(timeOf(m.date), style = MaterialTheme.typography.labelSmall, color = muted)
-                        if (mine) {
-                            Spacer(Modifier.size(4.dp))
-                            Icon(
-                                if (read) Icons.Filled.DoneAll else Icons.Filled.Done,
-                                contentDescription = null,
-                                tint = if (read) scheme.primary else muted,
-                                modifier = Modifier.size(14.dp),
+                        if (m.buttons.isNotEmpty()) {
+                            InlineKeyboard(
+                                message = m,
+                                viewModel = viewModel,
+                                mine = mine,
+                                modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
                             )
+                        }
+
+                        // Реакции слева и время справа — в одной строке, без пустоты рядом со временем.
+                        Row(
+                            Modifier.fillMaxWidth().padding(end = 8.dp),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            if (m.reactions.isNotEmpty()) {
+                                Box(Modifier.weight(1f)) {
+                                    ReactionsRow(m, onReact, contentColor = content, chosenColor = scheme.primary)
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                            Row(
+                                Modifier.padding(start = 6.dp, bottom = if (m.reactions.isNotEmpty()) 6.dp else 0.dp, top = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (edited) Text(tr("изм."), style = MaterialTheme.typography.labelSmall, color = muted)
+                                if (edited) Spacer(Modifier.size(4.dp))
+                                Text(timeOf(m.date), style = MaterialTheme.typography.labelSmall, color = muted)
+                                if (mine) {
+                                    Spacer(Modifier.size(4.dp))
+                                    Icon(
+                                        if (read) Icons.Filled.DoneAll else Icons.Filled.Done,
+                                        contentDescription = null,
+                                        tint = if (read) scheme.primary else muted,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1014,7 +1421,7 @@ private fun MessageRow(
                     color = container,
                     contentColor = content,
                     shape = commentsShape,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().longPressFirst(m.id, fireLongPress),
                 ) {
                     Row(
                         Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp, vertical = 6.dp),
@@ -1126,6 +1533,14 @@ private fun Composer(
     paidStars: Long,
     pickerOpen: Boolean,
     attachOpen: Boolean = false,
+    voiceRecording: Boolean = false,
+    onVoicePress: () -> Unit = {},
+    onVoiceDrag: (Float, Float) -> Unit = { _, _ -> },
+    onVoiceRelease: () -> Unit = {},
+    onRoundClick: () -> Unit = {},
+    onRoundHoldStart: () -> Unit = {},
+    onRoundHoldDrag: (Float, Float) -> Unit = { _, _ -> },
+    onRoundHoldRelease: () -> Unit = {},
     onTogglePicker: () -> Unit,
     onFieldFocus: () -> Unit,
     onAttach: () -> Unit,
@@ -1139,7 +1554,11 @@ private fun Composer(
     Surface(
         color = Color.Transparent,
         modifier = Modifier.fillMaxWidth()
-            .let { if (imeVisible || pickerOpen || attachOpen) it else it.windowInsetsPadding(WindowInsets.navigationBars) },
+            // Жестовая навигация (tappableElement = 0) не добавляет отступ: расстояние от кнопок до низа панели равно боковому.
+            .let {
+                if (imeVisible || pickerOpen || attachOpen) it
+                else it.padding(bottom = WindowInsets.tappableElement.asPaddingValues().calculateBottomPadding())
+            },
     ) {
         Column {
             AnimatedVisibility(
@@ -1167,7 +1586,7 @@ private fun Composer(
             }
 
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 26.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 FilledIconButton(
@@ -1231,6 +1650,7 @@ private fun Composer(
                 // Отправить / голосовое / кружок. Переключение голосовое ↔ кружок — как у тайлов быстрых настроек:
                 // круг превращается в скруглённый квадрат (пружина), цвет перетекает, иконка гаснет и появляется заново.
                 val kind = when {
+                    voiceRecording -> ComposerButtonKind.Voice // во время записи кнопка ничего не активирует: завершает Pill
                     hasText && mode is ComposerMode.Edit -> ComposerButtonKind.Confirm
                     hasText -> ComposerButtonKind.Send
                     videoMode -> ComposerButtonKind.Round
@@ -1270,9 +1690,66 @@ private fun Composer(
                     label = "composerContent",
                 )
 
+                // Жест голосового: тап — переключить на кружок, удержание ≥280 мс — запись,
+                // свайп вверх во время записи — закреп, влево — отмена, отпустил — отправка.
+                // pointerInput ловит всё удержание целиком: onClick у кнопки в режиме Voice отключён.
+                val holdScope = rememberCoroutineScope()
+                // Свежие лямбды: pointerInput живёт между перекомпоновками и иначе держал бы устаревшие.
+                val pressV by rememberUpdatedState(onVoicePress)
+                val dragV by rememberUpdatedState(onVoiceDrag)
+                val releaseV by rememberUpdatedState(onVoiceRelease)
+                val pressR by rememberUpdatedState(onRoundHoldStart)
+                val dragR by rememberUpdatedState(onRoundHoldDrag)
+                val releaseR by rememberUpdatedState(onRoundHoldRelease)
+                val holdGesture = if (kind == ComposerButtonKind.Voice || kind == ComposerButtonKind.Round) {
+                    val isRound = kind == ComposerButtonKind.Round
+                    Modifier.pointerInput(isRound) {
+                        awaitEachGesture {
+                            // requireUnconsumed = false: внутренний clickable IconButton успевает поглотить нажатие.
+                            awaitFirstDown(requireUnconsumed = false)
+                            var recording = false
+                            var totalX = 0f
+                            var totalY = 0f
+                            // Старт записи откладываем: обычный тап не должен начинать запись.
+                            val holdJob = holdScope.launch {
+                                kotlinx.coroutines.delay(280)
+                                recording = true
+                                if (isRound) pressR() else pressV()
+                            }
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.none { it.pressed }) {
+                                    holdJob.cancel()
+                                    break
+                                }
+                                if (recording) {
+                                    event.changes.firstOrNull()?.let {
+                                        val delta = it.positionChange()
+                                        totalX += delta.x
+                                        totalY += delta.y
+                                        // Пороги заданы для смещения от точки нажатия, поэтому передаём накопленное.
+                                        if (isRound) dragR(totalX, totalY) else dragV(totalX, totalY)
+                                    }
+                                }
+                            }
+                            if (recording) {
+                                if (isRound) releaseR() else releaseV()
+                            } else videoMode = !videoMode // короткий тап: микрофон ↔ кружок
+                        }
+                    }
+                } else Modifier
+
                 FilledIconButton(
-                    onClick = { if (hasText) onSend() else videoMode = !videoMode },
-                    modifier = Modifier.size(ComposerHeight),
+                    onClick = {
+                        when (kind) {
+                            // Голосовое и кружок живут в holdGesture: тап = смена режима, удержание = запись.
+                            ComposerButtonKind.Round, ComposerButtonKind.Voice -> {}
+                            else -> {
+                                if (hasText) onSend() else videoMode = !videoMode
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(ComposerHeight).then(holdGesture),
                     shape = buttonShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = container,
@@ -1320,6 +1797,79 @@ private fun JoinBar(channel: Boolean, joining: Boolean, onJoin: () -> Unit) {
         ) {
             FilledTonalButton(onClick = onJoin, enabled = !joining) {
                 Text(if (channel) "Подписаться" else "Вступить")
+            }
+        }
+    }
+}
+
+/** Пилюля записи голосового: пульсирующий индикатор, таймер и подсказка про свайпы. */
+@Composable
+private fun VoiceRecordingBar(
+    seconds: Int,
+    locked: Boolean,
+    tapMode: Boolean,
+    cancelled: Boolean,
+    onSend: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val pulse = rememberInfiniteTransition(label = "voicePulse")
+    val dotAlpha by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "voiceDotAlpha",
+    )
+    val showButtons = locked || tapMode
+
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Красный индикатор: пульсирует, в режиме отмены — статичный приглушённый.
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .alpha(if (cancelled) 0.4f else dotAlpha)
+                    .background(if (cancelled) scheme.errorContainer else scheme.error),
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                "%d:%02d".format(seconds / 60, seconds % 60),
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurface,
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                when {
+                    cancelled -> tr("Отменяю…")
+                    locked -> tr("Запись закреплена")
+                    else -> tr("Вверх — закрепить, влево — отмена")
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (showButtons) {
+                IconButton(onClick = onCancel) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = tr("Отмена"),
+                        tint = scheme.error,
+                    )
+                }
+                FilledIconButton(
+                    onClick = onSend,
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = scheme.primary),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = tr("Отправить"), tint = scheme.onPrimary)
+                }
             }
         }
     }

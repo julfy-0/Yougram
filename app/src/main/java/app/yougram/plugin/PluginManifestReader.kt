@@ -5,7 +5,7 @@ import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Чтение и проверка manifest.json (API 2.1 и 2.2). */
+/** Чтение и проверка manifest.json (API 2.1–2.3). */
 object PluginManifestReader {
     private val SETTING_KEY = Regex("[a-z0-9_]{1,40}")
     private const val MAX_SETTINGS = 50

@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -121,6 +122,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -133,6 +139,7 @@ import app.yougram.core.ui.glass.BackdropState
 import app.yougram.core.ui.glass.LocalPlates
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.rememberBackdropState
 import app.yougram.feature.calls.ui.CallsScreen
 import app.yougram.feature.calls.ui.CallsViewModel
@@ -850,7 +857,7 @@ private fun GlassTopBar(
                         (if (stories.isNotEmpty()) StoriesBarHeight else 0.dp) +
                         (if (folders.isNotEmpty()) FolderBarHeight else 0.dp),
             )
-            .glass(backdrop, glass, RectangleShape)
+            .glassTopBar(backdrop, glass)
             // Хэллоуинские частички: только в верхней панели, под её содержимым.
             .halloweenFall(speedScale = 3f),
     ) {
@@ -1031,24 +1038,43 @@ private fun FolderTabs(
     onSelect: (Int?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scroll = rememberScrollState()
+    var viewportPx by remember { mutableIntStateOf(0) }
+    // Положение и ширина каждой вкладки внутри прокручиваемого ряда (ключ: id папки, null = «Все»).
+    val bounds = remember { mutableStateMapOf<Int?, IntRange>() }
+    val sel = bounds[selected]
+    // Открытая папка всегда по центру: при смене (в том числе свайпом по списку) вкладки плавно докручиваются.
+    LaunchedEffect(selected, sel, viewportPx) {
+        val range = sel ?: return@LaunchedEffect
+        if (viewportPx == 0) return@LaunchedEffect
+        val center = (range.first + range.last) / 2
+        scroll.animateScrollTo((center - viewportPx / 2).coerceAtLeast(0))
+    }
     Row(
         modifier
             .fillMaxWidth()
             .height(FolderBarHeight)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
+            .onSizeChanged { viewportPx = it.width }
+            .horizontalScroll(scroll)
+            .padding(start = 20.dp, end = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FolderChip("Все", selected == null, unread[null] ?: 0) { onSelect(null) }
+        FolderChip(
+            "Все", selected == null, unread[null] ?: 0,
+            Modifier.onGloballyPositioned { bounds[null] = it.positionInParent().x.toInt()..(it.positionInParent().x.toInt() + it.size.width) },
+        ) { onSelect(null) }
         folders.forEach { folder ->
-            FolderChip(folder.title, selected == folder.id, unread[folder.id] ?: 0) { onSelect(folder.id) }
+            FolderChip(
+                folder.title, selected == folder.id, unread[folder.id] ?: 0,
+                Modifier.onGloballyPositioned { bounds[folder.id] = it.positionInParent().x.toInt()..(it.positionInParent().x.toInt() + it.size.width) },
+            ) { onSelect(folder.id) }
         }
     }
 }
 
 @Composable
-private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: () -> Unit) {
+private fun FolderChip(text: String, selected: Boolean, unread: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val motion = MaterialTheme.motionScheme
     // Выбранная папка становится «таблеткой», остальные — более квадратными (connected button group).
     val interaction = remember { MutableInteractionSource() }
@@ -1080,13 +1106,13 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
         shape = RoundedCornerShape(corner.coerceIn(0, 50)),
         color = container,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.semantics {
+        modifier = modifier.semantics {
             role = Role.Tab
             this.selected = selected
         },
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            Modifier.padding(start = 18.dp, end = if (unread > 0) 10.dp else 18.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1100,12 +1126,22 @@ private fun FolderChip(text: String, selected: Boolean, unread: Int, onClick: ()
                 Surface(
                     shape = CircleShape,
                     color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 6.dp),
+                    modifier = Modifier.padding(start = 8.dp),
                 ) {
                     Text(
                         if (unread > 99) "99+" else unread.toString(),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .defaultMinSize(minWidth = 22.dp, minHeight = 22.dp)
+                            .padding(horizontal = 6.dp)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                            lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                                alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                                trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                            ),
+                        ),
                         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,
                     )
                 }

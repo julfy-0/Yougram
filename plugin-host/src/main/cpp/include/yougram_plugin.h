@@ -1,5 +1,5 @@
 /*
- * Yougram Plugin SDK 2.2 (C ABI, YG_PLUGIN_API_VERSION 2, minor 2). Хост принимает плагины API 2.1 и 2.2.
+ * Yougram Plugin SDK 2.3 (C ABI, YG_PLUGIN_API_VERSION 2, minor 3). Хост принимает плагины API 2.1, 2.2 и 2.3.
  *
  * Плагин — shared-библиотека (.so) с экспортом yougram_plugin_entry(). Интерфейс — чистый C.
  * Пакет .ygplugin — zip: manifest.json + lib/<abi>/<entry>.
@@ -9,8 +9,9 @@
  *     "id": "com.example.plugin",            // [A-Za-z0-9][A-Za-z0-9._-]{0,119}
  *     "name": "Мой плагин",
  *     "version": "1.0.0",
- *     "api": "2.2",                          // допустимо "2.1" и "2.2"; 1.x и 2.0 не устанавливаются
- *     "icon": "icon.png",                    // необязательно: png/webp/jpg в пакете, до 512 КБ, лучше 256x256
+ *     "api": "2.3",                          // допустимо "2.1", "2.2" и "2.3"; 1.x и 2.0 не устанавливаются
+ *     "icon": "icon.png",                    // необязательно: png/webp/jpg (до 512 КБ, лучше 256x256)
+ *                                          // или, с API 2.3, icon.svg / icon.xml (Android vector, до 64 КБ): красится в цвет темы
  *     "author": "...", "description": "...",
  *     "entry": "libplugin.so",
  *     "priority": 0,                         // -100..100, больше = раньше в цепочке хуков
@@ -104,7 +105,7 @@ extern "C" {
 #endif
 
 #define YG_PLUGIN_API_VERSION 2u
-#define YG_PLUGIN_API_MINOR   2u
+#define YG_PLUGIN_API_MINOR   3u
 
 #define YG_LOG_DEBUG 0
 #define YG_LOG_INFO  1

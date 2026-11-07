@@ -97,7 +97,7 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
         SettingGroup {
             item { SettingRow("Использование памяти", icon = Icons.Filled.Storage, value = storage?.let { size(it.filesBytes + it.databaseBytes) } ?: "…") }
             item { SettingRow("Использование трафика", icon = Icons.Filled.BarChart, value = size(traffic)) }
-            item { SettingRow("Очистить кэш", subtitle = "Файлы можно скачать заново", icon = Icons.Filled.Delete, onClick = { dialog = DataDialog.ClearCache }) }
+            item { SettingRow("Очистить кэш", subtitle = "Файлы можно скачать заново", icon = Icons.Filled.Delete, onClick = { viewModel.loadCacheSizes(); dialog = DataDialog.ClearCache }) }
         }
 
         SectionLabel("Лимиты памяти")
@@ -170,12 +170,11 @@ fun DataStorageScreen(viewModel: SettingsDetailsViewModel, settings: SettingsRep
     }
 
     when (dialog) {
-        DataDialog.ClearCache -> ConfirmDialog(
-            title = "Очистить кэш?",
-            text = "Скачанные фото, видео и файлы будут удалены с устройства.",
-            confirmLabel = "Очистить",
-            onConfirm = {
-                viewModel.clearCache()
+        DataDialog.ClearCache -> ClearCacheDialog(
+            sizes = state.cacheSizes,
+            formatSize = { size(it) },
+            onConfirm = { categories ->
+                viewModel.clearCache(categories)
                 dialog = null
             },
             onDismiss = { dialog = null },

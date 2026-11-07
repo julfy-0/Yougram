@@ -1,0 +1,9 @@
+app.yougram.voip-pngs-0 C:\Users\sdc99\StudioProjects\Yougram\voip\build\generated\res\pngs\debug
+app.yougram.voip-resValues-1 C:\Users\sdc99\StudioProjects\Yougram\voip\build\generated\res\resValues\debug
+app.yougram.voip-updated_navigation_xml-2 C:\Users\sdc99\StudioProjects\Yougram\voip\build\generated\updated_navigation_xml\debug
+app.yougram.voip-mergeDebugResources-3 C:\Users\sdc99\StudioProjects\Yougram\voip\build\intermediates\incremental\debug\mergeDebugResources\merged.dir
+app.yougram.voip-mergeDebugResources-4 C:\Users\sdc99\StudioProjects\Yougram\voip\build\intermediates\incremental\debug\mergeDebugResources\stripped.dir
+app.yougram.voip-debug-5 C:\Users\sdc99\StudioProjects\Yougram\voip\build\intermediates\merged_res\debug\mergeDebugResources
+app.yougram.voip-debug-6 C:\Users\sdc99\StudioProjects\Yougram\voip\build\intermediates\packaged_res\debug\packageDebugResources
+app.yougram.voip-debug-7 C:\Users\sdc99\StudioProjects\Yougram\voip\src\debug\res
+app.yougram.voip-main-8 C:\Users\sdc99\StudioProjects\Yougram\voip\src\main\res

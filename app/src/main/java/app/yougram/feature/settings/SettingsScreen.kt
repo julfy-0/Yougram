@@ -20,6 +20,7 @@ import app.yougram.core.settings.PlateRepository
 import app.yougram.core.settings.SettingsRepository
 import app.yougram.feature.settings.appearance.AppIconSection
 import app.yougram.feature.settings.appearance.BlurTypeRow
+import app.yougram.feature.settings.appearance.CustomIconSection
 import app.yougram.feature.settings.appearance.GlassPreview
 import app.yougram.feature.settings.appearance.PlateSection
 import app.yougram.feature.settings.appearance.ThemeSection
@@ -43,69 +44,70 @@ fun SettingsScreen(
 
     SettingsPageColumn(contentPadding) {
         if (part == -1 || part == 0) {
-        SectionLabel("Тема и цвета")
-        ThemeSection(settings)
+            SectionLabel("Тема и цвета")
+            ThemeSection(settings)
 
-        AppIconSection()
+            AppIconSection()
+            CustomIconSection()
 
-        // На бюджетных устройствах размытие и тяжёлые анимации отключены автоматически;
-        // здесь их можно включить вручную.
-        val context = androidx.compose.ui.platform.LocalContext.current
-        if (app.yougram.core.ui.DeviceProfile.hardwareTier(context) == app.yougram.core.ui.DeviceTier.Low) {
-            val enhanced by settings.enhancedUi.collectAsState()
-            SettingGroup {
-                item {
-                    app.yougram.feature.settings.component.SwitchRow(
-                        "Улучшенный интерфейс",
-                        enhanced,
-                        settings::setEnhancedUi,
-                        subtitle = "Размытие и плавные анимации. Может лагать на вашем устройстве",
-                    )
+            // На бюджетных устройствах размытие и тяжёлые анимации отключены автоматически;
+            // здесь их можно включить вручную.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            if (app.yougram.core.ui.DeviceProfile.hardwareTier(context) == app.yougram.core.ui.DeviceTier.Low) {
+                val enhanced by settings.enhancedUi.collectAsState()
+                SettingGroup {
+                    item {
+                        app.yougram.feature.settings.component.SwitchRow(
+                            "Улучшенный интерфейс",
+                            enhanced,
+                            settings::setEnhancedUi,
+                            subtitle = "Размытие и плавные анимации. Может лагать на вашем устройстве",
+                        )
+                    }
                 }
+                SettingsFootnote("Ваше устройство определено как бюджетное, поэтому эффекты по умолчанию выключены.")
             }
-            SettingsFootnote("Ваше устройство определено как бюджетное, поэтому эффекты по умолчанию выключены.")
-        }
 
         }
         if (part == -1 || part == 1) {
-        SectionLabel("Панели")
-        GlassPreview(
-            glass.blurRadius,
-            if (glass.blurRadius <= 0.5f) 1f else glass.opacity,
-        )
-        SettingGroup {
-            item {
-                SettingRow(
-                    title = "Размытие",
-                    subtitle = glass.blurRadius.roundToInt().toString(),
-                    belowFullWidth = true,
-                    below = {
-                        DotSlider(glass.blurRadius, settings::setBlur, 0f..GlassSettings.MAX_BLUR)
-                    },
-                )
+            SectionLabel("Панели")
+            GlassPreview(
+                glass.blurRadius,
+                if (glass.blurRadius <= 0.5f) 1f else glass.opacity,
+            )
+            SettingGroup {
+                item {
+                    SettingRow(
+                        title = "Размытие",
+                        subtitle = glass.blurRadius.roundToInt().toString(),
+                        belowFullWidth = true,
+                        below = {
+                            DotSlider(glass.blurRadius, settings::setBlur, 0f..GlassSettings.MAX_BLUR)
+                        },
+                    )
+                }
+                item { BlurTypeRow(glass.blurType, settings::setBlurType) }
+                item {
+                    SettingRow(
+                        title = "Плотность панелей",
+                        subtitle = "${(glass.opacity * 100).roundToInt()} %",
+                        belowFullWidth = true,
+                        below = { DotSlider(glass.opacity, settings::setOpacity, 0f..1f) },
+                    )
+                }
+                item {
+                    SettingRow(
+                        title = "Сбросить по умолчанию",
+                        subtitle = "Размытие, тип размытия и плотность панелей",
+                        onClick = settings::resetGlass,
+                    )
+                }
             }
-            item { BlurTypeRow(glass.blurType, settings::setBlurType) }
-            item {
-                SettingRow(
-                    title = "Плотность панелей",
-                    subtitle = "${(glass.opacity * 100).roundToInt()} %",
-                    belowFullWidth = true,
-                    below = { DotSlider(glass.opacity, settings::setOpacity, 0f..1f) },
-                )
-            }
-            item {
-                SettingRow(
-                    title = "Сбросить по умолчанию",
-                    subtitle = "Размытие, тип размытия и плотность панелей",
-                    onClick = settings::resetGlass,
-                )
-            }
-        }
-        SettingsFootnote("Предпросмотр показывает размытие по Гауссу, выбранный тип применяется к самим панелям.")
+            SettingsFootnote("Предпросмотр показывает размытие по Гауссу, выбранный тип применяется к самим панелям.")
 
-        NavOrderSection(settings)
+            NavOrderSection(settings)
 
-        PlateSection(plates)
+            PlateSection(plates)
         }
     }
 }

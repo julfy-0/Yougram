@@ -1312,15 +1312,20 @@ class ChatRepository(
      * Удаляет кэшированные файлы (медиа можно скачать заново) и пересчитывает занятую память.
      * Возвращает, сколько байт освобождено (по статистике TDLib, не меньше 0).
      */
-    suspend fun clearCache(): Long {
+    suspend fun clearCache(categories: Set<CacheCategory> = CacheCategory.entries.toSet()): Long {
+        // Выбраны все категории — полная очистка (в том числе типы вне списка: голосовые, стикеры и т.п.).
+        val everything = categories.containsAll(CacheCategory.entries)
+        if (categories.isEmpty()) return 0L
         val before = (client.getStorageStatisticsFast() as? TdlResult.Success)?.result?.let { it.filesSize + it.databaseSize } ?: 0L
-        // Временные файлы самого приложения (черновики вложений, записи голосовых/кружков, скачанные обновления).
-        // Состояние звонков (voip*) не трогаем.
-        withContext(Dispatchers.IO) {
-            runCatching {
-                context.cacheDir.listFiles().orEmpty()
-                    .filter { !it.name.startsWith("voip") && !it.name.startsWith("spy_import") }
-                    .forEach { it.deleteRecursively() }
+        if (everything) {
+            // Временные файлы самого приложения (черновики вложений, записи голосовых/кружков, скачанные обновления).
+            // Состояние звонков (voip*) не трогаем.
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    context.cacheDir.listFiles().orEmpty()
+                        .filter { !it.name.startsWith("voip") && !it.name.startsWith("spy_import") }
+                        .forEach { it.deleteRecursively() }
+                }
             }
         }
         client.optimizeStorage(
@@ -1328,7 +1333,8 @@ class ChatRepository(
             ttl = 0,
             count = 0,
             immunityDelay = 0,
-            fileTypes = emptyArray(),
+            // Пустой массив — все типы; иначе только выбранные категории.
+            fileTypes = if (everything) emptyArray() else categories.flatMap { it.fileTypes() }.toTypedArray(),
             chatIds = longArrayOf(),
             excludeChatIds = longArrayOf(),
             returnDeletedFileStatistics = false,
@@ -1339,6 +1345,16 @@ class ChatRepository(
         capShown = false
         val after = storageUsage(force = true)
         return (before - after).coerceAtLeast(0L)
+    }
+
+    /**
+     * Сколько места занимает кэш каждой категории (по статистике TDLib).
+     * Считает файлы по всем чатам сразу, поэтому может занять пару секунд.
+     */
+    suspend fun cacheSizes(): Map<CacheCategory, Long> {
+        val stats = client.getStorageStatistics(chatLimit = 0).getOrThrow()
+        val byType = stats.byChat.flatMap { chat -> chat.byFileType.map { it.fileType to it.size } }
+        return CacheCategory.sizes(byType)
     }
 
     /** Запускает загрузку файла; прогресс и путь придут через [fileState]. */
@@ -2212,6 +2228,18 @@ class ChatRepository(
             .sortedByDescending { it.id }
     }
 
+    suspend fun messageLink(chatId: Long, messageId: Long): String? = runCatching {
+        client.getMessageLink(
+            chatId = chatId,
+            messageId = messageId,
+            mediaTimestamp = 0,
+            forAlbum = false,
+            inMessageThread = false,
+            checklistTaskId = 0,
+            pollOptionId = "",
+        ).getOrThrow().link
+    }.getOrNull()
+
     suspend fun forwardMessage(toChatId: Long, fromChatId: Long, messageId: Long) {
         client.forwardMessages(
             chatId = toChatId,
@@ -2426,6 +2454,27 @@ class ChatRepository(
         ).getOrThrow()
     }
 
+    /** Отправляет 2–10 файлов одним альбомом документов; подпись цепляется к первому. */
+    suspend fun sendDocumentAlbum(chatId: Long, paths: List<String>, caption: String = "") {
+        val contents: List<InputMessageContent> = paths.take(10).mapIndexed { index, path ->
+            InputMessageDocument(
+                document = InputDocument(
+                    document = InputFileLocal(path = path),
+                    thumbnail = null,
+                    disableContentTypeDetection = false,
+                ),
+                caption = if (index == 0) captionOf(caption) else null,
+            )
+        }
+        client.sendMessageAlbum(
+            chatId = chatId,
+            topicId = topicParam(chatId),
+            replyTo = threadReply(chatId),
+            options = null,
+            inputMessageContents = contents.toTypedArray(),
+        ).getOrThrow()
+    }
+
     /** Отправляет любой файл документом (так же уходят видео из галереи). */
     suspend fun sendDocument(chatId: Long, path: String, caption: String = "") = sendContent(
         chatId,
@@ -2533,6 +2582,21 @@ class ChatRepository(
             isPublic = false,
         ).getOrThrow()
         return loadProfile()
+    }
+
+    /** Удаляет конкретную свою аватарку из [ownAvatarHistory] (id фото зашит в имени файла). */
+    suspend fun deleteProfilePhoto(media: MediaItem) {
+        val id = media.name.substringBeforeLast('.').substringAfterLast('_').toLongOrNull()
+            ?: error("Не удалось определить фото")
+        client.deleteProfilePhoto(profilePhotoId = id).getOrThrow()
+    }
+
+    /** Удаляет текущую (самую новую) аватарку пользователя; предыдущая становится текущей. */
+    suspend fun deleteCurrentProfilePhoto() {
+        val me = client.getMe().getOrThrow()
+        val current = client.getUserProfilePhotos(userId = me.id, offset = 0, limit = 1).getOrThrow()
+            .photos.orEmpty().filterNotNull().firstOrNull() ?: return
+        client.deleteProfilePhoto(profilePhotoId = current.id).getOrThrow()
     }
 
     /** Подписаться на канал / вступить в группу. */

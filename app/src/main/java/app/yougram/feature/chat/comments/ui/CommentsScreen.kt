@@ -63,8 +63,14 @@ import app.yougram.core.settings.ChatPrefs
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.settings.PlateArea
 import app.yougram.core.ui.component.Avatar
+import app.yougram.core.ui.component.CookieSendButton
+import app.yougram.core.ui.component.ChatBarFieldCorner
+import app.yougram.core.ui.component.chatBarTextFieldColors
+import app.yougram.core.ui.glass.BottomBarShape
+import app.yougram.core.ui.glass.barTint
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.plateColor
 import app.yougram.core.ui.glass.rememberBackdropState
 import dev.g000sha256.tdl.dto.Message
@@ -73,7 +79,7 @@ import java.text.DateFormat
 import java.util.Date
 
 private val BarHeight = 56.dp
-private val ComposerHeight = 52.dp
+private val ComposerHeight = 56.dp
 
 /**
  * Комментарии к посту в стиле клиента: стеклянные верхняя панель и поле ввода поверх списка,
@@ -139,7 +145,7 @@ fun CommentsScreen(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(topInset + BarHeight)
-                .glass(backdrop, glass, RectangleShape)
+                .glassTopBar(backdrop, glass)
                 .padding(top = topInset)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -167,14 +173,16 @@ fun CommentsScreen(
             }
         }
 
-        // Поле ввода: стеклянная «таблетка» и круглая кнопка отправки.
+        // Нижняя стеклянная панель как в основном чате: на всю ширину, скруглена сверху,
+        // внутри тёмное поле-«таблетка» и кнопка-«печенье» (при тексте — круг).
         Row(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .imePadding()
+                .glass(backdrop, glass, BottomBarShape, tint = barTint())
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -183,46 +191,23 @@ fun CommentsScreen(
                 onValueChange = { input = it },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = ComposerHeight)
-                    .glass(backdrop, glass, MaterialTheme.shapes.largeIncreased)
-                    .clip(MaterialTheme.shapes.largeIncreased),
+                    .heightIn(min = ComposerHeight),
                 placeholder = { Text("Комментарий") },
+                shape = RoundedCornerShape(ChatBarFieldCorner),
                 maxLines = 4,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
+                colors = chatBarTextFieldColors(),
             )
             val canSend = input.isNotBlank()
-            // Форма кнопки «перетекает»: квадрат со скруглением (пусто) → круг (можно отправлять).
-            val lowTier = app.yougram.core.ui.rememberDeviceTier() == app.yougram.core.ui.DeviceTier.Low
-            val sendCorner by animateDpAsState(
-                targetValue = if (canSend) 28.dp else 16.dp,
-                animationSpec = if (lowTier) snap() else MaterialTheme.motionScheme.fastSpatialSpec(),
-                label = "sendCorner",
-            )
-            Box(
-                Modifier
-                    .size(ComposerHeight)
-                    .clip(RoundedCornerShape(sendCorner.coerceAtLeast(0.dp)))
-                    .background(
-                        if (canSend) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainerHighest,
-                    )
-                    .clickable(enabled = canSend) {
-                        viewModel.send(input)
-                        input = ""
-                    },
-                contentAlignment = Alignment.Center,
+            CookieSendButton(
+                active = canSend,
+                enabled = canSend,
+                size = ComposerHeight,
+                onClick = {
+                    viewModel.send(input)
+                    input = ""
+                },
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = tr("Отправить"),
-                    tint = if (canSend) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = tr("Отправить"))
             }
         }
     }

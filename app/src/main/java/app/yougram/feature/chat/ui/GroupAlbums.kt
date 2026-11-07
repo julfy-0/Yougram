@@ -3,8 +3,11 @@ package app.yougram.feature.chat.ui
 import app.yougram.feature.chat.data.MessageItem
 
 /** Склеивает подряд идущие сообщения одного альбома. Список — от новых к старым, как в чате. */
-fun List<MessageItem>.groupAlbums(): List<ChatEntry> {
+fun List<MessageItem>.groupAlbums(previous: Map<Long, ChatEntry> = emptyMap()): List<ChatEntry> {
     val out = ArrayList<ChatEntry>(size)
+    // Если строка не изменилась, отдаём тот же экземпляр: Compose пропустит её перерисовку,
+    // и новое сообщение/реакция не пересобирает все видимые пузыри.
+    fun ChatEntry.reuse(): ChatEntry = previous[key]?.takeIf { it == this } ?: this
     var i = 0
     while (i < size) {
         val first = this[i]
@@ -18,7 +21,7 @@ fun List<MessageItem>.groupAlbums(): List<ChatEntry> {
             ) j++
         }
         if (j - i < 2) {
-            out += ChatEntry(first.id, first, emptyList(), setOf(first.id))
+            out += ChatEntry(first.id, first, emptyList(), setOf(first.id)).reuse()
         } else {
             val group = subList(i, j).asReversed()
             val primary = group.firstOrNull { it.text.isNotEmpty() } ?: group.first()
@@ -27,7 +30,7 @@ fun List<MessageItem>.groupAlbums(): List<ChatEntry> {
                 message = primary,
                 albumMedia = group.mapNotNull { it.media },
                 ids = group.map { it.id }.toSet(),
-            )
+            ).reuse()
         }
         i = j
     }

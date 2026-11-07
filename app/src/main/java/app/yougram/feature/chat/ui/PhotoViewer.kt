@@ -20,6 +20,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import android.widget.Toast
 import androidx.compose.runtime.rememberCoroutineScope
@@ -84,6 +85,8 @@ fun PhotoViewer(
     onDismiss: () -> Unit,
     /** Показывать кнопку «Скачать» (сохраняет текущее фото в галерею). */
     allowSave: Boolean = false,
+    /** Если задан — в просмотрщике есть кнопка «Удалить» для текущего фото (своя аватарка). */
+    onDelete: ((MediaItem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -91,6 +94,24 @@ fun PhotoViewer(
     var zoomed by remember { mutableStateOf(false) }
     val backdrop = rememberBackdropState()
     LaunchedEffect(pagerState.currentPage) { zoomed = false }
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+            title = { Text(tr("Удалить аватарку?")) },
+            text = { Text(tr("Это фото будет удалено из вашего профиля.")) },
+            confirmButton = {
+                app.yougram.core.ui.component.TextButton(onClick = {
+                    confirmDelete = false
+                    items.getOrNull(pagerState.currentPage)?.let { onDelete?.invoke(it) }
+                }) { Text(tr("Удалить")) }
+            },
+            dismissButton = {
+                app.yougram.core.ui.component.TextButton(onClick = { confirmDelete = false }) { Text(tr("Отмена")) }
+            },
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -141,6 +162,22 @@ fun PhotoViewer(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.Close, contentDescription = tr("Закрыть"), tint = Color.White)
+            }
+            if (onDelete != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(
+                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 6.dp,
+                            end = if (allowSave) 60.dp else 12.dp,
+                        )
+                        .size(40.dp)
+                        .glass(backdrop, ViewerGlass, CircleShape, Color.Black)
+                        .clickable { confirmDelete = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = tr("Удалить"), tint = Color.White)
+                }
             }
             if (allowSave) {
                 Box(

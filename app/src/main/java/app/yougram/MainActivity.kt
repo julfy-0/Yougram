@@ -133,7 +133,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(secure) { applySecureFlag(secure) }
+            // Секретный чат открыт — защищаем окно; настройка блокировки — защищает и диалоги.
+            val secretOpen by app.yougram.core.ui.SecureScreen.count.collectAsState()
+            LaunchedEffect(secure, secretOpen > 0) {
+                app.yougram.core.ui.SecureScreen.global.value = secure
+                applySecureFlag(secure)
+            }
 
             // Входящий звонок должен быть виден и на заблокированном экране.
             LaunchedEffect(inCall != null) {
@@ -243,7 +248,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applySecureFlag(secure: Boolean) {
         // Скриншоты разрешены везде, кроме секретных чатов (их флаг держит SecureWindowEffect).
-        if (app.yougram.core.ui.SecureScreen.count.value > 0) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (secure || app.yougram.core.ui.SecureScreen.count.value > 0) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 }

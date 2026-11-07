@@ -91,12 +91,19 @@ class AuthRepository(private val telegram: TelegramClient) {
         null -> AuthStep.Loading
         is AuthorizationStateWaitPhoneNumber -> AuthStep.EnterPhone
         is AuthorizationStateWaitOtherDeviceConfirmation -> AuthStep.QrLogin(link)
-        is AuthorizationStateWaitCode -> AuthStep.EnterCode(
-            phoneHint = phone,
-            via = codeInfo.type.toVia(),
-            timeoutSec = codeInfo.timeout,
-            canResend = codeInfo.nextType != null,
-        )
+        is AuthorizationStateWaitCode -> {
+            // Диагностика «код не приходит»: каким способом Telegram решил его доставить.
+            android.util.Log.i(
+                "YougramAuth",
+                "WaitCode: type=${codeInfo.type::class.simpleName} next=${codeInfo.nextType?.let { it::class.simpleName }} timeout=${codeInfo.timeout}",
+            )
+            AuthStep.EnterCode(
+                phoneHint = phone,
+                via = codeInfo.type.toVia(),
+                timeoutSec = codeInfo.timeout,
+                canResend = codeInfo.nextType != null,
+            )
+        }
         is AuthorizationStateWaitPassword -> AuthStep.EnterPassword(hint = passwordHint)
         is AuthorizationStateReady -> AuthStep.Ready
         else -> {

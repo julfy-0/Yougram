@@ -93,6 +93,68 @@ private class LinkToken(val start: Int, val end: Int, val value: String, val men
 private fun overlaps(tokens: List<LinkToken>, from: Int, to: Int, start: Int, end: Int): Boolean =
     (from until to).any { start < tokens[it].end && end > tokens[it].start }
 
+private data class TokenKey(val text: String, val emojis: List<CustomEmojiSpan>, val links: List<LinkSpan>)
+
+// Разбор текста — три-четыре regex по всему сообщению; на прокрутке повторять его для уже виденных
+// сообщений незачем.
+private val tokenCache = android.util.LruCache<TokenKey, List<LinkToken>>(512)
+
+private fun tokenize(text: String, emojis: List<CustomEmojiSpan>, links: List<LinkSpan>): List<LinkToken> {
+    val key = TokenKey(text, emojis, links)
+    tokenCache.get(key)?.let { return it }
+    // Без этих символов ссылок, почты и @юзернеймов в тексте быть не может — тяжёлые regex пропускаем.
+    val hasDot = text.indexOf('.') >= 0
+    val hasColon = text.indexOf(':') >= 0
+    val hasAt = text.indexOf('@') >= 0
+    val tokens = ArrayList<LinkToken>()
+    // Ссылки, заданные самим Telegram («слово» со спрятанным адресом), важнее всего найденного по тексту.
+    for (l in links) {
+        val end = l.offset + l.length
+        if (l.length <= 0 || l.offset < 0 || end > text.length || l.url.isBlank()) continue
+        if (overlaps(tokens, 0, tokens.size, l.offset, end)) continue
+        tokens += LinkToken(l.offset, end, l.url, mention = false)
+    }
+    val explicitCount = tokens.size
+    // Адреса в тексте: с схемой/www, затем почта, затем домены без схемы.
+    if (hasColon || hasDot) for (match in UrlPattern.findAll(text)) {
+        val url = trimUrlEnd(match.value)
+        if (url.length < 4) continue
+        val start = match.range.first
+        if (overlaps(tokens, 0, tokens.size, start, start + url.length)) continue
+        tokens += LinkToken(start, start + url.length, url, mention = false)
+    }
+    if (hasAt) for (match in EmailPattern.findAll(text)) {
+        val start = match.range.first
+        val end = match.range.last + 1
+        if (overlaps(tokens, 0, tokens.size, start, end)) continue
+        tokens += LinkToken(start, end, "mailto:" + match.value, mention = false)
+    }
+    if (hasDot) for (match in BareDomainPattern.findAll(text)) {
+        val url = trimUrlEnd(match.value)
+        if (url.length < 4) continue
+        val start = match.range.first
+        if (overlaps(tokens, 0, tokens.size, start, start + url.length)) continue
+        tokens += LinkToken(start, start + url.length, url, mention = false)
+    }
+    val urlCount = tokens.size
+    if (hasAt) for (match in MentionPattern.findAll(text)) {
+        val start = match.range.first
+        // @ внутри ссылки (например, t.me/@name) — это часть ссылки, не отдельный юзернейм.
+        if (overlaps(tokens, 0, urlCount, start, start + 1)) continue
+        tokens += LinkToken(start, match.range.last + 1, match.groupValues[1], mention = true)
+    }
+    val textTokens = tokens.size
+    for (e in emojis) {
+        val end = e.offset + e.length
+        if (e.length <= 0 || e.offset < 0 || end > text.length) continue
+        if (overlaps(tokens, 0, textTokens, e.offset, end)) continue
+        tokens += LinkToken(e.offset, end, "", mention = false, emojiId = e.id)
+    }
+    tokens.sortBy { it.start }
+    tokenCache.put(key, tokens)
+    return tokens
+}
+
 /** Текст сообщения, в котором ссылки и @юзернеймы подсвечены и кликабельны. */
 @Composable
 fun rememberLinkified(
@@ -105,53 +167,8 @@ fun rememberLinkified(
 ): AnnotatedString {
     val currentOpen by rememberUpdatedState(onOpen)
     val currentMention by rememberUpdatedState(onMention)
-    return remember(text, linkColor, emojis, links) {
-        val tokens = ArrayList<LinkToken>()
-        // Ссылки, заданные самим Telegram («слово» со спрятанным адресом), важнее всего найденного по тексту.
-        for (l in links) {
-            val end = l.offset + l.length
-            if (l.length <= 0 || l.offset < 0 || end > text.length || l.url.isBlank()) continue
-            if (overlaps(tokens, 0, tokens.size, l.offset, end)) continue
-            tokens += LinkToken(l.offset, end, l.url, mention = false)
-        }
-        val explicitCount = tokens.size
-        // Адреса в тексте: с схемой/www, затем почта, затем домены без схемы.
-        for (match in UrlPattern.findAll(text)) {
-            val url = trimUrlEnd(match.value)
-            if (url.length < 4) continue
-            val start = match.range.first
-            if (overlaps(tokens, 0, tokens.size, start, start + url.length)) continue
-            tokens += LinkToken(start, start + url.length, url, mention = false)
-        }
-        for (match in EmailPattern.findAll(text)) {
-            val start = match.range.first
-            val end = match.range.last + 1
-            if (overlaps(tokens, 0, tokens.size, start, end)) continue
-            tokens += LinkToken(start, end, "mailto:" + match.value, mention = false)
-        }
-        for (match in BareDomainPattern.findAll(text)) {
-            val url = trimUrlEnd(match.value)
-            if (url.length < 4) continue
-            val start = match.range.first
-            if (overlaps(tokens, 0, tokens.size, start, start + url.length)) continue
-            tokens += LinkToken(start, start + url.length, url, mention = false)
-        }
-        val urlCount = tokens.size
-        for (match in MentionPattern.findAll(text)) {
-            val start = match.range.first
-            // @ внутри ссылки (например, t.me/@name) — это часть ссылки, не отдельный юзернейм.
-            if (overlaps(tokens, 0, urlCount, start, start + 1)) continue
-            tokens += LinkToken(start, match.range.last + 1, match.groupValues[1], mention = true)
-        }
-        val textTokens = tokens.size
-        for (e in emojis) {
-            val end = e.offset + e.length
-            if (e.length <= 0 || e.offset < 0 || end > text.length) continue
-            if (overlaps(tokens, 0, textTokens, e.offset, end)) continue
-            tokens += LinkToken(e.offset, end, "", mention = false, emojiId = e.id)
-        }
-        tokens.sortBy { it.start }
-
+    val tokens = remember(text, emojis, links) { tokenize(text, emojis, links) }
+    return remember(text, linkColor, tokens) {
         buildAnnotatedString {
             var cursor = 0
             for (t in tokens) {

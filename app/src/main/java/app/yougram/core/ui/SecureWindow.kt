@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /** Счётчик открытых секретных чатов: пока он > 0, окна приложения защищены от скриншотов и записи экрана. */
 object SecureScreen {
     val count = MutableStateFlow(0)
+    /** Защита включена в настройках блокировки: действует на все окна, включая диалоги. */
+    val global = MutableStateFlow(false)
     fun enter() = count.update { it + 1 }
     fun leave() = count.update { (it - 1).coerceAtLeast(0) }
 }
@@ -39,7 +41,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
  */
 @Composable
 fun SecureWindowEffect() {
-    val secure = SecureScreen.count.collectAsState().value > 0
+    val secure = SecureScreen.count.collectAsState().value > 0 || SecureScreen.global.collectAsState().value
     val view = LocalView.current
     DisposableEffect(secure, view) {
         val window = (view.parent as? DialogWindowProvider)?.window ?: view.context.findActivity()?.window

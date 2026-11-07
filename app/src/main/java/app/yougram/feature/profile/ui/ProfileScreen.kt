@@ -27,6 +27,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Notifications
@@ -121,7 +123,11 @@ import app.yougram.feature.settings.component.SettingRow
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import app.yougram.feature.chat.ui.saveToGallery
 
 private enum class ProfileTab(val label: String) {
     MEDIA("Медиа"),
@@ -144,9 +150,26 @@ fun ProfileScreen(
     onOpenChat: () -> Unit,
     onLeft: () -> Unit,
     onCall: (userId: Long, video: Boolean) -> Unit,
+    /** Открыть управление группой/каналом (журнал, заявки, ссылки, медленный режим); null — недоступно. */
+    onOpenAdmin: ((chatId: Long) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Долгое нажатие на аватар: сразу сохранить текущую (самую новую) аватарку в галерею.
+    val saveAvatar: () -> Unit = save@{
+        val media = state.avatars.firstOrNull() ?: return@save
+        scope.launch {
+            val path = viewModel.fileState(media.fileId).first().path
+            if (path == null) {
+                viewModel.download(media.fileId, 32)
+                Toast.makeText(context, tr("Фото ещё загружается, попробуйте позже"), Toast.LENGTH_SHORT).show()
+            } else {
+                val ok = saveToGallery(context, path, media.name, media.mimeType, media.kind)
+                Toast.makeText(context, if (ok) tr("Сохранено в галерею") else tr("Не удалось сохранить"), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     var tab by remember { mutableStateOf(ProfileTab.MEDIA) }
     var confirmLeave by remember { mutableStateOf(false) }
     var showDossier by remember { mutableStateOf(false) }
@@ -230,7 +253,7 @@ fun ProfileScreen(
         if (details == null) {
             if (state.loading) LoadingIndicator(Modifier.align(Alignment.Center), contained = true)
         } else {
-            val actions = actionsFor(details, context, onOpenChat, startCall, viewModel::toggleMute, { showEdit = true }) { confirmLeave = true }
+            val actions = actionsFor(details, context, onOpenChat, startCall, viewModel::toggleMute, { showEdit = true }, onAdmin = onOpenAdmin?.let { open -> { open(details.chatId) } }) { confirmLeave = true }
             val media = remember(state.shared) { state.shared.filter { it.media?.kind in MediaKinds } }
             val files = remember(state.shared) { state.shared.filter { it.media?.kind == MediaKind.DOCUMENT } }
             // Музыка профиля показывается полоской под кнопками действий, а во вкладке — остальное.
@@ -254,7 +277,7 @@ fun ProfileScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value, onAvatarClick = { if (state.avatars.isNotEmpty()) showAvatars = true }) } }
+                item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value, onAvatarClick = { if (state.avatars.isNotEmpty()) showAvatars = true }, onAvatarLongClick = saveAvatar) } }
                 if (app.yougram.plugin.PluginUi.PROFILE_ACTIONS !in pluginHidden) {
                     item { Appear(1, entered.value) { ActionsGroup(actions) } }
                 }
@@ -378,9 +401,13 @@ private fun actionsFor(
     onCall: (Boolean) -> Unit,
     onToggleMute: () -> Unit,
     onEdit: () -> Unit,
+    onAdmin: (() -> Unit)? = null,
     onLeave: () -> Unit,
 ): List<ProfileAction> {
     val edit = ProfileAction(Icons.Filled.Edit, tr("Изменить"), onEdit)
+    val manage = if (onAdmin != null && details.canEdit) {
+        listOf(ProfileAction(Icons.Filled.AdminPanelSettings, tr("Управление"), onAdmin))
+    } else emptyList()
     val dial = {
         val phone = details.phone
         if (phone == null) {
@@ -419,12 +446,12 @@ private fun actionsFor(
         ProfileKind.GROUP -> listOf(
             ProfileAction(Icons.Filled.ChatBubble, tr("Чат"), onOpenChat),
             sound,
-        ) + (if (details.canEdit) listOf(edit) else emptyList()) +
+        ) + (if (details.canEdit) listOf(edit) else emptyList()) + manage +
                 ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, tr("Покинуть"), onLeave)
         ProfileKind.CHANNEL -> listOf(
             sound,
             ProfileAction(Icons.Filled.Share, tr("Ссылка"), share),
-        ) + (if (details.canEdit) listOf(edit) else emptyList()) +
+        ) + (if (details.canEdit) listOf(edit) else emptyList()) + manage +
                 ProfileAction(Icons.AutoMirrored.Filled.ExitToApp, tr("Покинуть"), onLeave)
         ProfileKind.OTHER -> listOf(ProfileAction(Icons.Filled.ChatBubble, tr("Чат"), onOpenChat))
     }
@@ -437,6 +464,7 @@ private fun ProfileHeader(
     listState: LazyListState,
     entered: Boolean,
     onAvatarClick: () -> Unit,
+    onAvatarLongClick: () -> Unit,
 ) {
     Column(
         Modifier
@@ -473,7 +501,12 @@ private fun ProfileHeader(
                         title = details.title,
                         fileId = details.avatarFileId,
                         fileState = viewModel::fileState,
-                        modifier = Modifier.clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
+                        modifier = Modifier.combinedClickable(
+                            onClickLabel = "Открыть аватар",
+                            onLongClickLabel = "Сохранить аватар",
+                            onLongClick = onAvatarLongClick,
+                            onClick = onAvatarClick,
+                        ),
                         size = 108.dp,
                         borderWidth = 4.dp,
                         borderColor = MaterialTheme.colorScheme.surface,
@@ -491,7 +524,12 @@ private fun ProfileHeader(
                     title = details.title,
                     fileId = details.avatarFileId,
                     fileState = viewModel::fileState,
-                    modifier = Modifier.clickable(onClickLabel = "Открыть аватар", onClick = onAvatarClick),
+                    modifier = Modifier.combinedClickable(
+                        onClickLabel = "Открыть аватар",
+                        onLongClickLabel = "Сохранить аватар",
+                        onLongClick = onAvatarLongClick,
+                        onClick = onAvatarClick,
+                    ),
                     size = 132.dp,
                     shape = MaterialShapes.Cookie9Sided.toShape(),
                 )
@@ -523,17 +561,31 @@ private fun ProfileHeader(
     }
 }
 
-/** Действия: ряд крупных тональных плиток (иконка + подпись); «Покинуть» подсвечено как опасное. */
+/**
+ * Действия: связанная группа кнопок (M3 Expressive connected button group) — плитки «иконка + подпись»
+ * стыкуются в один ряд: внешние углы крупные, внутренние (между соседями) маленькие, зазор 2dp.
+ * «Покинуть» подсвечено как опасное.
+ */
 @Composable
 private fun ActionsGroup(actions: List<ProfileAction>) {
     val scheme = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        actions.forEach { action ->
+    val outer = 24.dp
+    val inner = 4.dp
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        actions.forEachIndexed { index, action ->
             val danger = action.label == tr("Покинуть")
+            val first = index == 0
+            val last = index == actions.lastIndex
+            val shape = RoundedCornerShape(
+                topStart = if (first) outer else inner,
+                bottomStart = if (first) outer else inner,
+                topEnd = if (last) outer else inner,
+                bottomEnd = if (last) outer else inner,
+            )
             Surface(
                 onClick = action.onClick,
                 modifier = Modifier.weight(1f).heightIn(min = 76.dp),
-                shape = MaterialTheme.shapes.large,
+                shape = shape,
                 color = if (danger) scheme.errorContainer else scheme.secondaryContainer,
                 contentColor = if (danger) scheme.onErrorContainer else scheme.onSecondaryContainer,
             ) {
@@ -730,12 +782,28 @@ private fun Modifier.clip4(): Modifier = this.then(Modifier.clip(RoundedCornerSh
 private fun FileRow(media: MediaItem, context: Context, viewModel: ProfileViewModel) {
     val full by remember(media.fileId) { viewModel.fileState(media.fileId) }.collectAsState(FileState())
     var pendingOpen by remember { mutableStateOf(false) }
+    var playerPath by remember { mutableStateOf<String?>(null) }
+    val inApp = app.yougram.feature.chat.ui.isInAppPlayable(media)
+    fun open(path: String) {
+        if (inApp) playerPath = path
+        else app.yougram.feature.chat.ui.openFile(context, path, media.mimeType)
+    }
     LaunchedEffect(pendingOpen, full.path) {
         val path = full.path
         if (pendingOpen && path != null) {
             pendingOpen = false
-            app.yougram.feature.chat.ui.openFile(context, path, media.mimeType)
+            open(path)
         }
+    }
+    playerPath?.let { p ->
+        app.yougram.feature.chat.ui.VideoViewerDialog(
+            path = p,
+            onDismiss = { playerPath = null },
+            onError = {
+                playerPath = null
+                app.yougram.feature.chat.ui.openFile(context, p, media.mimeType)
+            },
+        )
     }
     SettingGroup {
         item {
@@ -746,7 +814,7 @@ private fun FileRow(media: MediaItem, context: Context, viewModel: ProfileViewMo
                 onClick = {
                     val path = full.path
                     if (path != null) {
-                        app.yougram.feature.chat.ui.openFile(context, path, media.mimeType)
+                        open(path)
                     } else {
                         pendingOpen = true
                         if (!full.active) viewModel.download(media.fileId, 16)

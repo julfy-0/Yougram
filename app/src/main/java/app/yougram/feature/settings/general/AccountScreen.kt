@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
@@ -74,7 +75,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class AccountDialog { Username, Phone, Birthdate, Channels, AddAccount, Logout }
+private enum class AccountDialog { Username, Phone, Birthdate, Channels, AddAccount, Logout, DeleteAvatar }
 
 @Composable
 fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountManager, contentPadding: PaddingValues) {
@@ -83,6 +84,7 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountMa
     val focus = LocalFocusManager.current
     LaunchedEffect(Unit) {
         viewModel.loadAccount()
+        viewModel.loadAvatarState()
         viewModel.loadPrivacy(listOf(PrivacyKey.Birthdate, PrivacyKey.Bio))
     }
     var dialog by remember { mutableStateOf<AccountDialog?>(null) }
@@ -212,6 +214,16 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountMa
             }
         }
 
+        if (state.hasAvatar) {
+            SettingGroup {
+                item {
+                    ActionRow("Удалить фото профиля", Icons.Filled.Delete, MaterialTheme.colorScheme.error) {
+                        dialog = AccountDialog.DeleteAvatar
+                    }
+                }
+            }
+        }
+
         SettingGroup {
             item {
                 ActionRow("Добавить аккаунт", Icons.Filled.PersonAdd, MaterialTheme.colorScheme.primary) {
@@ -290,6 +302,16 @@ fun AccountScreen(viewModel: SettingsDetailsViewModel, accountManager: AccountMa
             onConfirm = {
                 dialog = null
                 accountManager.addAndRestart()
+            },
+            onDismiss = { dialog = null },
+        )
+        AccountDialog.DeleteAvatar -> ConfirmDialog(
+            title = "Удалить аватарку?",
+            text = "Текущее фото профиля будет удалено. Предыдущее станет текущим.",
+            confirmLabel = "Удалить",
+            onConfirm = {
+                dialog = null
+                viewModel.deleteAvatar()
             },
             onDismiss = { dialog = null },
         )

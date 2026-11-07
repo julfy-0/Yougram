@@ -70,6 +70,9 @@
     "О себе": "Hakkımda",
     "О приложении": "Uygulama hakkında",
     "Обновление": "Güncelleme",
+    "Обновления": "Güncellemeler",
+    "Удалить фото профиля": "Profil fotoğrafını sil",
+    "Безопасность": "Güvenlik",
     "Очистить кэш": "Önbelleği temizle",
     "Очистить": "Temizle",
     "Добавить аккаунт": "Hesap ekle",
@@ -92,6 +95,12 @@
     "Стикеры и эмодзи": "Çıkartmalar ve emojiler",
     "Всплывающие окна": "Açılır pencereler",
     "Панели": "Paneller",
-    "Выкл.": "Kapalı"
+    "Выкл.": "Kapalı",
+    "Что очистить?": "Neyi temizleyelim?",
+    "Выбрать все": "Tümünü seç",
+    "Документы": "Belgeler",
+    "Видео": "Videolar",
+    "Музыка": "Müzik",
+    "Будет освобождено: {0}": "Boşalacak alan: {0}"
   }
 }

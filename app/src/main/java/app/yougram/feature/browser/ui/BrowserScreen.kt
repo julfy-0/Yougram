@@ -92,6 +92,7 @@ import app.yougram.core.ui.component.openExternally
 import app.yougram.core.ui.glass.LocalGlass
 import app.yougram.core.ui.glass.backdropSource
 import app.yougram.core.ui.glass.glass
+import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.rememberBackdropState
 
 /**
@@ -283,12 +284,7 @@ fun BrowserScreen(initialUrl: String, onClose: () -> Unit) {
                     Modifier
                         .fillMaxWidth()
                         .onSizeChanged { topBarPx = it.height }
-                        .glass(
-                            backdrop,
-                            glass,
-                            RectangleShape,
-                            tint = scheme.surfaceContainer,
-                        ),
+                        .glassTopBar(backdrop, glass, tint = scheme.surfaceContainer),
                 ) {
                     Row(
                         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),

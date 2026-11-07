@@ -119,8 +119,8 @@ fun MessageMedia(
     }
     val onClick: () -> Unit = {
         val path = full.path
-        val playable = (media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
-                media.mimeType != "image/gif"
+        val playable = ((media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
+                media.mimeType != "image/gif") || isInAppPlayable(media)
         when {
             media.kind == MediaKind.STICKER -> Unit
             // Фото открывается сразу: просмотрщик сам показывает превью и докачивает оригинал.
@@ -167,7 +167,29 @@ fun MessageMedia(
     }
     if (stickerSetOpen && media.stickerSetId != 0L) StickerSetSheet(media.stickerSetId, viewModel) { stickerSetOpen = false }
     val viewerPath = full.path
-    if (viewer && viewerPath != null) VideoViewerDialog(viewerPath) { viewer = false }
+    if (viewer && viewerPath != null) {
+        VideoViewerDialog(
+            path = viewerPath,
+            onDismiss = { viewer = false },
+            // Кодек не поддержан встроенным плеером — отдаём файл внешнему приложению.
+            onError = {
+                viewer = false
+                openFile(context, viewerPath, media.mimeType)
+            },
+        )
+    }
+}
+
+private val InAppVideoExt = setOf("mp4", "m4v", "mkv", "webm", "mov", "3gp", "ts")
+private val InAppAudioExt = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac")
+
+/** Файл, присланный «документом», но проигрываемый встроенным плеером (видео или аудио). */
+internal fun isInAppPlayable(media: MediaItem): Boolean {
+    if (media.kind != MediaKind.DOCUMENT) return false
+    val mime = media.mimeType.lowercase()
+    val ext = media.name.substringAfterLast('.', "").lowercase()
+    return mime.startsWith("video/") || mime.startsWith("audio/") ||
+            ext in InAppVideoExt || ext in InAppAudioExt
 }
 
 /** Заглушка платного медиа: размытое превью, замок и цена в звёздах. */

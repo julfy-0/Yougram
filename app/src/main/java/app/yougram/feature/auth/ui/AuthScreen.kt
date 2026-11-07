@@ -120,8 +120,6 @@ fun AuthScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val halloween = HalloweenEvent.isActive()
-                AuthLogo()
-                Spacer(Modifier.height(20.dp))
                 Text(
                     "Yougram",
                     style = MaterialTheme.typography.displaySmallEmphasized,

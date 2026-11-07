@@ -79,6 +79,8 @@ import app.yougram.feature.chat.comments.navigation.commentsRoute
 import app.yougram.feature.chat.ui.ChatOrTopics
 import app.yougram.feature.chat.ui.ChatScreen
 import app.yougram.feature.chat.ui.ChatViewModel
+import app.yougram.feature.groupadmin.ui.GroupAdminScreen
+import app.yougram.feature.groupadmin.ui.GroupAdminViewModel
 import app.yougram.feature.main.ui.MainScreen
 import app.yougram.feature.profile.ui.ProfileScreen
 import app.yougram.feature.profile.ui.ProfileViewModel
@@ -91,6 +93,7 @@ private const val ROUTE_AUTH = "auth"
 private const val ROUTE_CHATS = "chats"
 private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}&topicId={topicId}"
 private const val ROUTE_PROFILE = "profile/{chatId}"
+private const val ROUTE_GROUP_ADMIN = "groupadmin/{chatId}"
 private const val ROUTE_BROWSER = "browser/{url}"
 private const val ROUTE_STORIES = "stories/{chatId}/{storyId}"
 
@@ -151,7 +154,7 @@ fun YougramNavHost(container: AppContainer) {
     LaunchedEffect(step) {
         val current = navController.currentDestination?.route
         when (step) {
-            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT && current != ROUTE_PROFILE && current != ROUTE_BROWSER) {
+            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT && current != ROUTE_PROFILE && current != ROUTE_GROUP_ADMIN && current != ROUTE_BROWSER) {
                 navController.navigate(ROUTE_CHATS) { popUpTo(0) { inclusive = true } }
             }
             AuthStep.Loading -> Unit
@@ -443,7 +446,25 @@ fun YougramNavHost(container: AppContainer) {
                         },
                         onLeft = { navController.popBackStack(ROUTE_CHATS, inclusive = false) },
                         onCall = { userId, video -> container.callManager.startCall(userId, video) },
+                        onOpenAdmin = { id -> navController.navigate("groupadmin/$id") },
                     )
+                }
+                composable(
+                    route = ROUTE_GROUP_ADMIN,
+                    arguments = listOf(navArgument("chatId") { type = NavType.LongType }),
+                    enterTransition = {
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
+                    },
+                ) { entry ->
+                    val chatId = entry.arguments!!.getLong("chatId")
+                    val vm: GroupAdminViewModel = viewModel(
+                        key = "groupadmin-$chatId",
+                        factory = GroupAdminViewModel.factory(container.groupAdmin, chatId),
+                    )
+                    GroupAdminScreen(viewModel = vm, onBack = { navController.popBackStack() })
                 }
             }
             CallOverlay(container.callManager, container.chatRepository, callBackdrop)

@@ -70,6 +70,8 @@
     "О себе": "Bio",
     "О приложении": "About the app",
     "Обновление": "Update",
+    "Обновления": "Updates",
+    "Удалить фото профиля": "Delete profile photo",
     "Очистить кэш": "Clear cache",
     "Очистить": "Clear",
     "Добавить аккаунт": "Add account",
@@ -719,6 +721,7 @@
     "Тема, панели, настройки чатов, папки": "Theme, panels, chat settings, folders",
     "Призрак, шпион, фильтры и др.": "Ghost, spy, filters and more",
     "Плагины на C++": "C++ plugins",
+    "Оформление, безопасность и т.д.": "Design, security, etc.",
     "Номер телефона, имя пользователя": "Phone number, username",
     "Пин-код, отпечаток, кто видит ваши данные": "PIN, fingerprint, who sees your data",
     "Группа, канал, аккаунт": "Group, channel, account",
@@ -994,7 +997,7 @@
     "Перезагрузить плагины": "Reload plugins",
     "Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ": "Native code is not isolated: it runs with the same rights as the app, and its crash closes Yougram. ",
     "Ставьте только плагины, которым доверяете.": "Install only plugins you trust.",
-    "SDK 2.2: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.2: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
+    "SDK 2.3: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.": "SDK 2.3: the yougram_plugin.h header and the example_hello.cpp sample are in the app sources.",
     "Установить плагин?": "Install plugin?",
     "Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ": "A plugin is machine code. It will get full access to Yougram data and your Telegram account. ",
     "Устанавливайте только из источников, которым доверяете.": "Install only from sources you trust.",
@@ -1449,6 +1452,10 @@
     "Шрифты из Google Fonts скачиваются в память приложения только когда вы их выбираете или видите в списке; «Очистить» удаляет те, что сейчас не используются. Скругление шрифта работает у Google Sans Flex (он встроен в приложение) и у своих вариативных шрифтов с осью ROND; у остальных ничего не меняется. Ниже можно задать свой шрифт, жирность и курсив для отдельных элементов. «Как везде» — берётся общая настройка.": "Google Fonts are downloaded into app storage only when you select them or see them in the list; “Clear” removes those not currently in use. Font roundness works with Google Sans Flex (bundled in the app) and your own variable fonts with a ROND axis; other fonts are unaffected. Below you can set a font, weight and italic for individual elements. “Same as app” uses the general setting.",
     "Скачанные шрифты": "Downloaded fonts",
     "Пока ничего не скачано": "Nothing downloaded yet",
-    "%.1f МБ в памяти приложения": "%.1f MB in app storage"
+    "%.1f МБ в памяти приложения": "%.1f MB in app storage",
+    "Что очистить?": "What to clear?",
+    "Выбрать все": "Select all",
+    "Документы": "Documents",
+    "Будет освобождено: {0}": "Will free up: {0}"
   }
 }

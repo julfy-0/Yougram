@@ -2,6 +2,7 @@ package app.yougram.feature.settings
 
 import app.yougram.core.i18n.tr
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -59,9 +60,15 @@ fun SettingsDetailPane(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Column(Modifier.widthIn(max = 640.dp).fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             Row(
-                Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .clip(app.yougram.core.ui.glass.TopBarShape)
+                    .background(app.yougram.core.ui.glass.barTint())
+                    .statusBarsPadding()
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (canGoBack) {

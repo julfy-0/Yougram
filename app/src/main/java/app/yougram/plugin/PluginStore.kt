@@ -36,6 +36,10 @@ data class StorePlugin(
     val permissions: List<String>,
     /** Когда добавлен в каталог (unix-секунды, необязательно): по нему строится раздел «Новые». */
     val added: Long = 0L,
+    /** true, если разработчик помечен в каталоге как доверенный ("verified": true в index.json). */
+    val verified: Boolean = false,
+    /** GitHub-логин того, кто выложил плагин (из каталога); пусто — старый каталог, тогда показываем author. */
+    val developer: String = "",
 )
 
 object PluginStore {
@@ -80,7 +84,7 @@ object PluginStore {
                 val url = o.optString("url")
                 val sha = o.optString("sha256")
                 if (id.isEmpty() || url.isEmpty() || sha.isEmpty()) return@mapNotNull null
-                // Каталог пишет "api" из manifest.json; плагины вне 2.1..2.2 не показываем: они всё равно не установятся.
+                // Каталог пишет "api" из manifest.json; плагины вне 2.1..2.3 не показываем: они всё равно не установятся.
                 val api = o.optString("api")
                 if (api.isNotEmpty() && !PluginApiVersion.isSupported(api)) return@mapNotNull null
                 val perms = o.optJSONArray("permissions")
@@ -98,6 +102,8 @@ object PluginStore {
                     size = o.optLong("size", 0L),
                     changelog = o.optString("changelog"),
                     added = o.optLong("added", 0L),
+                    verified = o.optBoolean("verified", false),
+                    developer = o.optString("developer"),
                     permissions = perms?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 )
             }
