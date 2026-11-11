@@ -85,10 +85,10 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
             } else Image(
                 painter = painterResource(id = badgeRes),
                 contentDescription = when (currentKind) {
-                    BadgeKind.CHANNEL -> "Официальный канал Yougram"
-                    BadgeKind.CREATOR -> "Создатель Yougram"
-                    BadgeKind.GOLD -> "Разработчик Yougram"
-                    BadgeKind.NORMAL -> "Пользователь Yougram"
+                    BadgeKind.CHANNEL -> "Официальный канал MaterialGram"
+                    BadgeKind.CREATOR -> "Создатель MaterialGram"
+                    BadgeKind.GOLD -> "Разработчик MaterialGram"
+                    BadgeKind.NORMAL -> "Пользователь MaterialGram"
                 },
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
@@ -101,10 +101,10 @@ fun YougramBadge(userId: Long, modifier: Modifier = Modifier, size: Dp = 16.dp) 
             text = {
                 Text(
                     when (badgeKind) {
-                        BadgeKind.CHANNEL -> "Официальный канал клиента Yougram ❤️"
-                        BadgeKind.CREATOR -> "Создатель Yougram ❤️"
+                        BadgeKind.CHANNEL -> "Официальный канал клиента MaterialGram ❤️"
+                        BadgeKind.CREATOR -> "Создатель MaterialGram ❤️"
                         BadgeKind.GOLD -> "Разработчик клиента❤️"
-                        BadgeKind.NORMAL -> "Пользователь Yougram ❤️"
+                        BadgeKind.NORMAL -> "Пользователь MaterialGram ❤️"
                     },
                 )
             },

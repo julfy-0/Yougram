@@ -62,12 +62,12 @@ fun ThemePresetsScreen(settings: SettingsRepository, plates: PlateRepository, co
             item {
                 SettingRow(
                     title = "Вставить тему из буфера обмена",
-                    subtitle = "Импорт темы, скопированной из Yougram",
+                    subtitle = "Импорт темы, скопированной из MaterialGram",
                     icon = Icons.Filled.FileDownload,
                     onClick = {
                         val text = readClipboard(context)
                         val json = text?.let(ThemeSnapshot::parse)
-                        if (json == null) toast(tr("В буфере нет темы Yougram"))
+                        if (json == null) toast(tr("В буфере нет темы MaterialGram"))
                         else {
                             saved = library.add("Импортированная тема", json)
                             toast(tr("Тема добавлена"))
@@ -160,7 +160,7 @@ fun ThemePresetsScreen(settings: SettingsRepository, plates: PlateRepository, co
 
 private fun copyToClipboard(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("Yougram theme", text))
+    cm.setPrimaryClip(ClipData.newPlainText("MaterialGram theme", text))
 }
 
 private fun readClipboard(context: Context): String? {

@@ -30,7 +30,7 @@ suspend fun saveToGallery(context: Context, path: String, name: String, mime: St
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, type)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "$folder/Yougram")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "$folder/MaterialGram")
             }
             val resolver = context.contentResolver
             val uri = resolver.insert(collection, values) ?: error("insert failed")

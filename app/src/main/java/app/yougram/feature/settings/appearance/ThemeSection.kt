@@ -110,7 +110,7 @@ fun ThemeSection(settings: SettingsRepository) {
                     title = "Оформление под ивенты",
                     checked = HalloweenEvent.themingEnabled,
                     onChange = { HalloweenEvent.setThemingEnabled(context, it) },
-                    subtitle = "Праздничные заставки, частицы и значки. Выключено — обычный Yougram",
+                    subtitle = "Праздничные заставки, частицы и значки. Выключено — обычный MaterialGram",
                 )
             }
         }

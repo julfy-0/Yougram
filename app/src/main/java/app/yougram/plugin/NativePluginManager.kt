@@ -30,7 +30,7 @@ import org.json.JSONObject
 class NativePluginManager(private val context: Context) {
     companion object {
         const val API_VERSION = PluginApiVersion.CURRENT
-        private const val TAG = "YougramPlugins"
+        private const val TAG = "MaterialGramPlugins"
         private const val BUNDLED_ID = "com.yougram.example.hello"
         private const val MAX_UNPACKED_BYTES = 64L * 1024 * 1024
         private const val HOOK_TIMEOUT_MS = 1500L

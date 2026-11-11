@@ -263,7 +263,7 @@ fun MainScreen(
     LaunchedEffect(badgeOn, ownBanner, ownBadgeStyle) {
         val ok = runCatching { container.chatRepository.syncOwnBadge(badgeOn, ownBanner, ownBadgeStyle) }.getOrDefault(false)
         if (!ok && badgeOn) {
-            Toast.makeText(badgeContext, tr("Не удалось обновить метку или баннер Yougram в профиле (проверьте длину «О себе»)"), Toast.LENGTH_LONG).show()
+            Toast.makeText(badgeContext, tr("Не удалось обновить метку или баннер MaterialGram в профиле (проверьте длину «О себе»)"), Toast.LENGTH_LONG).show()
         }
     }
 

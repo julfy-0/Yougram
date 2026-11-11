@@ -176,7 +176,7 @@ fun AssistantScreen(
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { confirmImport = false },
             title = { Text("Установить плагин?") },
-            text = { Text("Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. Ставьте только из источников, которым доверяете.") },
+            text = { Text("Плагин — это машинный код. Он получит полный доступ к данным MaterialGram и вашему аккаунту Telegram. Ставьте только из источников, которым доверяете.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmImport = false

@@ -154,7 +154,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             }
         }
         SettingsFootnote(
-            tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает Yougram. ") +
+            tr("Нативный код не изолирован: он работает с теми же правами, что и приложение, и его сбой закрывает MaterialGram. ") +
                     tr("Ставьте только плагины, которым доверяете."),
         )
         SettingsFootnote("SDK 2.3: заголовок yougram_plugin.h и пример example_hello.cpp в исходниках приложения.")
@@ -166,7 +166,7 @@ fun PluginsScreen(manager: NativePluginManager, contentPadding: PaddingValues) {
             title = { Text("Установить плагин?") },
             text = {
                 Text(
-                    tr("Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. ") +
+                    tr("Плагин — это машинный код. Он получит полный доступ к данным MaterialGram и вашему аккаунту Telegram. ") +
                             tr("Устанавливайте только из источников, которым доверяете."),
                 )
             },
