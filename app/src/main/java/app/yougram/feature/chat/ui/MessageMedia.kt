@@ -151,7 +151,7 @@ fun MessageMedia(
         AlertDialog(
             onDismissRequest = { pluginConfirm = false },
             title = { Text("Установить плагин?") },
-            text = { Text(tr("Файл «{0}» будет установлен прямо в Yougram, без сохранения в память устройства.", media.name)) },
+            text = { Text(tr("Файл «{0}» будет установлен прямо в MaterialGram, без сохранения в память устройства.", media.name)) },
             confirmButton = {
                 TextButton(onClick = { pluginConfirm = false; installPlugin(File(pluginPath), false) }) { Text("Установить") }
             },

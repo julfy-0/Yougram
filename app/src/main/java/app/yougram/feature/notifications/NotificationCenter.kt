@@ -135,7 +135,7 @@ class NotificationCenter(
         val g = groups[groupId] ?: Group(
             id = groupId,
             chatId = chatId,
-            title = runCatching { chats.getChatTitle(chatId) }.getOrDefault("Yougram"),
+            title = runCatching { chats.getChatTitle(chatId) }.getOrDefault("MaterialGram"),
             kind = chats.chatKind(chatId),
         ).also { groups[groupId] = it }
         if (!kindEnabled(g.kind, prefs)) {
@@ -263,7 +263,7 @@ class NotificationCenter(
         )
         val summary = NotificationCompat.Builder(context, CH_SILENT)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("Yougram")
+            .setContentTitle("MaterialGram")
             .setContentText(tr("Новых сообщений: {0}, чатов: {1}", total, groups.size))
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)

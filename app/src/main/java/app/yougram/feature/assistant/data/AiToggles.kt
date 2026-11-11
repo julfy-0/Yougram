@@ -69,7 +69,7 @@ internal object AiToggles {
         t("Статичный зум", "статичн") { s, v -> s.updateCamera { it.copy(staticZoom = v) } },
         t("Улучшенный интерфейс", "улучшенн") { s, v -> s.setEnhancedUi(v) },
         t("Курсив в шрифте", "курсив") { s, v -> s.setFontItalic(v) },
-        t("Значок Yougram", "значок+yougram", "бейдж", "badge") { s, v -> s.setBadge(v) },
+        t("Значок MaterialGram", "значок+yougram", "бейдж", "badge") { s, v -> s.setBadge(v) },
         t("Stream ALL Videos", "stream+all", "стрим+все", "все видео") { s, v -> s.updateDataPrefs { it.copy(streamAll = v) } },
         t("Локальный Premium", "premium", "премиум", "звезд") { s, v -> s.setLocalPremium(v) },
     )

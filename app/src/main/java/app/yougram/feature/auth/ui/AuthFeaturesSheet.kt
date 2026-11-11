@@ -42,7 +42,7 @@ private val features = listOf(
     AuthFeature(
         Icons.Filled.History,
         "Архив удалённого и правок",
-        "Yougram сохраняет на устройстве удалённые сообщения, историю правок и вложения. В обычном Telegram они пропадают.",
+        "MaterialGram сохраняет на устройстве удалённые сообщения, историю правок и вложения. В обычном Telegram они пропадают.",
     ),
     AuthFeature(
         Icons.Filled.FilterAlt,
@@ -84,7 +84,7 @@ fun AuthFeaturesSheet(onDismiss: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Что умеет Yougram", style = MaterialTheme.typography.titleLarge)
+            Text("Что умеет MaterialGram", style = MaterialTheme.typography.titleLarge)
             Text(
                 "То, чего нет в обычном Telegram",
                 style = MaterialTheme.typography.bodyMedium,

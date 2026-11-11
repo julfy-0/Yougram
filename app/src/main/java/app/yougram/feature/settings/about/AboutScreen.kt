@@ -153,14 +153,14 @@ fun AboutScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Yougram",
+                text = "MaterialGram",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = tr("Yougram v{0} · на базе TDLib {1}", BuildConfig.VERSION_NAME, tdlibVersion),
+                text = tr("MaterialGram v{0} · на базе TDLib {1}", BuildConfig.VERSION_NAME, tdlibVersion),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -177,7 +177,7 @@ fun AboutScreen(
         SettingGroup {
             item {
                 SettingRow(
-                    title = "Версия Yougram",
+                    title = "Версия MaterialGram",
                     subtitle = "Текущий релиз",
                     value = BuildConfig.VERSION_NAME,
                     icon = Icons.Filled.Info,
@@ -345,7 +345,7 @@ fun AboutScreen(
     confirm?.let { action ->
         val (title, text) = when (action) {
             DebugConfirm.ResetSettings ->
-                "Сбросить настройки?" to "Все настройки Yougram вернутся к значениям по умолчанию. Приложение перезапустится."
+                "Сбросить настройки?" to "Все настройки MaterialGram вернутся к значениям по умолчанию. Приложение перезапустится."
             DebugConfirm.ClearDatabase ->
                 "Очистить базу данных?" to "Локальная база и файлы активного аккаунта будут удалены, потребуется войти заново. Приложение перезапустится."
         }
@@ -386,7 +386,7 @@ private suspend fun exportLogs(context: Context, tdlibVersion: String): android.
             val file = File(dir, "yougram_log_${System.currentTimeMillis()}.txt")
             val proc = ProcessBuilder("logcat", "-d", "-v", "threadtime").redirectErrorStream(true).start()
             file.bufferedWriter().use { w ->
-                w.appendLine("Yougram ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), TDLib $tdlibVersion")
+                w.appendLine("MaterialGram ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), TDLib $tdlibVersion")
                 w.appendLine("Android ${AndroidBuild.VERSION.RELEASE} (API ${AndroidBuild.VERSION.SDK_INT}), ${AndroidBuild.MANUFACTURER} ${AndroidBuild.MODEL}")
                 w.appendLine("----")
                 proc.inputStream.bufferedReader().copyTo(w)

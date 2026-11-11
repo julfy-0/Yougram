@@ -65,7 +65,7 @@ object PluginStore {
             connectTimeout = CONNECT_TIMEOUT
             readTimeout = READ_TIMEOUT
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Yougram-PluginStore")
+            setRequestProperty("User-Agent", "MaterialGram-PluginStore")
         }
     }
 

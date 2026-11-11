@@ -278,7 +278,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "Yougram/${BuildConfig.VERSION_NAME}")
+        conn.setRequestProperty("User-Agent", "MaterialGram/${BuildConfig.VERSION_NAME}")
         if (api) conn.setRequestProperty("Accept", "application/vnd.github+json")
         val code = conn.responseCode
         if (code !in 200..299) {
@@ -295,7 +295,7 @@ class AppUpdater(context: Context, private val scope: CoroutineScope) {
     }
 
     private companion object {
-        const val REPO = "julfy-0/Yougram"
+        const val REPO = "xenone-beta/MaterialGram"
         val BANNER_NAME = Regex("^banner.*\\.(png|jpe?g|webp)$", RegexOption.IGNORE_CASE)
     }
 }

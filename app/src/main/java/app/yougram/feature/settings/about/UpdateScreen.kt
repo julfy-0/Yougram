@@ -81,7 +81,7 @@ internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
     ) {
         Image(
             painter = painterResource(id = R.drawable.about_banner),
-            contentDescription = tr("Баннер Yougram"),
+            contentDescription = tr("Баннер MaterialGram"),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )

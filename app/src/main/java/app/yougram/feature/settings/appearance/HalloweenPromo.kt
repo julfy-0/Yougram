@@ -81,7 +81,7 @@ private class PromoPage(val title: String, val text: String)
 private val PromoPages = listOf(
     PromoPage(
         "Хеллоуинский ивент",
-        "Yougram переоделся к Хэллоуину. Событие идёт до 23:59 31 октября.",
+        "MaterialGram переоделся к Хэллоуину. Событие идёт до 23:59 31 октября.",
     ),
     PromoPage(
         "Новая заставка",
@@ -93,7 +93,7 @@ private val PromoPages = listOf(
     ),
     PromoPage(
         "Хеллоуинский значок",
-        "Выберите его в «Настройки → Внешний вид и чаты → Баннер и значок»: его увидят все пользователи Yougram.",
+        "Выберите его в «Настройки → Внешний вид и чаты → Баннер и значок»: его увидят все пользователи MaterialGram.",
     ),
     PromoPage(
         "Успейте до 31 октября",
@@ -201,7 +201,7 @@ private fun PromoPageContent(index: Int, pulse: Float) {
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text(
-                        "Yougram",
+                        "MaterialGram",
                         modifier = Modifier.padding(start = 24.dp),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,

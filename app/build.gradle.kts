@@ -28,12 +28,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.yougram"
+        applicationId = "xenoLab.materialgram.app"
         minSdk = 31
         targetSdk = 36
 
-        versionCode = 39
-        versionName = "1.4.2"
+        versionCode = (System.getenv("APP_VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.0"
 
         buildConfigField(
             "int",
@@ -83,21 +83,27 @@ android {
 
     signingConfigs {
         create("release") {
-            val pass = localProps.getProperty("KS_PASS")
-            val keystore = rootProject.file("yougram.jks")
+            // MaterialGram signs with its own key. In CI it comes from GitHub secrets (see .github/workflows/release.yml);
+            // locally, KS_PASS / MG_KEYSTORE_FILE can be set in local.properties.
+            val keystorePath = System.getenv("MG_KEYSTORE_FILE") ?: localProps.getProperty("MG_KEYSTORE_FILE")
+            val pass = System.getenv("MG_KEYSTORE_PASSWORD") ?: localProps.getProperty("KS_PASS")
+            val alias = System.getenv("MG_KEY_ALIAS") ?: localProps.getProperty("MG_KEY_ALIAS") ?: "release"
+            val keyPass = System.getenv("MG_KEY_PASSWORD") ?: pass
 
-            if (pass != null && keystore.exists()) {
-                storeFile = keystore
+            if (pass != null && keystorePath != null && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
                 storePassword = pass
-                keyAlias = "yougram"
-                keyPassword = pass
+                keyAlias = alias
+                keyPassword = keyPass
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // Without a release keystore the APK is signed with the debug key, so it still installs.
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+                ?: signingConfigs.getByName("debug")
 
             isMinifyEnabled = true
             isShrinkResources = true

@@ -3198,7 +3198,7 @@ class ChatRepository(
     private fun miniAppParams(theme: dev.g000sha256.tdl.dto.ThemeParameters?) =
         dev.g000sha256.tdl.dto.WebAppOpenParameters(
             theme = theme,
-            applicationName = "Yougram",
+            applicationName = "MaterialGram",
             mode = dev.g000sha256.tdl.dto.WebAppOpenModeFullSize(),
         )
 

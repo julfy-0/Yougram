@@ -92,10 +92,10 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
         SettingGroup {
             item {
                 SwitchRow(
-                    "Значок Yougram",
+                    "Значок MaterialGram",
                     badge,
                     { v -> settings.setBadge(v) },
-                    subtitle = "Ставит метку в «О себе»: другие пользователи Yougram увидят значок у вашего имени",
+                    subtitle = "Ставит метку в «О себе»: другие пользователи MaterialGram увидят значок у вашего имени",
                     icon = Icons.Filled.VerifiedUser,
                 )
             }
@@ -124,7 +124,7 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
             }
         }
         Text(
-            "Другие пользователи Yougram увидят этот значок рядом с вашим именем. Для остальных приложений он невидим.",
+            "Другие пользователи MaterialGram увидят этот значок рядом с вашим именем. Для остальных приложений он невидим.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -152,7 +152,7 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
         }
         Text(
             tr("Картинка хранится только на этом устройстве и заменяет шаблон в вашем профиле. ") +
-                    tr("Другим пользователям Yougram по-прежнему виден выбранный ниже шаблон: в «О себе» помещаются только 12 бит."),
+                    tr("Другим пользователям MaterialGram по-прежнему виден выбранный ниже шаблон: в «О себе» помещаются только 12 бит."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -225,9 +225,9 @@ fun BannerScreen(settings: SettingsRepository, contentPadding: PaddingValues) {
         Text(
             buildString {
                 append(tr("Баннер записывается невидимыми символами в «О себе» (занимает 10 из 70 символов) "))
-                append(tr("и виден только в Yougram: для остальных приложений профиль выглядит как обычно. "))
+                append(tr("и виден только в MaterialGram: для остальных приложений профиль выглядит как обычно. "))
                 append(tr("Если скрыть «О себе» в настройках приватности, баннер тоже станет невидим."))
-                if (!badge) append(tr("\n\nСейчас значок Yougram выключен, поэтому баннер не публикуется. Включите значок в разделе «Режим призрака и шпион»."))
+                if (!badge) append(tr("\n\nСейчас значок MaterialGram выключен, поэтому баннер не публикуется. Включите значок в разделе «Режим призрака и шпион»."))
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

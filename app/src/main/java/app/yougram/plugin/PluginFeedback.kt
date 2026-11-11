@@ -58,7 +58,7 @@ object PluginFeedback {
             conn.requestMethod = method
             conn.connectTimeout = TIMEOUT
             conn.readTimeout = TIMEOUT
-            conn.setRequestProperty("User-Agent", "Yougram-PluginStore")
+            conn.setRequestProperty("User-Agent", "MaterialGram-PluginStore")
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 conn.doOutput = true

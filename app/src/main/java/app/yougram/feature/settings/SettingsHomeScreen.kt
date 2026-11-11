@@ -331,7 +331,7 @@ fun SettingsHomeScreen(
         }
 
         Text(
-            "Yougram ${BuildConfig.VERSION_NAME}",
+            "MaterialGram ${BuildConfig.VERSION_NAME}",
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(role = Role.Button) { onNavigate(SettingsPage.About) }
