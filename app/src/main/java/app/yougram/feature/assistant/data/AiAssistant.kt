@@ -81,7 +81,7 @@ class AiAssistant(
         _messages.update { it + AiMessage(false, "Готово: ${action.setting.name} — ${action.value}.") }
     }
 
-    /** Сообщение от ассистента без генерации (например, итог установки плагина). */
+    /** Сообщение от ассистента без генерации. */
     fun report(text: String) { _messages.update { it + AiMessage(false, text) } }
 
     fun send(text: String) {
@@ -90,10 +90,6 @@ class AiAssistant(
         if (q.isEmpty() || _busy.value) return
         _error.value = null
         val intent = AiActions.fromUserText(q)
-        if (intent.any { it is AiAction.ImportPlugin }) {
-            _messages.update { it + AiMessage(true, q) + AiMessage(false, "Выберите файл плагина (.ygplugin) — нажмите кнопку. Перед установкой я попрошу подтверждение.", intent) }
-            return
-        }
         if (intent.any { it is AiAction.Set }) {
             // Команда однозначна — отвечаем сразу, без генерации (быстро и без выдумок модели).
             _messages.update { it + AiMessage(true, q) + AiMessage(false, "Могу сделать это — нажмите кнопку.", intent) }

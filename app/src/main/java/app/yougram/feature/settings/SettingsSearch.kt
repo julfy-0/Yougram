@@ -78,7 +78,6 @@ private val searchEntries = listOf(
     SearchEntry(SettingsPage.MessageFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.MessageFilters, "фильтр сообщений"),
     SearchEntry(SettingsPage.SharedFilters.title, null, Icons.Filled.VisibilityOff, SettingsPage.SharedFilters, "фильтр общие"),
     SearchEntry(SettingsPage.ShadowBan.title, null, Icons.Filled.VisibilityOff, SettingsPage.ShadowBan, "бан теневой"),
-    SearchEntry("Плагины", "Оформление, безопасность и т.д.", Icons.Filled.Extension, SettingsPage.Plugins, "плагин модуль расширение ygplugin"),
     SearchEntry("Энергосбережение", "Экономия заряда", Icons.Filled.BatterySaver, SettingsPage.PowerSaving, "батарея заряд"),
     SearchEntry("Аккаунт", "Номер телефона, имя пользователя", Icons.Filled.Person, SettingsPage.Account, "телефон имя username профиль аватар"),
     SearchEntry("Безопасность", "Пин-код, отпечаток, кто видит ваши данные", Icons.Filled.Lock, SettingsPage.Privacy, "приватность видимость номер пароль пин код биометрия отпечаток двухфакторная безопасность конфиденциальность"),

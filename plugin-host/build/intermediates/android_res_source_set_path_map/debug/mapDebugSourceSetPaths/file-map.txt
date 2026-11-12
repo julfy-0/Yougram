@@ -1,9 +1,0 @@
-app.yougram.pluginhost.plugin-host-pngs-0 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\res\pngs\debug
-app.yougram.pluginhost.plugin-host-resValues-1 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\res\resValues\debug
-app.yougram.pluginhost.plugin-host-updated_navigation_xml-2 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\updated_navigation_xml\debug
-app.yougram.pluginhost.plugin-host-mergeDebugResources-3 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\incremental\debug\mergeDebugResources\merged.dir
-app.yougram.pluginhost.plugin-host-mergeDebugResources-4 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\incremental\debug\mergeDebugResources\stripped.dir
-app.yougram.pluginhost.plugin-host-debug-5 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\merged_res\debug\mergeDebugResources
-app.yougram.pluginhost.plugin-host-debug-6 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\packaged_res\debug\packageDebugResources
-app.yougram.pluginhost.plugin-host-debug-7 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\src\debug\res
-app.yougram.pluginhost.plugin-host-main-8 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\src\main\res

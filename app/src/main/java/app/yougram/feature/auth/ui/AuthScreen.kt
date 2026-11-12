@@ -121,7 +121,7 @@ fun AuthScreen(
             ) {
                 val halloween = HalloweenEvent.isActive()
                 Text(
-                    "Yougram",
+                    "MaterialGram",
                     style = MaterialTheme.typography.displaySmallEmphasized,
                     color = if (halloween) Color(0xFFFF8A1F) else Color.Unspecified,
                 )
@@ -337,7 +337,7 @@ fun AuthScreen(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Что умеет Yougram")
+                    Text("Что умеет MaterialGram")
                 }
                 if (!(step == AuthStep.EnterPhone && !editPhone)) {
                     Spacer(Modifier.height(4.dp))

@@ -85,11 +85,6 @@ fun SettingsDetailPane(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (page == SettingsPage.Plugins) {
-                    IconButton(onClick = { onNavigate(SettingsPage.PluginManager) }) {
-                        Icon(Icons.Filled.Extension, contentDescription = tr("Менеджер плагинов"))
-                    }
-                }
             }
             Box(Modifier.weight(1f).fillMaxWidth().backdropSource(backdrop)) {
                 val shapeBag = remember(page) { ShapeBag() }

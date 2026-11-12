@@ -115,7 +115,7 @@ private fun LockScreen(appLock: AppLock, promptEnabled: Boolean) {
 
     fun tryBiometric() {
         if (settings.biometric) {
-            showBiometricPrompt(context, appLock, "Разблокировка Yougram", onSuccess = { appLock.unlockByBiometric() })
+            showBiometricPrompt(context, appLock, "Разблокировка MaterialGram", onSuccess = { appLock.unlockByBiometric() })
         }
     }
 
@@ -180,7 +180,7 @@ private fun LockScreen(appLock: AppLock, promptEnabled: Boolean) {
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("Yougram заблокирован", style = MaterialTheme.typography.headlineSmallEmphasized, textAlign = TextAlign.Center)
+                Text("MaterialGram заблокирован", style = MaterialTheme.typography.headlineSmallEmphasized, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
                 val hint = when {
                     lockedOut -> tr("Слишком много попыток. Повторите через {0} с", remainingSec)

@@ -99,9 +99,6 @@ import app.yougram.feature.assistant.data.AiMessage
 import app.yougram.feature.assistant.data.AiModelState
 import app.yougram.feature.assistant.data.AiModel
 import app.yougram.feature.assistant.data.AiModelManager
-import app.yougram.feature.settings.extras.PendingPlugin
-import app.yougram.feature.settings.extras.PluginScanDialog
-import app.yougram.plugin.SuspiciousPluginException
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -118,74 +115,9 @@ fun AssistantScreen(
     settings: SettingsRepository,
     contentPadding: PaddingValues,
     onNavigate: (SettingsPage) -> Unit,
-    plugins: app.yougram.plugin.NativePluginManager,
 ) {
     val model by assistant.models.state.collectAsState()
     val context = LocalContext.current
-    val importScope = androidx.compose.runtime.rememberCoroutineScope()
-    var confirmImport by remember { mutableStateOf(false) }
-    var pendingScan by remember { mutableStateOf<PendingPlugin?>(null) }
-    val importPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-    ) { uri: android.net.Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        importScope.launch {
-            val temp = java.io.File(context.cacheDir, "plugin-import-${System.nanoTime()}.ygplugin")
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { input.copyTo(it) } }
-                        ?: error("Не удалось прочитать файл")
-                    plugins.installFromZip(temp)
-                }
-            }
-            val err = result.exceptionOrNull()
-            if (err is SuspiciousPluginException) {
-                pendingScan = PendingPlugin(temp, err.report)
-                return@launch
-            }
-            withContext(Dispatchers.IO) { temp.delete() }
-            assistant.report(
-                result.fold(
-                    onSuccess = { "Плагин «${it.manifest.name}» установлен (v${it.manifest.version}). Проверка на вредоносный код пройдена." },
-                    onFailure = { "Не удалось установить плагин: ${it.message}" },
-                ),
-            )
-        }
-    }
-    pendingScan?.let { p ->
-        PluginScanDialog(
-            p,
-            onInstall = {
-                pendingScan = null
-                importScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        runCatching { plugins.installFromZip(p.file, allowSuspicious = true) }.also { p.file.delete() }
-                    }
-                    assistant.report(
-                        r.fold(
-                            onSuccess = { "Плагин «${it.manifest.name}» установлен (v${it.manifest.version}) по вашему подтверждению." },
-                            onFailure = { "Не удалось установить плагин: ${it.message}" },
-                        ),
-                    )
-                }
-            },
-            onCancel = { pendingScan = null; p.file.delete() },
-        )
-    }
-    if (confirmImport) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmImport = false },
-            title = { Text("Установить плагин?") },
-            text = { Text("Плагин — это машинный код. Он получит полный доступ к данным Yougram и вашему аккаунту Telegram. Ставьте только из источников, которым доверяете.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmImport = false
-                    importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
-                }) { Text("Выбрать файл") }
-            },
-            dismissButton = { TextButton(onClick = { confirmImport = false }) { Text("Отмена") } },
-        )
-    }
     val chatPrefs by settings.chatPrefs.collectAsState()
 
     // Фон как на страницах настроек (а не обои чата).
@@ -201,7 +133,7 @@ fun AssistantScreen(
             when {
                 !assistant.supported -> Notice("Ассистент работает только на 64-битных устройствах.", top)
                 else -> when (val s = model) {
-                    is AiModelState.Ready -> Chat(assistant, top, chatPrefs.textSize, chatPrefs.bubbleRadius, chatPrefs.ownBubbleColor, chatPrefs.otherBubbleColor, chatPrefs.bubbleOpacity, onNavigate) { confirmImport = true }
+                    is AiModelState.Ready -> Chat(assistant, top, chatPrefs.textSize, chatPrefs.bubbleRadius, chatPrefs.ownBubbleColor, chatPrefs.otherBubbleColor, chatPrefs.bubbleOpacity, onNavigate)
                     is AiModelState.Downloading -> Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(top = top + 16.dp, start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Загрузка ${selected.title}… ${(s.progress * 100).toInt()}% (${s.downloaded / 1_000_000} из ${s.total / 1_000_000} МБ)")
                         app.yougram.core.ui.component.LinearWavyProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth(), thick = true)
@@ -305,7 +237,6 @@ private fun ColumnScope.Chat(
     otherColor: Long,
     opacityPercent: Int,
     onNavigate: (SettingsPage) -> Unit,
-    onImportPlugin: () -> Unit,
 ) {
     val messages by assistant.messages.collectAsState()
     val busy by assistant.busy.collectAsState()
@@ -333,7 +264,7 @@ private fun ColumnScope.Chat(
             Bubble(
                 m, textSize = textSize, radius = bubbleRadius,
                 ownColor = ownColor, otherColor = otherColor, opacity = opacityPercent / 100f,
-                onNavigate = onNavigate, onApply = assistant::apply, onImportPlugin = onImportPlugin,
+                onNavigate = onNavigate, onApply = assistant::apply,
             )
         }
     }
@@ -392,7 +323,6 @@ private fun Bubble(
     opacity: Float,
     onNavigate: (SettingsPage) -> Unit,
     onApply: (AiAction.Set) -> Unit,
-    onImportPlugin: () -> Unit,
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val r = radius.coerceIn(12, 28).dp
@@ -438,7 +368,6 @@ private fun Bubble(
                             when (a) {
                                 is AiAction.Open -> onNavigate(a.page)
                                 is AiAction.Set -> onApply(a)
-                                AiAction.ImportPlugin -> onImportPlugin()
                             }
                         },
                     ) { Text(a.label) }

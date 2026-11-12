@@ -25,10 +25,6 @@ sealed interface AiAction {
         override val label get() = "Применить: ${setting.name} → $value"
     }
 
-    /** Открывает выбор файла .ygplugin и устанавливает плагин (после подтверждения пользователя). */
-    data object ImportPlugin : AiAction {
-        override val label get() = "Импортировать плагин…"
-    }
 }
 
 /**
@@ -49,7 +45,6 @@ object AiActions {
         "Устройства" to SettingsPage.Devices,
         "Чёрный список" to SettingsPage.Blocked,
         "Архив" to SettingsPage.Archive,
-        "Плагины" to SettingsPage.Plugins,
         "Режим призрака" to SettingsPage.Ghost,
         "Настройки клиента" to SettingsPage.Extras,
         "Аккаунт" to SettingsPage.Account,
@@ -114,14 +109,6 @@ object AiActions {
     private val offWords = listOf("выключ", "отключ", "выкл", "убери", "отруби", "деактив", "не надо", "без ")
     private val onWords = listOf("включ", "вкл", "актив", "поставь", "установи", "сделай", "хочу", "верни")
 
-    private val importWords = listOf("импорт", "установ", "загруз", "добав", "подключ", "поставь")
-
-    /** «Импортируй плагин», «установи плагин» и т.п. — команда, а не вопрос. */
-    fun isPluginImport(t: String): Boolean =
-        (t.contains("плагин") || t.contains("модул") || t.contains("ygplugin")) &&
-            importWords.any { t.contains(it) } &&
-            !(t.contains('?') || questionStarts.any { t.trimStart().startsWith(it) })
-
     /** Основы слов из названия настройки (≥4 букв, первые 5): позволяет находить любую настройку по её имени. */
     private fun nameStems(name: String): List<String> =
         name.lowercase().replace('ё', 'е')
@@ -133,7 +120,6 @@ object AiActions {
         listOf("уведомлен", "пуш") to "Уведомления",
         listOf("язык", "локализ") to "Язык",
         listOf("архив") to "Архив",
-        listOf("модул", "плагин") to "Плагины",
         listOf("призрак") to "Режим призрака",
         listOf("черный список", "заблокирован") to "Чёрный список",
         listOf("устройств", "сеанс") to "Устройства",
@@ -153,7 +139,6 @@ object AiActions {
      */
     fun fromUserText(raw: String): List<AiAction> {
         val t = raw.lowercase().replace('ё', 'е')
-        if (isPluginImport(t)) return listOf(AiAction.ImportPlugin, AiAction.Open("Плагины", SettingsPage.Plugins))
         val sets = ArrayList<AiAction>()
         val isQuestion = t.contains('?') || questionStarts.any { t.trimStart().startsWith(it) }
         if (!isQuestion) {
@@ -189,8 +174,8 @@ object AiActions {
 
     /** Системная инструкция: короткая, потому что контекст модели всего 1280 токенов. */
     val systemPrompt: String =
-        "Ты — официальный ИИ Yougram, встроенный помощник приложения Yougram (клиент Telegram). " +
-            "Если спрашивают, кто ты, отвечай: «Я официальный ИИ Yougram». Не называй себя Gemma, Qwen, Google, Alibaba или другой моделью и компанией. " +
+        "Ты — официальный ИИ MaterialGram, встроенный помощник приложения MaterialGram (клиент Telegram). " +
+            "Если спрашивают, кто ты, отвечай: «Я официальный ИИ MaterialGram». Не называй себя Gemma, Qwen, Google, Alibaba или другой моделью и компанией. " +
             "Отвечай по-русски, кратко, 1–3 предложения, только по существу. " +
             "Включением и выключением настроек занимается само приложение: если пользователь просит включить что-то, " +
             "посоветуй написать «включи …». Чтобы направить в раздел, назови его в кавычках: «ИМЯ». " +

@@ -94,7 +94,7 @@ fun ExtrasScreen(settings: SettingsRepository, contentPadding: PaddingValues, on
                     "Встроенный браузер",
                     inAppBrowser,
                     { v -> settings.setInAppBrowser(v) },
-                    subtitle = "Ссылки из чатов открываются внутри Yougram, а не во внешнем браузере",
+                    subtitle = "Ссылки из чатов открываются внутри MaterialGram, а не во внешнем браузере",
                     icon = Icons.Filled.Language,
                 )
             }

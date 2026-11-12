@@ -1,0 +1,56 @@
+name: CI
+
+# The native part (WebRTC, ffmpeg, TDLib JNI) makes this build long, so it runs on demand and on pushes to main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Write local.properties
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          {
+            echo "TG_API_ID=${TG_API_ID:-0}"
+            echo "TG_API_HASH=${TG_API_HASH}"
+          } > local.properties
+          [ -n "$TG_API_ID" ] || echo "::warning::Secret TG_API_ID is empty - the app will build but cannot log in."
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MaterialGram-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

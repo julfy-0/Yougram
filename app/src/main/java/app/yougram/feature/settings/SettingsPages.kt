@@ -34,8 +34,6 @@ import app.yougram.feature.settings.about.UpdateScreen
 import app.yougram.feature.settings.extras.ExtrasScreen
 import app.yougram.feature.settings.extras.GhostModeScreen
 import app.yougram.feature.settings.extras.MessageFiltersScreen
-import app.yougram.feature.settings.extras.PluginsScreen
-import app.yougram.feature.settings.extras.PluginStoreScreen
 import app.yougram.feature.settings.extras.ShadowBanScreen
 import app.yougram.feature.settings.extras.SharedFiltersScreen
 import app.yougram.feature.settings.extras.SpyModeScreen
@@ -120,9 +118,6 @@ fun SettingsPageContent(
         SettingsPage.DataStorage -> DataStorageScreen(details, container.settings, contentPadding)
         SettingsPage.Stickers -> StickersScreen(container.telegram.client, contentPadding)
         SettingsPage.NetworkUsage -> NetworkUsageScreen(container.telegram.client, contentPadding)
-        SettingsPage.Plugins -> PluginStoreScreen(container.plugins, contentPadding)
-        SettingsPage.PluginsNew -> PluginStoreScreen(container.plugins, contentPadding, newOnly = true)
-        SettingsPage.PluginManager -> PluginsScreen(container.plugins, contentPadding)
         SettingsPage.Archive -> ArchiveScreen(container.chatRepository, contentPadding, onOpenChat)
         SettingsPage.Devices -> DevicesScreen(details, contentPadding)
         SettingsPage.PowerSaving -> PowerSavingScreen(container.settings, contentPadding)
@@ -138,7 +133,7 @@ fun SettingsPageContent(
         SettingsPage.Language -> LanguageScreen(contentPadding)
         SettingsPage.About -> AboutScreen(contentPadding, container.updater, container.telegram.client, container.accountManager, onNavigate)
         SettingsPage.Update -> UpdateScreen(container.updater, container.telegram.client, contentPadding)
-        SettingsPage.Assistant -> app.yougram.feature.assistant.ui.AssistantScreen(container.assistant, container.settings, contentPadding, onNavigate, container.plugins)
+        SettingsPage.Assistant -> app.yougram.feature.assistant.ui.AssistantScreen(container.assistant, container.settings, contentPadding, onNavigate)
         SettingsPage.Extras -> ExtrasScreen(container.settings, contentPadding, onNavigate)
         SettingsPage.Ghost -> GhostModeScreen(container.settings, contentPadding)
         SettingsPage.Spy -> SpyModeScreen(container.settings, container.spy, contentPadding)

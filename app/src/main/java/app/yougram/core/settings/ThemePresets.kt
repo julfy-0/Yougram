@@ -124,7 +124,7 @@ object BuiltInPresets {
     }
 
     val all: List<BuiltInPreset> = listOf(
-        preset("Классика", "Стандартный вид Yougram") {
+        preset("Классика", "Стандартный вид MaterialGram") {
             put("mode", "Dark"); put("dynamic", true); put("accent", 0)
             put("glass", glass(GlassSettings.DEFAULT_BLUR.toDouble(), GlassSettings.DEFAULT_OPACITY.toDouble()))
             put("plates", plates(0.0))

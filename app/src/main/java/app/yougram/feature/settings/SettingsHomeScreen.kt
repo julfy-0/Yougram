@@ -126,7 +126,6 @@ import app.yougram.feature.chat.data.ProfileItem
 import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
-import app.yougram.plugin.NativePluginManager
 import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,9 +146,6 @@ enum class SettingsPage(val title: String) {
     NetworkUsage("Использование сети"),
     Stickers("Стикеры и реакции"),
     NotificationExceptions("Исключения уведомлений"),
-    Plugins("Плагины"),
-    PluginsNew("Новые плагины"),
-    PluginManager("Менеджер плагинов"),
     Archive("Архив"),
     Devices("Устройства"),
     PowerSaving("Энергосбережение"),
@@ -259,10 +255,6 @@ fun SettingsHomeScreen(
             onOpenProfile = { state.profile?.id?.let(onOpenProfile) },
         )
 
-        app.yougram.plugin.PluginSlot(app.yougram.plugin.PluginUi.SETTINGS_HOME, layout = app.yougram.plugin.PluginSlotLayout.Column)
-
-        val pluginHidden = app.yougram.plugin.rememberPluginHiddenSet()
-
         SectionLabel("ИИ-ассистент")
         SettingGroup {
             item { SettingRow("ИИ-ассистент", subtitle = "Помощь по настройкам, работает на устройстве", icon = Icons.Filled.AutoAwesome, onClick = { onNavigate(SettingsPage.Assistant) }) }
@@ -273,8 +265,7 @@ fun SettingsHomeScreen(
         val openUpdate = { onNavigate(SettingsPage.Update) }
         SettingGroup {
             item { SettingRow("О приложении", subtitle = "Версия, баннер, информация", icon = Icons.Filled.Info, onClick = { onNavigate(SettingsPage.About) }) }
-            item { SettingRow("Плагины", subtitle = "Оформление, безопасность и т.д.", icon = Icons.Filled.Extension, onClick = { onNavigate(SettingsPage.Plugins) }) }
-            if (app.yougram.plugin.PluginUi.SETTINGS_UPDATE !in pluginHidden) item {
+            item {
                 when (val u = update) {
                     UpdateState.Idle, UpdateState.Checking -> SettingRow(
                         title = "Проверка обновлений…", icon = Icons.Filled.SystemUpdate,
@@ -317,8 +308,7 @@ fun SettingsHomeScreen(
         val layout = remember(savedLayout) { HomeLayout.normalize(HomeLayout.parse(savedLayout), all.map { it.id }) }
 
         layout.forEach { section ->
-            // Вкладки, скрытые плагинами, не рисуем; секция без видимых вкладок пропадает целиком.
-            val visible = section.entries.filter { (app.yougram.plugin.PluginUi.SETTINGS_ENTRY_PREFIX + it) !in pluginHidden }
+            val visible = section.entries
             if (visible.isNotEmpty()) {
                 SectionLabel(section.title)
                 SettingGroup {
@@ -331,7 +321,7 @@ fun SettingsHomeScreen(
         }
 
         Text(
-            "Yougram ${BuildConfig.VERSION_NAME}",
+            "MaterialGram ${BuildConfig.VERSION_NAME}",
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(role = Role.Button) { onNavigate(SettingsPage.About) }

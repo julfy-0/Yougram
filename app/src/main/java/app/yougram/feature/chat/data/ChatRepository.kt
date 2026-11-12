@@ -13,8 +13,6 @@ import app.yougram.core.telegram.getOrThrow
 import app.yougram.core.telegram.okOrNull
 import app.yougram.feature.badge.data.YougramBadge
 import app.yougram.feature.badge.data.YougramBanner
-import app.yougram.plugin.NativePluginManager
-import app.yougram.plugin.PluginMessage
 import dev.g000sha256.tdl.TdlResult
 import dev.g000sha256.tdl.dto.BlockListMain
 import dev.g000sha256.tdl.dto.CallDiscardReasonDeclined
@@ -601,7 +599,6 @@ class ChatRepository(
     private val settings: SettingsRepository,
     private val spy: SpyStore,
     private val context: Context,
-    private val plugins: NativePluginManager? = null,
 ) {
     private val client get() = telegram.client
 
@@ -921,7 +918,6 @@ class ChatRepository(
             client.newMessageUpdates.collect { update ->
                 val item = update.message.toItem()
                 _newMessages.tryEmit(item)
-                plugins?.emitMessageReceived(PluginMessage.from(item, update.message.content))
                 onSpyMessage(item)
             }
         }
@@ -942,7 +938,6 @@ class ChatRepository(
                 // Запоминаем соответствие временного id настоящему: правка/удаление/закрепление
                 // по старому id (например, взятому до подтверждения отправки) дают «Message not found».
                 sentIdMap[update.oldMessageId] = update.message.id
-                plugins?.emitMessageSent(PluginMessage.from(update.message.toItem(), update.message.content), update.oldMessageId)
                 _sendSucceeded.tryEmit(
                     SendSucceededEvent(update.message.chatId, update.oldMessageId, update.message.toItem()),
                 )
@@ -965,7 +960,6 @@ class ChatRepository(
                     io { spy.markDeleted(update.chatId, rest, now()) }
                 } else emptySet()
                 _deletions.tryEmit(DeleteEvent(update.chatId, kept, ids.toSet() - kept))
-                plugins?.emitMessageDeleted(update.chatId, ids)
             }
         }
         scope.launch {
@@ -985,14 +979,6 @@ class ChatRepository(
                         emojisOf(content), linksOf(content),
                     ),
                 )
-                plugins?.events?.emit("message_edited", linkedMapOf(
-                    "chat_id" to update.chatId,
-                    "message_id" to update.messageId,
-                    "text" to text,
-                    "type" to content.javaClass.simpleName.removePrefix("Message"),
-                    "content" to app.yougram.plugin.TdObjectMapper.toMap(content),
-                    "media" to media?.let { m -> linkedMapOf("kind" to m.kind.name, "file_id" to m.fileId, "preview_file_id" to m.previewFileId, "width" to m.width, "height" to m.height, "name" to m.name, "mime_type" to m.mimeType, "size" to m.size, "duration" to m.duration) },
-                ))
             }
         }
         scope.launch {
@@ -1733,12 +1719,10 @@ class ChatRepository(
         chatId: Long,
         rawText: String,
         replyToId: Long? = null,
-        fromPlugin: Boolean = false,
         /** Упоминания людей без username: текст «@Имя» → id пользователя. */
         mentions: Map<String, Long> = emptyMap(),
     ) {
-        // Плагинные отправки идут мимо хука, иначе плагин зациклится на собственных сообщениях.
-        val text = if (fromPlugin) rawText else plugins?.beforeSend(chatId, rawText, replyToId) ?: return
+        val text = rawText
         client.sendMessage(
             chatId = chatId,
             topicId = topicParam(chatId),
@@ -2146,9 +2130,8 @@ class ChatRepository(
         ReplyPreview(author, item.summary.ifEmpty { tr("Сообщение") })
     }.getOrDefault(ReplyPreview("", "Сообщение недоступно"))
 
-    suspend fun editText(chatId: Long, messageId: Long, text: String, fromPlugin: Boolean = false) {
-        // Правки плагина идут мимо хука before_edit, иначе плагин зациклится на собственных правках.
-        val finalText = if (fromPlugin) text else plugins?.beforeEdit(chatId, messageId, text) ?: return
+    suspend fun editText(chatId: Long, messageId: Long, text: String) {
+        val finalText = text
         var messageId = messageId
         // Сразу после отправки TDLib иногда ещё не успевает синхронизировать сообщение
         // с серверной историей. В этот короткий момент editMessageText может вернуть
@@ -3198,7 +3181,7 @@ class ChatRepository(
     private fun miniAppParams(theme: dev.g000sha256.tdl.dto.ThemeParameters?) =
         dev.g000sha256.tdl.dto.WebAppOpenParameters(
             theme = theme,
-            applicationName = "Yougram",
+            applicationName = "MaterialGram",
             mode = dev.g000sha256.tdl.dto.WebAppOpenModeFullSize(),
         )
 

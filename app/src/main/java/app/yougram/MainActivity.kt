@@ -163,7 +163,6 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.ui.platform.LocalDensity provides scaledDensity,
                     LocalGlass provides glass,
                     LocalPlates provides plates,
-                    app.yougram.plugin.LocalPluginApi provides container.pluginApi,
                     LocalYougramUsers provides yougramUsers,
                     LocalGoldUsers provides goldUsers,
                     LocalCreatorUsers provides creatorUsers,

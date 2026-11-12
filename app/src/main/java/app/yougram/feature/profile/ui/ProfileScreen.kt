@@ -264,7 +264,6 @@ fun ProfileScreen(
                     .filter { it.fileId != pinnedTrack?.fileId }
             }
             val links = remember(state.shared) { state.shared.filter { UrlRegex.containsMatchIn(it.text) } }
-            val pluginHidden = app.yougram.plugin.rememberPluginHiddenSet()
 
             LazyColumn(
                 Modifier.fillMaxSize(),
@@ -278,9 +277,7 @@ fun ProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { Appear(0, entered.value) { ProfileHeader(details, viewModel, listState, entered.value, onAvatarClick = { if (state.avatars.isNotEmpty()) showAvatars = true }, onAvatarLongClick = saveAvatar) } }
-                if (app.yougram.plugin.PluginUi.PROFILE_ACTIONS !in pluginHidden) {
-                    item { Appear(1, entered.value) { ActionsGroup(actions) } }
-                }
+                item { Appear(1, entered.value) { ActionsGroup(actions) } }
                 if (pinnedTrack != null) {
                     item(key = "pinned-music") {
                         Appear(1, entered.value) {
@@ -288,24 +285,12 @@ fun ProfileScreen(
                         }
                     }
                 }
-                if (app.yougram.plugin.PluginUi.PROFILE_INFO !in pluginHidden) {
-                    item {
-                        Appear(2, entered.value) {
-                            InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
-                        }
+                item {
+                    Appear(2, entered.value) {
+                        InfoGroup(details, context, onDossier = { viewModel.loadDossier(); showDossier = true })
                     }
                 }
-                item(key = "plugin-slot") {
-                    app.yougram.plugin.PluginSlot(
-                        app.yougram.plugin.PluginUi.PROFILE,
-                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        layout = app.yougram.plugin.PluginSlotLayout.Column,
-                    )
-                }
-                if (app.yougram.plugin.PluginUi.PROFILE_TABS !in pluginHidden) {
-                    item { Appear(3, entered.value) { TabSwitcher(tab) { tab = it } } }
-                }
-                if (app.yougram.plugin.PluginUi.PROFILE_TABS !in pluginHidden) {
+                item { Appear(3, entered.value) { TabSwitcher(tab) { tab = it } } }
                     when {
                         state.sharedLoading && tab != ProfileTab.DELETED -> item(key = "loading") {
                             Box(Modifier.animateItem().fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -348,7 +333,6 @@ fun ProfileScreen(
                             else item(key = "deleted") { Box(Modifier.animateItem()) { DeletedGroup(state.deleted) } }
                         }
                     }
-                }
             }
         }
 
