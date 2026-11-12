@@ -107,6 +107,14 @@ fun ThemeSection(settings: SettingsRepository) {
             }
             item {
                 SwitchRow(
+                    title = "Чисто чёрный фон (AMOLED)",
+                    checked = theme.amoled,
+                    onChange = settings::setAmoled,
+                    subtitle = "Для тёмной темы: фон и подложки максимально чёрные",
+                )
+            }
+            item {
+                SwitchRow(
                     title = "Оформление под ивенты",
                     checked = HalloweenEvent.themingEnabled,
                     onChange = { HalloweenEvent.setThemingEnabled(context, it) },

@@ -46,7 +46,7 @@ enum class ThemeMode { System, Light, Dark }
 
 /** Настройки темы: режим, системные цвета (Material You) или свой акцентный цвет. */
 data class ThemeSettings(
-    val mode: ThemeMode = ThemeMode.Dark,
+    val mode: ThemeMode = ThemeMode.System,
     val dynamic: Boolean = true,
     /** Индекс в списке акцентов; используется, когда [dynamic] выключен. */
     val accent: Int = 0,
@@ -64,6 +64,8 @@ data class ThemeSettings(
     val fontItalic: Boolean = false,
     /** Множитель скругления углов интерфейса (0…1.5), 1 — как раньше. */
     val cornerScale: Float = 1f,
+    /** Чисто чёрный фон в тёмной теме (экономит батарею на AMOLED), как в Resonance. */
+    val amoled: Boolean = false,
     /** Скругление шрифта 0…100 (ось ROND у вариативных шрифтов, например Google Sans Flex). */
     val fontRoundness: Int = 0,
     /** Отдельные шрифты элементов экрана; отсутствующий ключ — как у всего приложения. */
@@ -338,6 +340,7 @@ class SettingsRepository(private val context: Context) {
             fontWeightShift = prefs.getInt(KEY_FONT_WEIGHT_SHIFT, 0),
             fontItalic = prefs.getBoolean(KEY_FONT_ITALIC, false),
             cornerScale = prefs.getFloat(KEY_CORNER_SCALE, 1f),
+            amoled = prefs.getBoolean(KEY_AMOLED, false),
             fontRoundness = prefs.getInt(KEY_FONT_ROUNDNESS, 0),
             roleFonts = parseRoleFonts(prefs.getString(KEY_ROLE_FONTS, null)),
         )
@@ -454,6 +457,11 @@ class SettingsRepository(private val context: Context) {
     fun setFontItalic(value: Boolean) {
         _theme.update { it.copy(fontItalic = value) }
         prefs.edit().putBoolean(KEY_FONT_ITALIC, value).apply()
+    }
+
+    fun setAmoled(value: Boolean) {
+        _theme.update { it.copy(amoled = value) }
+        prefs.edit().putBoolean(KEY_AMOLED, value).apply()
     }
 
     fun setCornerScale(scale: Float) {
@@ -1031,6 +1039,7 @@ class SettingsRepository(private val context: Context) {
         const val KEY_FONT_WEIGHT_SHIFT = "theme_font_weight_shift"
         const val KEY_FONT_ITALIC = "theme_font_italic"
         const val KEY_CORNER_SCALE = "theme_corner_scale"
+        const val KEY_AMOLED = "theme_amoled"
         const val KEY_FONT_ROUNDNESS = "theme_font_roundness"
         const val KEY_ROLE_FONTS = "theme_role_fonts"
         const val KEY_POWER = "power_saving"

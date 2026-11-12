@@ -47,7 +47,7 @@ val HalloweenAccent = Color(0xFFFF8A1F)
 data class Accent(val name: String, val color: Color)
 
 val Accents = listOf(
-    Accent("Синий", Color(0xFF3F6FD8)),
+    Accent("Синий", Color(0xFF4F6BD8)),
     Accent("Бирюзовый", Color(0xFF00897B)),
     Accent("Зелёный", Color(0xFF43A047)),
     Accent("Оранжевый", Color(0xFFF57C00)),
@@ -105,6 +105,18 @@ private fun ColorScheme.darkenedBackgrounds(amount: Float): ColorScheme {
     )
 }
 
+/** Чисто чёрный фон и ступени тёмно-серого для подложек (как режим AMOLED в Resonance). */
+private fun ColorScheme.toAmoled(): ColorScheme = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceDim = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0B0B0B),
+    surfaceContainer = Color(0xFF121212),
+    surfaceContainerHigh = Color(0xFF1A1A1A),
+    surfaceContainerHighest = Color(0xFF222222),
+)
+
 private val DarkText = Color(0xFFF2F2F2)
 private val DarkTextVariant = Color(0xFFD0D0D0)
 
@@ -137,18 +149,13 @@ fun YougramTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
         )
     }
     // Порядок важен: сначала фон/текст тёмной темы, затем уровни surfaceContainer*, затем контраст on*-цветов.
-    val schemes = remember(base, dark, dynamicColors) {
-        val withBackground = when {
-            dark -> base.withLightText()
-            !dynamicColors -> base.withLightAccentBackground()
-            else -> base
-        }
-        // В тёмной теме поверхности принудительно #121212, поэтому уровни контейнеров считаем сами.
-        // В светлой с динамическими цветами оставляем системные уровни.
-        val withLevels = if (dark || !dynamicColors) withBackground.withContainerLevels(dark) else withBackground
-        // Фон чата остаётся прежним, остальной фон и подложки затемняются.
-        val chat = withLevels.withReadableContent(dark)
-        chat.darkenedBackgrounds(AppDarkenAmount).withReadableContent(dark) to chat.background
+    val schemes = remember(base, dark, dynamicColors, settings.amoled) {
+        // Стиль Resonance: цвета Material 3 берутся как есть (обои на Android 12+ или выбранный акцент),
+        // без собственного затемнения и принудительных цветов текста. Свой акцент получает уровни
+        // контейнеров, а в тёмной теме можно включить чисто чёрный фон.
+        val styled = if (dynamicColors) base else base.withContainerLevels(dark).withReadableContent(dark)
+        val final = if (dark && settings.amoled) styled.toAmoled() else styled
+        final to final.background
     }
     val colorScheme = schemes.first
     val chatBackground = schemes.second
