@@ -815,7 +815,7 @@ private fun ReviewItem(review: PluginReview, onDelete: () -> Unit) {
                 Stars(review.rating, 14.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    (review.name.ifBlank { "Пользователь Yougram" }) + " · " +
+                    (review.name.ifBlank { "Пользователь MaterialGram" }) + " · " +
                             android.text.format.DateFormat.getMediumDateFormat(context).format(java.util.Date(review.ts * 1000)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

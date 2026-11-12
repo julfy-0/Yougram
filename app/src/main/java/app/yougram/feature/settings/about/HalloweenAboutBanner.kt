@@ -57,7 +57,7 @@ internal fun HalloweenAboutBanner(modifier: Modifier = Modifier) {
         ) {
             Image(
                 painter = painterResource(id = customRes),
-                contentDescription = tr("Хэллоуинский баннер Yougram"),
+                contentDescription = tr("Хэллоуинский баннер MaterialGram"),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
@@ -101,7 +101,7 @@ internal fun HalloweenAboutBanner(modifier: Modifier = Modifier) {
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "Yougram",
+                    "MaterialGram",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     color = HalloweenOrange,

@@ -78,7 +78,7 @@ class ConnectionService : Service() {
         )
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("Yougram")
+            .setContentTitle("MaterialGram")
             .setContentText(tr("Соединение с Telegram"))
             .setOngoing(true)
             .setShowWhen(false)
