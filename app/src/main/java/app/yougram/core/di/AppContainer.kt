@@ -20,8 +20,6 @@ import app.yougram.feature.notifications.NotificationCenter
 import app.yougram.feature.security.data.AppLock
 import app.yougram.feature.stories.data.StoriesRepository
 import app.yougram.feature.update.data.AppUpdater
-import app.yougram.plugin.NativePluginManager
-import app.yougram.plugin.PluginApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -59,7 +57,6 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
 
     // Общие для всех аккаунтов объекты.
     val settings: SettingsRepository = previous?.settings ?: SettingsRepository(context.applicationContext)
-    val plugins: NativePluginManager = previous?.plugins ?: NativePluginManager(context.applicationContext)
     val plates: PlateRepository = previous?.plates ?: PlateRepository(context.applicationContext)
     val appLock: AppLock = previous?.appLock ?: AppLock(context.applicationContext)
     val accountManager: AccountManager = previous?.accountManager ?: AccountManager(context.applicationContext)
@@ -73,11 +70,7 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
     val authRepository = AuthRepository(telegram)
     val stories = StoriesRepository(telegram, appScope)
     val groupAdmin = GroupAdminRepository(telegram)
-    val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
-
-    /** API плагинов: команды, пункты меню, хуки. UI читает pluginApi.commands / pluginApi.actions. */
-    val pluginApi = PluginApi(context.applicationContext, telegram, chatRepository, plugins)
-        .also { plugins.api = it }
+    val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext)
 
     val accountRepository = AccountRepository(telegram, accountManager)
     val callAudio = CallAudio(context.applicationContext)
@@ -98,8 +91,6 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
 
     fun start() {
         CallLog.init(context.applicationContext)
-        // loadAll заново выгружает и загружает плагины: так они привязываются к PluginApi нового аккаунта.
-        plugins.loadAll()
         telegram.start()
         // Прокси из настроек (в том числе заданный на экране входа) передаём в TDLib при каждом изменении.
         appScope.launch {

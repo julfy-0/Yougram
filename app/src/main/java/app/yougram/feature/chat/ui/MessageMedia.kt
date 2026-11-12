@@ -30,9 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.rememberCoroutineScope
 import app.yougram.YougramApp
 import app.yougram.core.ui.component.TextButton
-import app.yougram.feature.settings.extras.PendingPlugin
-import app.yougram.feature.settings.extras.PluginScanDialog
-import app.yougram.plugin.SuspiciousPluginException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,24 +96,6 @@ fun MessageMedia(
     var viewer by remember { mutableStateOf(false) }
     var stickerSetOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    var pluginConfirm by remember { mutableStateOf(false) }
-    var pluginPending by remember { mutableStateOf<PendingPlugin?>(null) }
-    val isPlugin = media.kind == MediaKind.DOCUMENT && media.name.endsWith(".ygplugin", ignoreCase = true)
-    // Установка читает файл TDLib прямо из его кэша: в память устройства (Загрузки и т. п.) ничего не сохраняется.
-    fun installPlugin(file: File, allowSuspicious: Boolean) {
-        scope.launch {
-            val manager = (context.applicationContext as YougramApp).container.plugins
-            val result = withContext(Dispatchers.IO) { runCatching { manager.installFromZip(file, allowSuspicious) } }
-            val err = result.exceptionOrNull()
-            if (err is SuspiciousPluginException) {
-                pluginPending = PendingPlugin(file, err.report)
-                return@launch
-            }
-            result
-                .onSuccess { Toast.makeText(context, tr("Плагин «{0}» установлен", it.manifest.name), Toast.LENGTH_SHORT).show() }
-                .onFailure { Toast.makeText(context, tr("Ошибка плагина: {0}", it.message), Toast.LENGTH_LONG).show() }
-        }
-    }
     val onClick: () -> Unit = {
         val path = full.path
         val playable = ((media.kind == MediaKind.VIDEO || media.kind == MediaKind.ANIMATION) &&
@@ -125,8 +104,6 @@ fun MessageMedia(
             media.kind == MediaKind.STICKER -> Unit
             // Фото открывается сразу: просмотрщик сам показывает превью и докачивает оригинал.
             media.kind == MediaKind.PHOTO -> onOpenPhoto(media)
-            // Плагин (.ygplugin) ставим прямо в Yougram, не сохраняя файл на устройство.
-            path != null && isPlugin -> pluginConfirm = true
             // APK (скачанный) отдаём системному установщику.
             path != null && media.kind == MediaKind.DOCUMENT && ApkInstaller.isApk(media.name, media.mimeType) ->
                 ApkInstaller.install(context, path)
@@ -145,25 +122,6 @@ fun MessageMedia(
             StickerView(media, viewModel, full)
         }
         else -> VisualMedia(media, viewModel, full, onClick, tile)
-    }
-    val pluginPath = full.path
-    if (pluginConfirm && pluginPath != null) {
-        AlertDialog(
-            onDismissRequest = { pluginConfirm = false },
-            title = { Text("Установить плагин?") },
-            text = { Text(tr("Файл «{0}» будет установлен прямо в MaterialGram, без сохранения в память устройства.", media.name)) },
-            confirmButton = {
-                TextButton(onClick = { pluginConfirm = false; installPlugin(File(pluginPath), false) }) { Text("Установить") }
-            },
-            dismissButton = { TextButton(onClick = { pluginConfirm = false }) { Text("Отмена") } },
-        )
-    }
-    pluginPending?.let { p ->
-        PluginScanDialog(
-            p,
-            onInstall = { pluginPending = null; installPlugin(p.file, true) },
-            onCancel = { pluginPending = null }, // файл принадлежит TDLib, его не удаляем
-        )
     }
     if (stickerSetOpen && media.stickerSetId != 0L) StickerSetSheet(media.stickerSetId, viewModel) { stickerSetOpen = false }
     val viewerPath = full.path

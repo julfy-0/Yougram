@@ -150,12 +150,6 @@ fun ChatListScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            item(key = "plugin-header") {
-                app.yougram.plugin.PluginSlot(
-                    app.yougram.plugin.PluginUi.CHAT_LIST_HEADER,
-                    Modifier.padding(bottom = 6.dp),
-                )
-            }
             itemsIndexed(chats, key = { _, c -> c.id }) { index, chat ->
                 val haptics = app.yougram.core.ui.rememberHaptics()
                 val selected = chat.id in selection

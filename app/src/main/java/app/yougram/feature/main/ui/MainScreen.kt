@@ -159,10 +159,6 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.foundation.layout.fillMaxHeight
 import app.yougram.feature.settings.SettingsPageContent
-import app.yougram.feature.settings.extras.PluginStoreChipsHeight
-import app.yougram.feature.settings.extras.PluginStoreSearch
-import app.yougram.feature.settings.extras.PluginStoreSearchHeight
-import app.yougram.feature.settings.extras.PluginStoreTopBar
 import app.yougram.feature.settings.SettingsSearchResults
 import app.yougram.feature.settings.about.UpdateGlassBar
 import app.yougram.feature.splash.ui.halloweenFall
@@ -347,16 +343,10 @@ fun MainScreen(
     // Контент заезжает под панели, поэтому отступы берём с запасом на высоту панелей.
     // На подстраницах настроек навбара нет: отступ снизу нужен только там, где снизу своя панель.
     val bareSettingsSubpage = tab == MainTab.Settings && settingsPage !in setOf(
-        SettingsPage.Home, SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager, SettingsPage.Update, SettingsPage.Assistant,
+        SettingsPage.Home, SettingsPage.Update, SettingsPage.Assistant,
     )
-    // Магазин плагинов: поиск и категории живут в верхней панели, контент опускается ниже них.
-    val storePage = tab == MainTab.Settings && settingsPage in PluginStorePages
-    val storeBarTarget = if (storePage) {
-        PluginStoreSearchHeight + (if (PluginStoreSearch.categories.size > 1) PluginStoreChipsHeight else 0.dp)
-    } else 0.dp
-    val storeBar by animateDpAsState(storeBarTarget, label = "storeBar")
     val contentPadding = PaddingValues(
-        top = topInset + TopBarContentHeight + 8.dp + storeBar,
+        top = topInset + TopBarContentHeight + 8.dp,
         bottom = bottomInset + (if (bareSettingsSubpage) 16.dp else BottomBarHeight + 24.dp),
     )
 
@@ -490,12 +480,7 @@ fun MainScreen(
                 targetState = screen,
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
-                    // «Новые» ↔ «Все» в магазине плагинов: без сдвига, поле поиска остаётся на месте.
-                    val bothStore = initialState.first == MainTab.Settings && targetState.first == MainTab.Settings &&
-                            initialState.second in PluginStorePages && targetState.second in PluginStorePages
-                    if (bothStore) {
-                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
-                    } else {
+                    run {
                         // Открытие (другая вкладка или более глубокий подэкран) — справа налево,
                         // закрытие (подэкран выше по иерархии) — слева направо.
                         val open = if (initialState.first == targetState.first) {
@@ -686,8 +671,6 @@ fun MainScreen(
                 onAddStory = { onOpenStories(0L, 0) },
                 searchOnTop = chatPrefs.searchOnTop,
                 onSearch = { searching = true },
-                storeBarHeight = storeBar,
-                storeContent = if (storePage) ({ PluginStoreTopBar() }) else null,
                 backdrop = backdrop,
                 glass = glass,
                 topInset = topInset,
@@ -757,33 +740,6 @@ fun MainScreen(
                 glass = glass,
                 bottomInset = bottomInset,
                 progress = { navProgress },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-        }
-
-        // Страницы плагинов: вместо навбара — своя панель («Новые / Все / Менеджер») с той же анимацией, что у обычного навбара.
-        val pluginsBarShown = tab == MainTab.Settings && settingsPage in setOf(
-            SettingsPage.Plugins, SettingsPage.PluginsNew, SettingsPage.PluginManager,
-        )
-        LaunchedEffect(pluginsBarShown) {
-            if (!pluginsBarShown) {
-                PluginStoreSearch.query = ""
-                PluginStoreSearch.category = null
-            }
-        }
-        val pluginsBarProgress by animateFloatAsState(
-            targetValue = if (pluginsBarShown) 1f else 0f,
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
-            label = "plugins-bar",
-        )
-        if (pluginsBarProgress > 0.001f || pluginsBarShown) {
-            PluginsGlassBar(
-                selected = settingsPage,
-                onSelect = { settingsPage = it },
-                backdrop = backdrop,
-                glass = glass,
-                bottomInset = bottomInset,
-                progress = { pluginsBarProgress },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -1288,123 +1244,6 @@ private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle,
                         }
                     }
                 }
-            }
-            if (selected || frac > 0.001f) {
-                Text(
-                    tab.title,
-                    modifier = Modifier.graphicsLayer { alpha = textAlpha },
-                    color = content,
-                    maxLines = 1,
-                    softWrap = false,
-                    style = style,
-                )
-            }
-        }
-    }
-}
-
-private val PluginStorePages = setOf(SettingsPage.Plugins, SettingsPage.PluginsNew)
-
-private class PluginBarTab(val page: SettingsPage, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-
-/** Нижняя панель страниц плагинов: та же «таблетка» и та же пружинная анимация вкладок, что у основного навбара. */
-@Composable
-private fun PluginsGlassBar(
-    selected: SettingsPage,
-    onSelect: (SettingsPage) -> Unit,
-    backdrop: BackdropState,
-    glass: GlassSettings,
-    bottomInset: Dp,
-    progress: () -> Float,
-    modifier: Modifier = Modifier,
-) {
-    val tabs = remember {
-        listOf(
-            PluginBarTab(SettingsPage.PluginsNew, "Новые", Icons.Filled.NewReleases),
-            PluginBarTab(SettingsPage.Plugins, "Все", Icons.Filled.Storefront),
-            PluginBarTab(SettingsPage.PluginManager, "Менеджер", Icons.Filled.Extension),
-        )
-    }
-    val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
-    val baseLabelStyle = MaterialTheme.typography.labelLargeEmphasized
-    Row(
-        modifier
-            .offset {
-                val distance = (BottomBarHeight + BottomBarMargin + bottomInset).roundToPx()
-                IntOffset(0, (distance * (1f - progress())).roundToInt())
-            }
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val barTint = androidx.compose.ui.graphics.lerp(
-            MaterialTheme.colorScheme.surface,
-            androidx.compose.ui.graphics.Color.White,
-            0.10f,
-        )
-        Box(
-            Modifier
-                .height(BottomBarHeight)
-                .glass(backdrop, glass, CircleShape, barTint)
-                .clip(CircleShape),
-        ) {
-            Row(
-                Modifier.align(Alignment.Center).padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
-                horizontalArrangement = Arrangement.spacedBy(NavGap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                tabs.forEach { tab ->
-                    val title = tr(tab.title)
-                    val labelStyle = baseLabelStyle.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(title)).withRole(FontRole.Navbar)
-                    val px = remember(title, labelStyle) { measurer.measure(title, labelStyle, maxLines = 1).size.width }
-                    val extra = with(density) { px.toDp() } + 8.dp
-                    PluginBarTabItem(tab, selected = tab.page == selected, extra = extra, style = labelStyle, onClick = { onSelect(tab.page) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PluginBarTabItem(tab: PluginBarTab, selected: Boolean, extra: Dp, style: TextStyle, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val frac by animateFloatAsState(
-        if (selected) 1f else 0f,
-        spring(dampingRatio = 0.72f, stiffness = 650f),
-        label = "pluginNavFrac",
-    )
-    val textAlpha by animateFloatAsState(
-        if (selected) 1f else 0f,
-        tween(200, easing = FastOutSlowInEasing),
-        label = "pluginNavTextAlpha",
-    )
-    val container by animateColorAsState(
-        if (selected) scheme.primaryContainer else scheme.primaryContainer.copy(alpha = 0f),
-        tween(160),
-        label = "pluginNavContainer",
-    )
-    val content by animateColorAsState(
-        if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-        tween(160),
-        label = "pluginNavContent",
-    )
-    Box(
-        Modifier
-            .width(NavSlot + extra * frac.coerceIn(0f, 1.12f))
-            .height(NavSlot)
-            .clip(CircleShape)
-            .background(container)
-            .clickable(role = Role.Tab, onClick = onClick)
-            .semantics { this.selected = selected },
-    ) {
-        Row(
-            Modifier.align(Alignment.CenterStart).wrapContentWidth(Alignment.Start, unbounded = true),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(NavSlot), contentAlignment = Alignment.Center) {
-                Icon(tab.icon, contentDescription = if (selected) null else tab.title, tint = content, modifier = Modifier.size(24.dp))
             }
             if (selected || frac > 0.001f) {
                 Text(

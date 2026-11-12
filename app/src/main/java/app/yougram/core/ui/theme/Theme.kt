@@ -73,13 +73,13 @@ val Accents = listOf(
  * добавлены largeIncreased / extraLargeIncreased / extraExtraLarge для новых компонентов.
  */
 private fun scaledShapes(s: Float) = Shapes(
-    extraSmall = RoundedCornerShape((8 * s).dp),
-    small = RoundedCornerShape((12 * s).dp),
-    medium = RoundedCornerShape((16 * s).dp),
-    large = RoundedCornerShape((24 * s).dp),
-    largeIncreased = RoundedCornerShape((28 * s).dp),
-    extraLarge = RoundedCornerShape((32 * s).dp),
-    extraLargeIncreased = RoundedCornerShape((40 * s).dp),
+    extraSmall = RoundedCornerShape((4 * s).dp),
+    small = RoundedCornerShape((8 * s).dp),
+    medium = RoundedCornerShape((12 * s).dp),
+    large = RoundedCornerShape((16 * s).dp),
+    largeIncreased = RoundedCornerShape((20 * s).dp),
+    extraLarge = RoundedCornerShape((28 * s).dp),
+    extraLargeIncreased = RoundedCornerShape((32 * s).dp),
     extraExtraLarge = RoundedCornerShape((48 * s).dp),
 )
 

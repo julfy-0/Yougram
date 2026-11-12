@@ -137,7 +137,6 @@ kotlin {
 
 dependencies {
     // Нативный код (плагины, tgcalls/libyougram_voip) вынесен в модуль :cpp
-    implementation(project(":plugin-host"))
     implementation(project(":voip"))
 
     implementation(libs.androidx.core.ktx)
