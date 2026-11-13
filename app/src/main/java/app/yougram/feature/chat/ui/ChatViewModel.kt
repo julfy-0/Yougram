@@ -93,14 +93,22 @@ class ChatViewModel(
     val topicId: Int = 0,
     /** Ветка комментариев к посту канала в чате обсуждения; 0 — обычный чат. */
     val threadId: Long = 0L,
+    /** Тема «Избранного», в которой открыт чат; 0 — все сообщения. */
+    val savedTopicId: Long = 0L,
+    /** Тег «Избранного» (эмодзи), по которому отфильтрована история; пусто — без фильтра. */
+    val savedTag: String = "",
 ) : ViewModel() {
 
     init {
         repository.setActiveTopic(chatId, topicId)
         repository.setActiveThread(chatId, threadId)
+        repository.setActiveSavedTopic(chatId, savedTopicId)
+        repository.setActiveSavedTag(chatId, savedTag)
     }
 
     override fun onCleared() {
+        if (savedTag.isNotEmpty()) repository.setActiveSavedTag(chatId, "")
+        if (savedTopicId != 0L) repository.setActiveSavedTopic(chatId, 0L)
         if (topicId != 0) repository.setActiveTopic(chatId, 0)
         if (threadId != 0L) repository.setActiveThread(chatId, 0L)
         super.onCleared()
@@ -457,7 +465,7 @@ class ChatViewModel(
                 _state.update { s ->
                     s.copy(
                         messages = s.messages.map {
-                            if (it.id == event.messageId) it.copy(text = event.text, media = event.media ?: it.media, summary = event.summary, poll = event.poll ?: it.poll, emojis = event.emojis, links = event.links) else it
+                            if (it.id == event.messageId) it.copy(text = event.text, media = event.media ?: it.media, summary = event.summary, poll = event.poll ?: it.poll, emojis = event.emojis, links = event.links, location = event.location ?: it.location) else it
                         },
                         edits = if (event.oldText == null) s.edits else
                             s.edits + (event.messageId to (s.edits[event.messageId].orEmpty() + EditRecord(event.oldText, event.at))),
@@ -740,8 +748,15 @@ class ChatViewModel(
     fun sendPoll(question: String, options: List<String>, anonymous: Boolean, multiple: Boolean) =
         sendMedia { repository.sendPoll(chatId, question, options, anonymous, multiple) }
 
-    fun sendLocation(latitude: Double, longitude: Double, accuracy: Double) =
-        sendMedia { repository.sendLocation(chatId, latitude, longitude, accuracy) }
+    fun sendLocation(latitude: Double, longitude: Double, accuracy: Double, livePeriod: Int = 0) =
+        sendMedia { repository.sendLocation(chatId, latitude, longitude, accuracy, livePeriod) }
+
+    /** Останавливает свою трансляцию геопозиции в сообщении [messageId]. */
+    fun stopLiveLocation(messageId: Long) = sendMedia { repository.stopLiveLocation(chatId, messageId) }
+
+    /** Включает обновление активных трансляций геопозиции (если они есть), пока приложение открыто. */
+    fun ensureLiveLocation(context: android.content.Context) =
+        app.yougram.feature.chat.location.LiveLocationSharer.ensureRunning(context.applicationContext, repository)
 
     fun sendVoice(path: String, duration: Int) = sendMedia { repository.sendVoice(chatId, path, duration) }
 
@@ -846,8 +861,10 @@ class ChatViewModel(
             initialMessageId: Long = 0L,
             topicId: Int = 0,
             threadId: Long = 0L,
+            savedTopicId: Long = 0L,
+            savedTag: String = "",
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatViewModel(repository, chatId, settings, initialMessageId, topicId, threadId) }
+            initializer { ChatViewModel(repository, chatId, settings, initialMessageId, topicId, threadId, savedTopicId, savedTag) }
         }
     }
 }

@@ -42,12 +42,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.yougram.BuildConfig
-import app.yougram.R
 import app.yougram.core.settings.GlassSettings
 import app.yougram.core.telegram.getOrThrow
 import app.yougram.core.ui.glass.BackdropState
@@ -71,31 +69,18 @@ internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
         HalloweenAboutBanner(modifier)
         return
     }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center,
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.about_banner),
-            contentDescription = tr("Баннер Yougram"),
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
-    }
+    // Баннер нарисован кодом: см. CodeBanners.kt (картинка about_banner больше не нужна).
+    YougramCodeBanner(modifier)
 }
 
 /**
  * Баннер обновления 1000×400 — картинка banner.png/jpg/webp из файлов релиза на GitHub.
- * Пока грузится — заглушка того же размера; если баннера в релизе нет или он не загрузился — обычный баннер «О приложении».
+ * Пока грузится — заглушка того же размера; если баннера в релизе нет или он не загрузился — OTA-баннер, нарисованный кодом (см. [YougramOtaBanner]).
  */
 @Composable
 private fun UpdateReleaseBanner(updater: AppUpdater, url: String?) {
     if (url == null) {
-        YougramAboutBanner()
+        YougramOtaBanner()
         return
     }
     val loaded by produceState<Pair<Boolean, ImageBitmap?>>(false to null, url) {
@@ -103,7 +88,7 @@ private fun UpdateReleaseBanner(updater: AppUpdater, url: String?) {
     }
     val (done, bitmap) = loaded
     if (done && bitmap == null) {
-        YougramAboutBanner()
+        YougramOtaBanner()
         return
     }
     Box(

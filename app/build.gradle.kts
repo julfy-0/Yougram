@@ -29,11 +29,11 @@ android {
 
     defaultConfig {
         applicationId = "app.yougram"
-        minSdk = 31
+        minSdk = 29
         targetSdk = 36
 
-        versionCode = 39
-        versionName = "1.4.2"
+        versionCode = 40
+        versionName = "1.4.3"
 
         buildConfigField(
             "int",

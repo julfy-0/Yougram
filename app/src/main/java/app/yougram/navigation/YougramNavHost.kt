@@ -63,7 +63,9 @@ import app.yougram.core.ui.component.LocalOpenLink
 import app.yougram.feature.miniapp.ui.LocalOpenMiniApp
 import app.yougram.feature.miniapp.ui.MiniAppHost
 import app.yougram.feature.miniapp.ui.MiniAppRequest
+import app.yougram.core.ui.component.LocalOpenHashtag
 import app.yougram.core.ui.component.LocalOpenUsername
+import app.yougram.feature.chat.search.ui.HashtagSearchScreen
 import app.yougram.core.ui.component.isTelegramUrl
 import app.yougram.core.ui.component.isWebUrl
 import app.yougram.core.ui.component.normalizeUrl
@@ -74,6 +76,8 @@ import app.yougram.feature.auth.data.AuthStep
 import app.yougram.feature.auth.ui.AuthScreen
 import app.yougram.feature.auth.ui.AuthViewModel
 import app.yougram.feature.browser.ui.BrowserScreen
+import app.yougram.feature.browser.instantview.InstantViewScreen
+import app.yougram.feature.browser.instantview.isInstantViewHost
 import app.yougram.feature.calls.ui.CallOverlay
 import app.yougram.feature.chat.comments.navigation.commentsRoute
 import app.yougram.feature.chat.ui.ChatOrTopics
@@ -95,6 +99,8 @@ private const val ROUTE_CHAT = "chat/{chatId}?messageId={messageId}&topicId={top
 private const val ROUTE_PROFILE = "profile/{chatId}"
 private const val ROUTE_GROUP_ADMIN = "groupadmin/{chatId}"
 private const val ROUTE_BROWSER = "browser/{url}"
+private const val ROUTE_HASHTAG = "hashtag/{tag}"
+private const val ROUTE_IV = "iv/{url}"
 private const val ROUTE_STORIES = "stories/{chatId}/{storyId}"
 
 private const val NavMillis = 320
@@ -154,7 +160,7 @@ fun YougramNavHost(container: AppContainer) {
     LaunchedEffect(step) {
         val current = navController.currentDestination?.route
         when (step) {
-            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT && current != ROUTE_PROFILE && current != ROUTE_GROUP_ADMIN && current != ROUTE_BROWSER) {
+            AuthStep.Ready -> if (current != ROUTE_CHATS && current != ROUTE_CHAT && current != ROUTE_PROFILE && current != ROUTE_GROUP_ADMIN && current != ROUTE_BROWSER && current != ROUTE_HASHTAG && current != ROUTE_IV) {
                 navController.navigate(ROUTE_CHATS) { popUpTo(0) { inclusive = true } }
             }
             AuthStep.Loading -> Unit
@@ -190,6 +196,18 @@ fun YougramNavHost(container: AppContainer) {
                 if (inAppBrowser && isWebUrl(url)) navController.navigate("browser/${Uri.encode(url)}")
                 else openExternally(context, url)
             }
+            // Instant View: у telegra.ph — из сети, у остальных сайтов — если страница уже закэширована TDLib.
+            val openWebOrInstantView: () -> Unit = {
+                if (!isWebUrl(url)) openWeb()
+                else {
+                    scope.launch {
+                        val iv = runCatching {
+                            container.chatRepository.loadInstantView(url, onlyLocal = !isInstantViewHost(url))
+                        }.getOrNull()
+                        if (iv != null) navController.navigate("iv/${Uri.encode(url)}") else openWeb()
+                    }
+                }
+            }
             if (isTelegramUrl(url)) {
                 scope.launch {
                     when (val r = runCatching { linkHandler.resolve(url) }.getOrDefault(TgLinkResult.Failed)) {
@@ -210,7 +228,7 @@ fun YougramNavHost(container: AppContainer) {
                         TgLinkResult.Failed -> Toast.makeText(context, tr("Не удалось открыть ссылку"), Toast.LENGTH_SHORT).show()
                     }
                 }
-            } else openWeb()
+            } else openWebOrInstantView()
         }
     }
     val openLinkNow = rememberUpdatedState(openLink)
@@ -262,9 +280,15 @@ fun YougramNavHost(container: AppContainer) {
         }
     }
 
+    // Тап по #хэштегу: отдельный экран поиска сообщений по тегу.
+    val openHashtag: (String) -> Unit = remember(navController) {
+        { tag: String -> navController.navigate("hashtag/" + android.net.Uri.encode(tag)) }
+    }
+
     CompositionLocalProvider(
         LocalOpenLink provides openLink,
         LocalOpenUsername provides openUsername,
+        LocalOpenHashtag provides openHashtag,
         LocalOpenMiniApp provides openMiniApp,
     ) {
         val callBackdrop = rememberBackdropState()
@@ -413,6 +437,28 @@ fun YougramNavHost(container: AppContainer) {
                 commentsRoute(navController, container)
 
                 composable(
+                    route = ROUTE_HASHTAG,
+                    arguments = listOf(navArgument("tag") { type = NavType.StringType }),
+                    enterTransition = {
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
+                    },
+                ) { entry ->
+                    val tag = entry.arguments?.getString("tag").orEmpty()
+                    HashtagSearchScreen(
+                        container = container,
+                        tag = tag,
+                        onBack = { navController.popBackStack() },
+                        // На планшете чат открывается в правой панели, поэтому экран тега закрываем.
+                        onOpenMessage = { c, m ->
+                            if (twoPaneNow.value) navController.popBackStack()
+                            openChat(c, m)
+                        },
+                    )
+                }
+                composable(
                     route = ROUTE_BROWSER,
                     arguments = listOf(navArgument("url") { type = NavType.StringType }),
                     enterTransition = {
@@ -425,6 +471,29 @@ fun YougramNavHost(container: AppContainer) {
                     BrowserScreen(
                         initialUrl = entry.arguments?.getString("url").orEmpty(),
                         onClose = { navController.popBackStack() },
+                    )
+                }
+                composable(
+                    route = ROUTE_IV,
+                    arguments = listOf(navArgument("url") { type = NavType.StringType }),
+                    enterTransition = {
+                        slideInHorizontally(slideSpec) { it } + fadeIn(fadeSpec)
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(slideSpec) { it } + fadeOut(fadeSpec)
+                    },
+                ) { entry ->
+                    val ivUrl = entry.arguments?.getString("url").orEmpty()
+                    InstantViewScreen(
+                        container = container,
+                        url = ivUrl,
+                        onClose = { navController.popBackStack() },
+                        onOpenInBrowser = { u ->
+                            navController.popBackStack()
+                            if (inAppBrowser) navController.navigate("browser/${Uri.encode(u)}")
+                            else openExternally(context, u)
+                        },
+                        onOpenLink = { openLinkNow.value(it) },
                     )
                 }
                 composable(

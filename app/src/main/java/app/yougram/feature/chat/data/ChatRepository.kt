@@ -15,6 +15,8 @@ import app.yougram.feature.badge.data.YougramBadge
 import app.yougram.feature.badge.data.YougramBanner
 import app.yougram.plugin.NativePluginManager
 import app.yougram.plugin.PluginMessage
+import app.yougram.feature.browser.instantview.InstantViewPage
+import app.yougram.feature.browser.instantview.mapInstantView
 import dev.g000sha256.tdl.TdlResult
 import dev.g000sha256.tdl.dto.BlockListMain
 import dev.g000sha256.tdl.dto.CallDiscardReasonDeclined
@@ -67,6 +69,13 @@ import dev.g000sha256.tdl.dto.InputPhoto
 import dev.g000sha256.tdl.dto.Message
 import dev.g000sha256.tdl.dto.MessageAnimation
 import dev.g000sha256.tdl.dto.MessageCall
+import dev.g000sha256.tdl.dto.MessageLocation
+import dev.g000sha256.tdl.dto.MessageLiveLocation
+import dev.g000sha256.tdl.dto.LiveLocation
+import dev.g000sha256.tdl.dto.InputMessageLiveLocation
+import app.yougram.feature.chat.location.LiveLocationSharer
+import dev.g000sha256.tdl.dto.MessageVenue
+import app.yougram.feature.chat.location.LocationItem
 import dev.g000sha256.tdl.dto.MessageContent
 import dev.g000sha256.tdl.dto.MessageDocument
 import dev.g000sha256.tdl.dto.MessageInteractionInfo
@@ -97,6 +106,11 @@ import dev.g000sha256.tdl.dto.MessageOriginHiddenUser
 import dev.g000sha256.tdl.dto.MessageOriginUser
 import dev.g000sha256.tdl.dto.MessageTopic
 import dev.g000sha256.tdl.dto.MessageTopicForum
+import dev.g000sha256.tdl.dto.MessageTopicSavedMessages
+import dev.g000sha256.tdl.dto.SavedMessagesTopic
+import dev.g000sha256.tdl.dto.SavedMessagesTopicTypeAuthorHidden
+import dev.g000sha256.tdl.dto.SavedMessagesTopicTypeMyNotes
+import dev.g000sha256.tdl.dto.SavedMessagesTopicTypeSavedFromChat
 import dev.g000sha256.tdl.dto.MessageTopicThread
 import dev.g000sha256.tdl.dto.MessageVideo
 import dev.g000sha256.tdl.dto.MessageVideoNote
@@ -434,6 +448,10 @@ data class MessageItem(
     val links: List<LinkSpan> = emptyList(),
     /** Id альбома (несколько фото/видео одним сообщением); 0 — не альбом. */
     val albumId: Long = 0L,
+    /** Тема «Избранного», к которой относится сообщение; 0 — вне тем. */
+    val savedTopicId: Long = 0L,
+    /** Геопозиция, место или трансляция геопозиции; null — обычное сообщение. */
+    val location: LocationItem? = null,
 ) {
     /** Ключ автора: id пользователя (>0) или id чата (<0). */
     val senderKey: Long? get() = senderUserId ?: senderChatId
@@ -450,6 +468,25 @@ data class ForumTopicItem(
     val isPinned: Boolean,
     val unread: Int,
     val lastSender: String,
+    val lastText: String,
+    val lastDate: Int,
+)
+
+/** Тег сохранённого сообщения (реакция-тег) с подписью и числом сообщений. */
+data class SavedTagItem(val emoji: String, val label: String, val count: Int)
+
+enum class SavedTopicKind { NOTES, HIDDEN, CHAT }
+
+/** Тема «Избранного»: заметки без источника, скрытый автор или чат-источник пересылки. */
+data class SavedTopicItem(
+    val id: Long,
+    val kind: SavedTopicKind,
+    /** Чат-источник (для [SavedTopicKind.CHAT]); иначе 0. */
+    val sourceChatId: Long,
+    /** Название источника; для NOTES и HIDDEN пусто — подпись выбирает экран. */
+    val title: String,
+    val isPinned: Boolean,
+    val order: Long,
     val lastText: String,
     val lastDate: Int,
 )
@@ -580,6 +617,7 @@ data class ContentEvent(
     /** Позиции эмодзи и скрытых ссылок нового текста: после правки старые смещения уже не подходят. */
     val emojis: List<CustomEmojiSpan> = emptyList(),
     val links: List<LinkSpan> = emptyList(),
+    val location: LocationItem? = null,
 )
 
 /** Собеседник прочитал исходящие сообщения до [lastMessageId] включительно. */
@@ -783,6 +821,12 @@ class ChatRepository(
     /** Подписки нужно оформить до первого запроса, поэтому вызывается из AppContainer.start(). */
     fun start() {
         scope.launch {
+            client.savedMessagesTopicUpdates.collect { update ->
+                savedTopicRaw[update.topic.id] = update.topic
+                _savedTopicsVersion.value++
+            }
+        }
+        scope.launch {
             client.chatFoldersUpdates.collect { update ->
                 _folders.value = update.chatFolders.orEmpty().filterNotNull().map {
                     ChatFolderItem(id = it.id, title = it.name.text.text)
@@ -973,7 +1017,9 @@ class ChatRepository(
                 val content = update.newContent
                 val text = bodyOf(content, isOutgoing = false)
                 val media = content.toMedia()
-                val summary = (content as? MessagePoll)?.poll?.let { "📊 ${it.question.text}" } ?: summaryOf(text, media)
+                val locationItem = content.toLocationItem()
+                val summary = (content as? MessagePoll)?.poll?.let { "📊 ${it.question.text}" }
+                    ?: locationItem?.let { locationSummary(it) } ?: summaryOf(text, media)
                 val at = now()
                 val old = io {
                     spy.recordEdit(update.chatId, update.messageId, text, summary, at, settings.spyPrefs.value.saveEdits)
@@ -983,6 +1029,7 @@ class ChatRepository(
                         update.chatId, update.messageId, text, media, summary, old, at,
                         (content as? MessagePoll)?.poll?.toItem(),
                         emojisOf(content), linksOf(content),
+                        location = locationItem,
                     ),
                 )
                 plugins?.events?.emit("message_edited", linkedMapOf(
@@ -1628,9 +1675,25 @@ class ChatRepository(
             val pageLimit = limit - collected.size + (if (from != 0L) 1 else 0)
             val topic = topicOf(chatId)
             val thread = threadOf(chatId)
+            val savedTopic = savedTopicOf(chatId)
+            val tag = savedTagOf(chatId)
+            if (tag.isNotEmpty()) {
+                val found = client.searchSavedMessages(
+                    savedMessagesTopicId = savedTopic, tag = ReactionTypeEmoji(emoji = tag), query = "",
+                    fromMessageId = from, offset = 0, limit = pageLimit,
+                ).getOrThrow()
+                val msgs = found.messages.orEmpty().filterNotNull()
+                val news = msgs.filter { it.id != fromMessageId && !collected.containsKey(it.id) }
+                if (news.isEmpty()) break
+                news.forEach { collected[it.id] = it.toItem() }
+                from = msgs.last().id
+                attempts++
+                continue
+            }
             val page = when {
                 thread != 0L -> client.getMessageThreadHistory(chatId = chatId, messageId = thread, fromMessageId = from, offset = 0, limit = pageLimit)
                 topic != 0 -> client.getForumTopicHistory(chatId = chatId, forumTopicId = topic, fromMessageId = from, offset = 0, limit = pageLimit)
+                savedTopic != 0L -> client.getSavedMessagesTopicHistory(savedMessagesTopicId = savedTopic, fromMessageId = from, offset = 0, limit = pageLimit)
                 else -> client.getChatHistory(chatId = chatId, fromMessageId = from, offset = 0, limit = pageLimit, onlyLocal = false)
             }
             val batch = page.getOrThrow().messages.orEmpty().filterNotNull()
@@ -1648,9 +1711,115 @@ class ChatRepository(
         val thread = threadOf(chatId)
         it.chatId == chatId && when {
             thread != 0L -> it.threadId == thread || it.reply?.messageId == thread
+            savedTagOf(chatId).isNotEmpty() -> false
+            savedTopicOf(chatId) != 0L -> it.savedTopicId == savedTopicOf(chatId)
             else -> topicOf(chatId) == 0 || it.topicId == topicOf(chatId)
         }
     }
+
+    // ---- Хэштеги ----
+
+    /** Подсказки хэштегов по началу [prefix] (без «#»); пустой префикс — недавние. Теги возвращаются без «#». */
+    suspend fun searchHashtags(prefix: String, limit: Int = 10): List<String> =
+        client.searchHashtags(prefix = prefix, limit = limit).getOrThrow().hashtags.orEmpty().filterNotNull()
+
+    /** Убирает хэштег из недавних. */
+    suspend fun removeRecentHashtag(hashtag: String) {
+        client.removeRecentHashtag(hashtag = hashtag).getOrThrow()
+    }
+
+    // ---- Instant View ----
+
+    private val instantViewCache = ConcurrentHashMap<String, InstantViewPage>()
+
+    /** Уже загруженная статья Instant View для [url] (без запроса). */
+    fun cachedInstantView(url: String): InstantViewPage? = instantViewCache[url]
+
+    /**
+     * Instant View страницы: при [onlyLocal] только из кэша TDLib (быстро, без сети), иначе с загрузкой.
+     * Возвращает null, если у страницы нет Instant View.
+     */
+    suspend fun loadInstantView(url: String, onlyLocal: Boolean): InstantViewPage? {
+        instantViewCache[url]?.let { return it }
+        val iv = client.getWebPageInstantView(url = url, onlyLocal = onlyLocal).okOrNull() ?: return null
+        val page = mapInstantView(url, iv)
+        if (page.blocks.isEmpty()) return null
+        if (instantViewCache.size > 30) instantViewCache.clear()
+        instantViewCache[url] = page
+        return page
+    }
+
+    // ---- Избранное по темам ----
+
+    private val savedTopicRaw = ConcurrentHashMap<Long, SavedMessagesTopic>()
+    private val _savedTopicsVersion = MutableStateFlow(0)
+
+    /** Растёт при каждом обновлении тем «Избранного» от TDLib. */
+    val savedTopicsVersion: StateFlow<Int> = _savedTopicsVersion.asStateFlow()
+
+    private val activeSavedTopics = ConcurrentHashMap<Long, Long>()
+
+    /** Тема «Избранного», открытая сейчас в чате [chatId] (0 — все сообщения): из неё грузится история. */
+    fun setActiveSavedTopic(chatId: Long, topicId: Long) {
+        if (topicId == 0L) activeSavedTopics.remove(chatId) else activeSavedTopics[chatId] = topicId
+    }
+
+    private fun savedTopicOf(chatId: Long): Long = activeSavedTopics[chatId] ?: 0L
+
+    private val activeSavedTags = ConcurrentHashMap<Long, String>()
+
+    /** Тег (эмодзи), по которому фильтруется «Избранное» в чате [chatId]; пусто — без фильтра. */
+    fun setActiveSavedTag(chatId: Long, emoji: String) {
+        if (emoji.isEmpty()) activeSavedTags.remove(chatId) else activeSavedTags[chatId] = emoji
+    }
+
+    private fun savedTagOf(chatId: Long): String = activeSavedTags[chatId] ?: ""
+
+    /** Теги «Избранного» (обычные эмодзи-теги; премиум-эмодзи пропускаем). */
+    suspend fun savedTags(): List<SavedTagItem> =
+        client.getSavedMessagesTags(savedMessagesTopicId = 0L).getOrThrow().tags.orEmpty().filterNotNull()
+            .mapNotNull { t ->
+                (t.tag as? ReactionTypeEmoji)?.let { SavedTagItem(it.emoji, t.label, t.count) }
+            }
+
+    suspend fun setSavedTopicPinned(topicId: Long, pinned: Boolean) {
+        client.toggleSavedMessagesTopicIsPinned(savedMessagesTopicId = topicId, isPinned = pinned).getOrThrow()
+    }
+
+    /** Чат [chatId] — «Избранное» (личный чат с самим собой, его id равен id пользователя). */
+    suspend fun isSavedMessages(chatId: Long): Boolean {
+        if (_ownUserId.value == 0L) runCatching { _ownUserId.value = client.getMe().getOrThrow().id }
+        return _ownUserId.value != 0L && chatId == _ownUserId.value
+    }
+
+    /** Просит TDLib подгрузить темы «Избранного»; сами темы приходят обновлениями, см. [savedTopicsVersion]. */
+    suspend fun requestSavedTopics() {
+        // Когда темы закончились, TDLib отвечает ошибкой 404 — это нормальный конец цикла.
+        repeat(5) {
+            if (runCatching { client.loadSavedMessagesTopics(limit = 100).getOrThrow() }.isFailure) return
+        }
+    }
+
+    suspend fun savedTopics(): List<SavedTopicItem> =
+        savedTopicRaw.values.sortedByDescending { it.order }.map { t ->
+            val last = t.lastMessage?.toItem()
+            val type = t.type
+            SavedTopicItem(
+                id = t.id,
+                kind = when (type) {
+                    is SavedMessagesTopicTypeMyNotes -> SavedTopicKind.NOTES
+                    is SavedMessagesTopicTypeAuthorHidden -> SavedTopicKind.HIDDEN
+                    else -> SavedTopicKind.CHAT
+                },
+                sourceChatId = (type as? SavedMessagesTopicTypeSavedFromChat)?.chatId ?: 0L,
+                title = (type as? SavedMessagesTopicTypeSavedFromChat)
+                    ?.let { runCatching { getChatTitle(it.chatId) }.getOrDefault("") }.orEmpty(),
+                isPinned = t.isPinned,
+                order = t.order,
+                lastText = last?.summary.orEmpty(),
+                lastDate = last?.date ?: 0,
+            )
+        }
 
     // ---- Форумы (группы с темами) ----
 
@@ -2537,13 +2706,84 @@ class ChatRepository(
             ),
         )
 
-    /** Отправляет геопозицию (не «живую»). */
-    suspend fun sendLocation(chatId: Long, latitude: Double, longitude: Double, accuracy: Double) = sendContent(
-        chatId,
-        InputMessageLocation(
-            location = dev.g000sha256.tdl.dto.Location(latitude = latitude, longitude = longitude, horizontalAccuracy = accuracy),
-        ),
-    )
+    /** Отправляет геопозицию; [livePeriod] > 0 — трансляция на столько секунд. */
+    suspend fun sendLocation(
+        chatId: Long, latitude: Double, longitude: Double, accuracy: Double, livePeriod: Int = 0,
+    ) {
+        val point = dev.g000sha256.tdl.dto.Location(latitude = latitude, longitude = longitude, horizontalAccuracy = accuracy)
+        val content: InputMessageContent = if (livePeriod > 0) {
+            InputMessageLiveLocation(
+                location = LiveLocation(location = point, livePeriod = livePeriod, heading = 0, proximityAlertRadius = 0),
+            )
+        } else {
+            InputMessageLocation(location = point)
+        }
+        sendContent(chatId, content)
+    }
+
+    /** Останавливает свою трансляцию геопозиции в сообщении. */
+    suspend fun stopLiveLocation(chatId: Long, messageId: Long) {
+        LiveLocationSharer.untrack(chatId, messageId)
+        client.editMessageLiveLocation(
+            chatId = chatId,
+            messageId = messageId,
+            replyMarkup = null,
+            location = null,
+        ).getOrThrow()
+    }
+
+    /** Обновляет координаты одной своей трансляции; [livePeriod] — её исходный период в секундах. */
+    suspend fun updateLiveLocation(
+        chatId: Long, messageId: Long, latitude: Double, longitude: Double, accuracy: Double, livePeriod: Int,
+    ) {
+        client.editMessageLiveLocation(
+            chatId = chatId,
+            messageId = messageId,
+            replyMarkup = null,
+            location = LiveLocation(
+                location = dev.g000sha256.tdl.dto.Location(latitude = latitude, longitude = longitude, horizontalAccuracy = accuracy),
+                livePeriod = livePeriod,
+                heading = 0,
+                proximityAlertRadius = 0,
+            ),
+        ).getOrThrow()
+    }
+
+    private fun locationSummary(l: LocationItem): String = when {
+        l.title.isNotBlank() -> "📍 ${l.title}"
+        l.isLive -> "📍 " + tr("Трансляция геопозиции")
+        else -> "📍 " + tr("Геопозиция")
+    }
+
+    private fun MessageContent.toLocationItem(): LocationItem? {
+        val now = System.currentTimeMillis() / 1000
+        return when (this) {
+            is MessageLocation -> LocationItem(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                accuracy = location.horizontalAccuracy,
+            )
+            is MessageLiveLocation -> {
+                val live = location ?: return null
+                val point = live.location ?: return null
+                LocationItem(
+                    latitude = point.latitude,
+                    longitude = point.longitude,
+                    accuracy = point.horizontalAccuracy,
+                    livePeriod = live.livePeriod,
+                    liveUntil = if (expiresIn > 0) now + expiresIn else 0L,
+                    heading = live.heading,
+                )
+            }
+            is MessageVenue -> LocationItem(
+                latitude = venue.location.latitude,
+                longitude = venue.location.longitude,
+                title = venue.title,
+                address = venue.address,
+            )
+            else -> null
+        }
+    }
 
     /** Включает или выключает уведомления чата; остальные настройки уведомлений сохраняются. */
     suspend fun setMuted(chatId: Long, muted: Boolean) {
@@ -2967,6 +3207,7 @@ class ChatRepository(
         is MessagePaidMedia -> c.caption.text
         is MessageVideoNote -> ""
         is MessageCall -> formatCallMessage(c, isOutgoing)
+        is MessageLocation, is MessageVenue -> ""
         else -> typeLabel(c)
     }
 
@@ -3087,6 +3328,10 @@ class ChatRepository(
         }
         val body = bodyOf(c, isOutgoing)
         val pollItem = (c as? MessagePoll)?.poll?.toItem()
+        val locationItem = c.toLocationItem()
+        if (isOutgoing && locationItem != null && locationItem.isLive && locationItem.liveUntil > System.currentTimeMillis() / 1000) {
+            LiveLocationSharer.track(chatId, id, locationItem.livePeriod, locationItem.liveUntil)
+        }
         return MessageItem(
             id = id,
             chatId = chatId,
@@ -3095,7 +3340,7 @@ class ChatRepository(
             date = date,
             media = media,
             call = callItem,
-            summary = if (pollItem != null) "📊 ${pollItem.question}" else summaryOf(body, media),
+            summary = if (pollItem != null) "📊 ${pollItem.question}" else if (locationItem != null) locationSummary(locationItem) else summaryOf(body, media),
             senderUserId = (senderId as? MessageSenderUser)?.userId,
             senderChatId = (senderId as? MessageSenderChat)?.chatId,
             topicId = (topicId as? MessageTopicForum)?.forumTopicId ?: 0,
@@ -3124,6 +3369,8 @@ class ChatRepository(
             },
             links = linksOf(c),
             albumId = mediaAlbumId,
+            savedTopicId = (topicId as? MessageTopicSavedMessages)?.savedMessagesTopicId ?: 0L,
+            location = locationItem,
         )
     }
 

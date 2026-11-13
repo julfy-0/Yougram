@@ -148,6 +148,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import app.yougram.feature.chat.location.LocationDialog
+import app.yougram.feature.chat.location.LocationMessage
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalFocusManager
@@ -176,6 +178,9 @@ import app.yougram.core.ui.glass.glassTopBar
 import app.yougram.core.ui.glass.rememberBackdropState
 import app.yougram.core.ui.rememberHaptics
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.lazy.LazyRow
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onSizeChanged
 import app.yougram.core.i18n.Localization
@@ -261,6 +266,18 @@ fun ChatScreen(
 
     var mode by remember { mutableStateOf<ComposerMode>(ComposerMode.Idle) }
     var draft by remember { mutableStateOf("") }
+    // Подсказки хэштегов: начало «#тег» в конце черновика (после пробела или в начале строки).
+    var hashtagTick by remember { mutableStateOf(0) }
+    val hashPrefix = remember(draft) { trailingHashtagPrefix(draft) }
+    val hashtagSuggestions by produceState(emptyList<String>(), hashPrefix, hashtagTick) {
+        value = if (hashPrefix == null) emptyList() else {
+            delay(120)
+            runCatching { container?.chatRepository?.searchHashtags(hashPrefix) ?: emptyList() }.getOrDefault(emptyList())
+                // Полностью набранный тег единственной подсказкой не показываем.
+                .filterNot { it.equals(hashPrefix, ignoreCase = true) && hashPrefix.isNotEmpty() }
+        }
+    }
+    val hashtagScope = rememberCoroutineScope()
     var menuFor by remember { mutableStateOf<ChatEntry?>(null) }
     var menuAnchor by remember { mutableStateOf<MessageAnchor?>(null) }
     LaunchedEffect(menuFor) { if (menuFor == null) menuAnchor = null }
@@ -273,6 +290,9 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var pollOpen by remember { mutableStateOf(false) }
+    var locationOpen by remember { mutableStateOf(false) }
+    val locationContext = LocalContext.current
+    LaunchedEffect(Unit) { viewModel.ensureLiveLocation(locationContext) }
     var overflowOpen by remember { mutableStateOf(false) }
     var viewer by remember { mutableStateOf<Pair<List<MediaItem>, Int>?>(null) }
     var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }
@@ -621,6 +641,17 @@ fun ChatScreen(
                         mode = mode,
                         draft = draft,
                         onDraft = { draft = it },
+                        hashtags = hashtagSuggestions,
+                        onPickHashtag = { tag ->
+                            val i = draft.lastIndexOf('#')
+                            if (i >= 0) draft = draft.substring(0, i) + "#" + tag + " "
+                        },
+                        onForgetHashtag = { tag ->
+                            hashtagScope.launch {
+                                runCatching { container?.chatRepository?.removeRecentHashtag(tag) }
+                                hashtagTick++
+                            }
+                        },
                         onCancelMode = {
                             if (mode is ComposerMode.Edit) draft = ""
                             mode = ComposerMode.Idle
@@ -738,7 +769,7 @@ fun ChatScreen(
                                     onFile = { attachOpen = false; pickFile.launch("*/*") },
                                     onMedia = { attachOpen = false; pickMedia.launch("image/*") },
                                     onPoll = { attachOpen = false; pollOpen = true },
-                                    onLocation = { attachOpen = false },
+                                    onLocation = { attachOpen = false; locationOpen = true },
                                     onVoice = {
                                         attachOpen = false
                                         voiceTapMode = true
@@ -787,6 +818,17 @@ fun ChatScreen(
         )
     }
 
+    if (locationOpen) {
+        LocationDialog(
+            onDismiss = { locationOpen = false },
+            onSend = { lat, lon, accuracy, livePeriod ->
+                locationOpen = false
+                viewModel.sendLocation(lat, lon, accuracy, livePeriod)
+                if (livePeriod > 0) viewModel.ensureLiveLocation(locationContext)
+            },
+        )
+    }
+
     if (pollOpen) {
         PollDialog(
             onDismiss = { pollOpen = false },
@@ -824,7 +866,7 @@ fun ChatScreen(
         MessageMenu(
             message = m,
             isRead = (state.readAt[m.id] ?: 0) > 0,
-            canEdit = m.isOutgoing && m.media == null && m.poll == null && !m.isService,
+            canEdit = m.isOutgoing && m.media == null && m.poll == null && m.location == null && !m.isService,
             canSave = m.media != null,
             canShadowBan = false,
             canWatchTyping = false,
@@ -1142,13 +1184,23 @@ private fun MessageRow(
     var swipeArmed by remember { mutableStateOf(false) }
     var swipeSettle by remember { mutableIntStateOf(0) }
     val swipeDir = if (mine) -1f else 1f
+    // Плавно возвращаем пузырь на место после свайпа-ответа.
     LaunchedEffect(swipeSettle) {
         if (swipeSettle > 0 && swipeOffset != 0f) {
-            animate(
-                initialValue = swipeOffset,
-                targetValue = 0f,
-                animationSpec = spring(stiffness = 450f, dampingRatio = 0.85f),
-            ) { value, _ -> swipeOffset = value }
+            val start = swipeOffset
+            val startTime = System.currentTimeMillis()
+            val durationMs = 220L
+            while (true) {
+                val elapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(0)
+                val t = (elapsed / durationMs.toFloat()).coerceIn(0f, 1f)
+                val eased = 1f - (1f - t) * (1f - t) * (1f - t)
+                swipeOffset = start * (1f - eased)
+                if (t >= 1f) {
+                    swipeOffset = 0f
+                    break
+                }
+                delay(16)
+            }
             swipeArmed = false
         }
     }
@@ -1333,6 +1385,15 @@ private fun MessageRow(
                                     MessageMedia(media, viewModel, onOpenPhoto = { onOpenMedia(listOf(it), 0) })
                                 }
                             }
+                        }
+
+                        m.location?.let { loc ->
+                            LocationMessage(
+                                item = loc,
+                                mine = mine,
+                                onStopLive = { viewModel.stopLiveLocation(m.id) },
+                                modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+                            )
                         }
 
                         m.poll?.let {
@@ -1524,11 +1585,23 @@ private fun ServiceMessage(text: String) {
 
 // ───────────────────────── Composer ─────────────────────────
 
+/** Начало хэштега в конце [draft] (текст после «#», возможно пустой); null, если в конце нет набираемого тега. */
+private fun trailingHashtagPrefix(draft: String): String? {
+    val i = draft.lastIndexOf('#')
+    if (i < 0) return null
+    if (i > 0 && !draft[i - 1].isWhitespace()) return null
+    val prefix = draft.substring(i + 1)
+    return prefix.takeIf { p -> p.length <= 64 && p.all { it.isLetterOrDigit() || it == '_' } }
+}
+
 @Composable
 private fun Composer(
     mode: ComposerMode,
     draft: String,
     onDraft: (String) -> Unit,
+    hashtags: List<String> = emptyList(),
+    onPickHashtag: (String) -> Unit = {},
+    onForgetHashtag: (String) -> Unit = {},
     onCancelMode: () -> Unit,
     paidStars: Long,
     pickerOpen: Boolean,
@@ -1546,6 +1619,7 @@ private fun Composer(
     onAttach: () -> Unit,
     onSend: () -> Unit,
 ) {
+    val haptics = rememberHaptics()
     val scheme = MaterialTheme.colorScheme
     val hasText = draft.isNotBlank()
     var videoMode by remember { mutableStateOf(false) }
@@ -1561,6 +1635,33 @@ private fun Composer(
             },
     ) {
         Column {
+            // Подсказки хэштегов; долгое нажатие убирает тег из недавних.
+            AnimatedVisibility(
+                visible = hashtags.isNotEmpty(),
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+            ) {
+                LazyRow(
+                    Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(hashtags, key = { it }) { tag ->
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.5f),
+                            modifier = Modifier.clip(CircleShape)
+                                .combinedClickable(onClick = { onPickHashtag(tag) }, onLongClick = { onForgetHashtag(tag) }),
+                        ) {
+                            Text(
+                                "#$tag",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
             AnimatedVisibility(
                 visible = mode !is ComposerMode.Idle,
                 enter = slideInVertically { it } + fadeIn(),
@@ -1626,7 +1727,8 @@ private fun Composer(
                         disabledIndicatorColor = Color.Transparent,
                     ),
                     leadingIcon = {
-                        IconButton(onClick = onTogglePicker) {
+                        // Иконка смещена правее без изменения раскладки: текст остаётся на месте.
+                        IconButton(onClick = onTogglePicker, modifier = Modifier.offset(x = 3.dp)) {
                             AnimatedContent(
                                 targetState = pickerOpen,
                                 transitionSpec = {
@@ -1656,13 +1758,25 @@ private fun Composer(
                     videoMode -> ComposerButtonKind.Round
                     else -> ComposerButtonKind.Voice
                 }
-                // Форма кнопки: голосовое — «печенье» с 12 волнами, кружок — скруглённый квадрат, отправка — круг.
-                // Между формами кнопка плавно перетекает (Morph) на пружине.
+                // Форма кнопки: у голосового и кружка одна и та же («печенье»), отправка — круг.
+                // Голосовое ↔ кружок форму не меняют: кнопка просто быстро проворачивается (spin ниже).
                 val shapeOf = { k: ComposerButtonKind ->
                     when (k) {
-                        ComposerButtonKind.Voice -> MaterialShapes.Cookie9Sided
-                        ComposerButtonKind.Round -> MaterialShapes.Square
+                        ComposerButtonKind.Voice, ComposerButtonKind.Round -> MaterialShapes.Cookie9Sided
                         else -> MaterialShapes.Circle
+                    }
+                }
+                // Поворот при смене голосовое ↔ кружок: два оборота (720°) всегда в одну сторону.
+                val spin = remember { Animatable(0f) }
+                val lastKind = remember { object { var value = kind } }
+                LaunchedEffect(kind) {
+                    val prev = lastKind.value
+                    lastKind.value = kind
+                    val micOrRound = { k: ComposerButtonKind -> k == ComposerButtonKind.Voice || k == ComposerButtonKind.Round }
+                    if (prev != kind && micOrRound(prev) && micOrRound(kind)) {
+                        spin.snapTo(0f)
+                        spin.animateTo(720f, tween(480, easing = FastOutSlowInEasing))
+                        spin.snapTo(0f)
                     }
                 }
                 var shapeFrom by remember { mutableStateOf(shapeOf(kind)) }
@@ -1674,7 +1788,7 @@ private fun Composer(
                         shapeFrom = shapeTo
                         shapeTo = target
                         shapeProgress.snapTo(0f)
-                        shapeProgress.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 380f))
+                        shapeProgress.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 700f))
                     }
                 }
                 val morph = remember(shapeFrom, shapeTo) { Morph(shapeFrom.normalized(), shapeTo.normalized()) }
@@ -1693,8 +1807,6 @@ private fun Composer(
                 // Жест голосового: тап — переключить на кружок, удержание ≥280 мс — запись,
                 // свайп вверх во время записи — закреп, влево — отмена, отпустил — отправка.
                 // pointerInput ловит всё удержание целиком: onClick у кнопки в режиме Voice отключён.
-                val holdScope = rememberCoroutineScope()
-                // Свежие лямбды: pointerInput живёт между перекомпоновками и иначе держал бы устаревшие.
                 val pressV by rememberUpdatedState(onVoicePress)
                 val dragV by rememberUpdatedState(onVoiceDrag)
                 val releaseV by rememberUpdatedState(onVoiceRelease)
@@ -1707,20 +1819,17 @@ private fun Composer(
                         awaitEachGesture {
                             // requireUnconsumed = false: внутренний clickable IconButton успевает поглотить нажатие.
                             awaitFirstDown(requireUnconsumed = false)
+                            val pressStart = System.currentTimeMillis()
                             var recording = false
                             var totalX = 0f
                             var totalY = 0f
-                            // Старт записи откладываем: обычный тап не должен начинать запись.
-                            val holdJob = holdScope.launch {
-                                kotlinx.coroutines.delay(280)
-                                recording = true
-                                if (isRound) pressR() else pressV()
-                            }
                             while (true) {
                                 val event = awaitPointerEvent()
-                                if (event.changes.none { it.pressed }) {
-                                    holdJob.cancel()
-                                    break
+                                if (event.changes.none { it.pressed }) break
+                                if (!recording && System.currentTimeMillis() - pressStart >= 280) {
+                                    recording = true
+                                    if (isRound) pressR() else pressV()
+                                    haptics(Haptics.Kind.Tick)
                                 }
                                 if (recording) {
                                     event.changes.firstOrNull()?.let {
@@ -1749,7 +1858,7 @@ private fun Composer(
                             }
                         }
                     },
-                    modifier = Modifier.size(ComposerHeight).then(holdGesture),
+                    modifier = Modifier.size(ComposerHeight).graphicsLayer { rotationZ = spin.value }.then(holdGesture),
                     shape = buttonShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = container,
@@ -1760,8 +1869,8 @@ private fun Composer(
                     AnimatedContent(
                         targetState = kind,
                         transitionSpec = {
-                            (fadeIn(tween(160, delayMillis = 90)) + scaleIn(tween(160, delayMillis = 90), initialScale = 0.78f))
-                                .togetherWith(fadeOut(tween(90)) + scaleOut(tween(90), targetScale = 0.78f))
+                            (fadeIn(tween(140, delayMillis = 100)) + scaleIn(tween(140, delayMillis = 100), initialScale = 0.78f))
+                                .togetherWith(fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.78f))
                                 .using(SizeTransform(clip = false))
                         },
                         label = "composerIcon",

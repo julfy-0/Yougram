@@ -28,6 +28,9 @@ val LocalOpenLink = staticCompositionLocalOf<(String) -> Unit> { {} }
 /** Открывает профиль по @username (без «@»): ищет пользователя или публичный чат в Telegram. */
 val LocalOpenUsername = staticCompositionLocalOf<(String) -> Unit> { {} }
 
+/** Нажатие на #хэштег в тексте: получает тег вместе с «#» и открывает поиск по нему. */
+val LocalOpenHashtag = staticCompositionLocalOf<(String) -> Unit> { {} }
+
 private val UrlPattern = Regex(
     """(?<![\p{L}\p{N}_@./-])(?:https?://|www\.|tg://|tg:(?=[a-z_]+\?)|(?:t|telegram)\.me/)[^\s<>"']+""",
     RegexOption.IGNORE_CASE,
@@ -45,6 +48,8 @@ private val EmailPattern = Regex(
 )
 // @username: 5–32 символа, начинается с буквы. Не трогаем адреса почты (user@host) и куски ссылок.
 private val MentionPattern = Regex("""(?<![\p{L}\p{N}_@./])@([A-Za-z][A-Za-z0-9_]{3,31})(?![A-Za-z0-9_])""")
+// #тег: буквы, цифры и «_», не чисто из цифр; не трогаем якоря внутри ссылок (…/page#top) и слова вида a#b.
+private val HashtagPattern = Regex("""(?<![\p{L}\p{N}_&/#])#([\p{L}\p{N}_]{1,64})(?![\p{L}\p{N}_])""")
 private val SchemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 private const val TrailingPunctuation = ".,;:!?)]}»\u2026"
 
@@ -88,7 +93,7 @@ fun openExternally(context: Context, url: String) {
     }
 }
 
-private class LinkToken(val start: Int, val end: Int, val value: String, val mention: Boolean, val emojiId: Long = 0L)
+private class LinkToken(val start: Int, val end: Int, val value: String, val mention: Boolean, val emojiId: Long = 0L, val hashtag: Boolean = false)
 
 private fun overlaps(tokens: List<LinkToken>, from: Int, to: Int, start: Int, end: Int): Boolean =
     (from until to).any { start < tokens[it].end && end > tokens[it].start }
@@ -143,6 +148,13 @@ private fun tokenize(text: String, emojis: List<CustomEmojiSpan>, links: List<Li
         if (overlaps(tokens, 0, urlCount, start, start + 1)) continue
         tokens += LinkToken(start, match.range.last + 1, match.groupValues[1], mention = true)
     }
+    if (text.indexOf('#') >= 0) for (match in HashtagPattern.findAll(text)) {
+        val start = match.range.first
+        val end = match.range.last + 1
+        if (match.groupValues[1].all { it.isDigit() }) continue
+        if (overlaps(tokens, 0, tokens.size, start, end)) continue
+        tokens += LinkToken(start, end, match.value, mention = false, hashtag = true)
+    }
     val textTokens = tokens.size
     for (e in emojis) {
         val end = e.offset + e.length
@@ -162,11 +174,13 @@ fun rememberLinkified(
     linkColor: Color,
     onOpen: (String) -> Unit,
     onMention: (String) -> Unit = {},
+    onHashtag: (String) -> Unit = LocalOpenHashtag.current,
     emojis: List<CustomEmojiSpan> = emptyList(),
     links: List<LinkSpan> = emptyList(),
 ): AnnotatedString {
     val currentOpen by rememberUpdatedState(onOpen)
     val currentMention by rememberUpdatedState(onMention)
+    val currentHashtag by rememberUpdatedState(onHashtag)
     val tokens = remember(text, emojis, links) { tokenize(text, emojis, links) }
     return remember(text, linkColor, tokens) {
         buildAnnotatedString {
@@ -176,6 +190,14 @@ fun rememberLinkified(
                 append(text.substring(cursor, t.start))
                 if (t.emojiId != 0L) {
                     appendInlineContent(customEmojiKey(t.emojiId), text.substring(t.start, t.end))
+                } else if (t.hashtag) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "hashtag",
+                            styles = TextLinkStyles(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold)),
+                            linkInteractionListener = { currentHashtag(t.value) },
+                        ),
+                    ) { append(text.substring(t.start, t.end)) }
                 } else if (t.mention) {
                     withLink(
                         LinkAnnotation.Clickable(

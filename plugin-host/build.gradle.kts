@@ -7,7 +7,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        minSdk = 31
+        minSdk = 29
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

@@ -204,6 +204,8 @@ private val SearchButtonShape = RoundedCornerShape(13.dp)
 /** Кнопка поиска внизу меньше «таблетки» на 30%. */
 private const val SearchButtonScale = 0.7f
 private val SearchBlurRadius = 24.dp
+/** Радиус размытия уходящей вкладки при переключении вкладок. */
+private val LeavingTabBlurRadius = 18.dp
 private const val SearchAnimationMillis = 260
 private const val SearchResultsAlpha = 0.78f
 
@@ -515,7 +517,22 @@ fun MainScreen(
                 },
                 label = "mainScreen",
             ) { (currentTab, currentPage) ->
-                Box(Modifier.fillMaxSize().skipWhenOffscreen()) {
+                // Уходящая вкладка размывается, пока уезжает и тает; подэкраны внутри одной вкладки и слабое железо — без размытия.
+                val leavingBlur by transition.animateDp(
+                    transitionSpec = { tween(ScreenAnimationMillis, easing = FastOutSlowInEasing) },
+                    label = "leavingTabBlur",
+                ) { state ->
+                    // Здесь transition — это EnterExitState, а не пара экранов: уходящий экран узнаём по тому,
+                    // что его вкладка уже не совпадает с вкладкой текущей цели (screen).
+                    val tabChanges = currentTab != screen.first
+                    if (state == EnterExitState.PostExit && tabChanges && blurAllowed) LeavingTabBlurRadius else 0.dp
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .then(if (leavingBlur > 0.dp) Modifier.blur(leavingBlur, BlurredEdgeTreatment.Unbounded) else Modifier)
+                        .skipWhenOffscreen(),
+                ) {
                     when (currentTab) {
                         MainTab.Chats -> Box(Modifier.fillMaxSize()) {
                             // Список остаётся в композиции под результатами поиска, поэтому прокрутка не теряется.

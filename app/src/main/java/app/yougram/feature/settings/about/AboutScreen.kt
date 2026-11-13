@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.MusicNote
@@ -74,8 +75,8 @@ import app.yougram.feature.account.data.AccountManager
 import app.yougram.feature.settings.SettingsPage
 import app.yougram.feature.settings.component.SectionLabel
 import app.yougram.feature.settings.component.SettingGroup
+import app.yougram.plugin.PluginApiVersion
 import app.yougram.feature.settings.component.SettingRow
-import app.yougram.feature.settings.component.SettingsFootnote
 import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.extras.PrimeEasterEgg
 import app.yougram.feature.settings.telegram.openUrl
@@ -193,6 +194,14 @@ fun AboutScreen(
             }
             item {
                 SettingRow(
+                    title = "Версия API плагинов",
+                    subtitle = tr("Поддерживаются плагины {0}–{1}", PluginApiVersion.MIN, PluginApiVersion.CURRENT),
+                    value = PluginApiVersion.CURRENT,
+                    icon = Icons.Filled.Extension,
+                )
+            }
+            item {
+                SettingRow(
                     title = "Сборка",
                     subtitle = tr("Код версии: {0}", BuildConfig.VERSION_CODE),
                     value = "v${BuildConfig.VERSION_NAME}",
@@ -287,7 +296,6 @@ fun AboutScreen(
             }
         }
 
-        SettingsFootnote("Баннер расположен в app/src/main/res/drawable/about_banner.png (рекомендуемые размеры: 1000×400 px, 2.5:1).")
     }
 
     if (showPrime) PrimeEasterEgg(onDismiss = { showPrime = false })

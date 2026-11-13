@@ -83,6 +83,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import app.yougram.core.settings.SavedViewPrefs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -374,6 +375,15 @@ fun ChatSettingsScreen(
 
         SectionLabel("Прочие настройки")
         SettingGroup {
+            item {
+                val byTopics by SavedViewPrefs.state(context).collectAsState()
+                SwitchRow(
+                    "Избранное по темам",
+                    byTopics,
+                    { v -> SavedViewPrefs.set(context, v) },
+                    subtitle = "Список источников пересылки вместо одного чата",
+                )
+            }
             item {
                 SwitchRow(
                     "Direct Share",

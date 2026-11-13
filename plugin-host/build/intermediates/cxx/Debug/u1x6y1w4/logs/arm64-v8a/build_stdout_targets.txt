@@ -1,2 +1,0 @@
-ninja: Entering directory `C:\Users\sdc99\StudioProjects\Yougram\plugin-host\.cxx\Debug\u1x6y1w4\arm64-v8a'
-ninja: no work to do.

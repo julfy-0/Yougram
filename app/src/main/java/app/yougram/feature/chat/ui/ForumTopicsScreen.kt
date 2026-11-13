@@ -49,6 +49,9 @@ import app.yougram.core.i18n.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import app.yougram.core.settings.SavedViewPrefs
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -94,8 +97,13 @@ fun ChatOrTopics(
     val forum by produceState<Boolean?>(if (skipCheck) false else null, chatId, topicId, messageId) {
         if (!skipCheck) value = container.chatRepository.isForum(chatId)
     }
+    val byTopics by SavedViewPrefs.state(LocalContext.current).collectAsState()
+    val checkSaved = byTopics && !skipCheck
+    val saved by produceState<Boolean?>(if (checkSaved) null else false, chatId, checkSaved) {
+        value = if (checkSaved) container.chatRepository.isSavedMessages(chatId) else false
+    }
     when {
-        forum == null -> Box(
+        forum == null || saved == null -> Box(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center,
         ) { LoadingIndicator(contained = true) }
@@ -107,6 +115,17 @@ fun ChatOrTopics(
             onBack = onBack,
             onOpenTopic = onOpenTopic,
             onOpenChatProfile = onOpenChatProfile,
+        )
+
+        saved == true -> SavedMessagesHost(
+            container = container,
+            chatId = chatId,
+            onBack = onBack,
+            onOpenChatProfile = onOpenChatProfile,
+            onOpenProfile = onOpenProfile,
+            onCall = onCall,
+            onOpenComments = onOpenComments,
+            showBack = showBack,
         )
 
         else -> {
