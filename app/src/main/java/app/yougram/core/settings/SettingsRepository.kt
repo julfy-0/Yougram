@@ -26,6 +26,18 @@ enum class BlurType(val key: String, val title: String, val hint: String) {
     }
 }
 
+/** Внешний вид стеклянных панелей. */
+enum class GlassStyle(val key: String, val title: String, val hint: String) {
+    Classic("classic", "Классика", "Размытие и полупрозрачная подкраска панели"),
+    Liquid("liquid", "Liquid Glass", "Как в iOS: насыщенный фон, блик по краю и мягкий объём");
+
+    companion object {
+        val DEFAULT = Classic
+
+        fun fromKey(key: String?): GlassStyle = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 /** Настройки «стеклянных» панелей. */
 data class GlassSettings(
     /** Радиус размытия фона под панелями, dp. 0 — без размытия. */
@@ -34,6 +46,8 @@ data class GlassSettings(
     val opacity: Float = DEFAULT_OPACITY,
     /** Алгоритм размытия. */
     val blurType: BlurType = BlurType.DEFAULT,
+    /** Стиль стекла: классический или «жидкое стекло» как в iOS. */
+    val style: GlassStyle = GlassStyle.DEFAULT,
 ) {
     companion object {
         const val DEFAULT_BLUR = 24f
@@ -307,6 +321,7 @@ class SettingsRepository(private val context: Context) {
             blurRadius = prefs.getFloat(KEY_BLUR, GlassSettings.DEFAULT_BLUR),
             opacity = prefs.getFloat(KEY_OPACITY, GlassSettings.DEFAULT_OPACITY),
             blurType = BlurType.fromKey(prefs.getString(KEY_BLUR_TYPE, null)),
+            style = GlassStyle.fromKey(prefs.getString(KEY_GLASS_STYLE, null)),
         )
     )
     val glass: StateFlow<GlassSettings> = _glass.asStateFlow()
@@ -319,6 +334,11 @@ class SettingsRepository(private val context: Context) {
     fun setBlurType(type: BlurType) {
         _glass.update { it.copy(blurType = type) }
         prefs.edit().putString(KEY_BLUR_TYPE, type.key).apply()
+    }
+
+    fun setGlassStyle(style: GlassStyle) {
+        _glass.update { it.copy(style = style) }
+        prefs.edit().putString(KEY_GLASS_STYLE, style.key).apply()
     }
 
     fun setOpacity(value: Float) {
@@ -484,6 +504,7 @@ class SettingsRepository(private val context: Context) {
         setBlur(GlassSettings.DEFAULT_BLUR)
         setOpacity(GlassSettings.DEFAULT_OPACITY)
         setBlurType(BlurType.DEFAULT)
+        setGlassStyle(GlassStyle.DEFAULT)
     }
 
     // Уведомления.
@@ -1019,6 +1040,7 @@ class SettingsRepository(private val context: Context) {
         const val KEY_BLUR = "glass_blur"
         const val KEY_OPACITY = "glass_opacity"
         const val KEY_BLUR_TYPE = "glass_blur_type"
+        const val KEY_GLASS_STYLE = "glass_style"
         const val KEY_HOME_LAYOUT = "home_layout"
         const val KEY_NAV_ORDER = "nav_order"
         const val KEY_MODE = "theme_mode"
