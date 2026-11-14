@@ -14,8 +14,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import app.yougram.core.settings.GlassSettings
+import app.yougram.core.settings.GlassStyle
 import app.yougram.core.ui.DeviceTier
 import app.yougram.core.ui.rememberDeviceTier
 import kotlin.math.ceil
@@ -100,6 +104,8 @@ fun Modifier.glass(
     // Тип размытия берётся из общих настроек: панели с жёстко заданными настройками
     // (плеер, просмотр фото, звонок, вход) тоже используют выбранный пользователем алгоритм.
     val blurType = LocalGlass.current.blurType
+    // Стиль, как и тип размытия, общий для всех панелей (и для тех, у кого настройки заданы жёстко).
+    val liquid = LocalGlass.current.style == GlassStyle.Liquid
     // Размытие 0 — сплошная панель.
     val blurOff = settings.blurRadius <= 0.5f
 
@@ -109,11 +115,16 @@ fun Modifier.glass(
         val enabled = !lowTier && radiusPx > 0.5f
         val smallW = ceil(metrics.widthPixels / BLUR_DOWNSCALE).toInt()
         val smallH = ceil(metrics.heightPixels / BLUR_DOWNSCALE).toInt()
-        val key = if (enabled) BlurKey(blurType, radiusPx, smallW, smallH) else null
+        val key = if (enabled) BlurKey(blurType, radiusPx, smallW, smallH, liquid) else null
         if (key != state.appliedKey) {
             state.appliedKey = key
-            state.small.renderEffect =
-                if (key != null) blurRenderEffect(key.type, radiusPx / BLUR_DOWNSCALE, smallW.toFloat(), smallH.toFloat()) else null
+            state.small.renderEffect = if (key != null) {
+                val blur = blurRenderEffect(key.type, radiusPx / BLUR_DOWNSCALE, smallW.toFloat(), smallH.toFloat())
+                // Liquid Glass: после размытия цвета под панелью делаем насыщеннее.
+                if (key.liquid) saturatedEffect(blur, LIQUID_SATURATION) else blur
+            } else {
+                null
+            }
         }
     }
 
@@ -139,17 +150,59 @@ fun Modifier.glass(
             val alpha = when {
                 blurOff -> 1f
                 lowTier -> maxOf(settings.opacity, LOW_TIER_MIN_ALPHA)
+                // В Liquid Glass подкраска чуть прозрачнее: фон под панелью виден лучше.
+                liquid -> settings.opacity * LIQUID_TINT_SCALE
                 else -> settings.opacity
             }
             drawRect(tint.copy(alpha = alpha))
+            if (liquid) drawLiquidHighlights(shape)
         }
 }
 
-private data class BlurKey(val type: app.yougram.core.settings.BlurType, val radiusPx: Float, val w: Int, val h: Int)
+private data class BlurKey(
+    val type: app.yougram.core.settings.BlurType,
+    val radiusPx: Float,
+    val w: Int,
+    val h: Int,
+    val liquid: Boolean,
+)
+
+/**
+ * Детали «жидкого стекла» поверх подкраски: свет сверху и лёгкая тень снизу дают объём,
+ * а диагональный блик по краю (ярче в левом верхнем углу) имитирует преломление на кромке стекла.
+ * Рисуется внутри [shape] (панель уже обрезана по ней), поэтому обводка делается вдвое толще видимой части.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLiquidHighlights(shape: Shape) {
+    drawRect(
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.16f),
+                Color.White.copy(alpha = 0.02f),
+                Color.Black.copy(alpha = 0.06f),
+            ),
+        ),
+    )
+    val rim = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.75f),
+            Color.White.copy(alpha = 0.06f),
+            Color.White.copy(alpha = 0.30f),
+        ),
+        start = Offset.Zero,
+        end = Offset(size.width, size.height),
+    )
+    drawOutline(shape.createOutline(size, layoutDirection, this), rim, style = Stroke(width = LIQUID_RIM_DP.dp.toPx() * 2f))
+}
 
 /** Во сколько раз уменьшаем копию экрана перед размытием. */
 private const val BLUR_DOWNSCALE = 4f
 /** Насколько светлее поверхности панели на всю ширину (0 — как поверхность, 1 — белый). */
 private const val BAR_LIGHTEN = 0.10f
 private const val OPAQUE_THRESHOLD = 0.98f
+/** Насыщенность размытого фона под панелью в Liquid Glass (1 — без изменений). */
+private const val LIQUID_SATURATION = 1.7f
+/** Во сколько раз Liquid Glass делает подкраску прозрачнее. */
+private const val LIQUID_TINT_SCALE = 0.85f
+/** Видимая толщина блика по краю панели, dp. */
+private const val LIQUID_RIM_DP = 1.2f
 private const val LOW_TIER_MIN_ALPHA = 0.85f

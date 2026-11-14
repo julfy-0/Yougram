@@ -21,6 +21,7 @@ import app.yougram.core.settings.SettingsRepository
 import app.yougram.feature.settings.appearance.AppIconSection
 import app.yougram.feature.settings.appearance.BlurTypeRow
 import app.yougram.feature.settings.appearance.CustomIconSection
+import app.yougram.feature.settings.appearance.GlassStyleRow
 import app.yougram.feature.settings.appearance.GlassPreview
 import app.yougram.feature.settings.appearance.PlateSection
 import app.yougram.feature.settings.appearance.ThemeSection
@@ -86,6 +87,7 @@ fun SettingsScreen(
                         },
                     )
                 }
+                item { GlassStyleRow(glass.style, settings::setGlassStyle) }
                 item { BlurTypeRow(glass.blurType, settings::setBlurType) }
                 item {
                     SettingRow(
@@ -98,7 +100,7 @@ fun SettingsScreen(
                 item {
                     SettingRow(
                         title = "Сбросить по умолчанию",
-                        subtitle = "Размытие, тип размытия и плотность панелей",
+                        subtitle = "Стиль стекла, размытие, тип размытия и плотность панелей",
                         onClick = settings::resetGlass,
                     )
                 }

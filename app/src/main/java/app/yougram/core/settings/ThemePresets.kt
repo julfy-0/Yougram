@@ -33,6 +33,7 @@ object ThemeSnapshot {
                 put("blur", g.blurRadius.toDouble())
                 put("opacity", g.opacity.toDouble())
                 put("blurType", g.blurType.key)
+                put("style", g.style.key)
             })
             put("plates", JSONObject().apply {
                 PlateArea.entries.forEach { put(it.key, plates.plates.value.of(it).toDouble()) }
@@ -79,6 +80,7 @@ object ThemeSnapshot {
             if (g.has("blur")) settings.setBlur(g.optDouble("blur").toFloat().coerceIn(0f, GlassSettings.MAX_BLUR))
             if (g.has("opacity")) settings.setOpacity(g.optDouble("opacity").toFloat().coerceIn(0f, 1f))
             if (g.has("blurType")) settings.setBlurType(BlurType.fromKey(g.optString("blurType")))
+            if (g.has("style")) settings.setGlassStyle(GlassStyle.fromKey(g.optString("style")))
         }
         json.optJSONObject("plates")?.let { p ->
             PlateArea.entries.forEach { if (p.has(it.key)) plates.set(it, p.optDouble(it.key).toFloat()) }

@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asAndroidRenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import app.yougram.core.settings.BlurType
 import kotlin.math.sqrt
@@ -27,6 +28,18 @@ fun blurRenderEffect(type: BlurType, radiusPx: Float, maxX: Float, maxY: Float):
         }
     }.getOrDefault(gaussian)
 }
+
+/**
+ * Поднимает насыщенность уже размытого фона (приём «жидкого стекла»: цвета под панелью становятся ярче,
+ * как у стекла в iOS). Работает на Android 12+, шейдеры не нужны.
+ */
+fun saturatedEffect(inner: RenderEffect, saturation: Float): RenderEffect = runCatching {
+    val m = android.graphics.ColorMatrix().apply { setSaturation(saturation) }
+    PlatformRenderEffect.createColorFilterEffect(
+        android.graphics.ColorMatrixColorFilter(m),
+        inner.asAndroidRenderEffect(),
+    ).asComposeRenderEffect()
+}.getOrDefault(inner)
 
 // ------------------------------------------------------------------------------------------------ Шейдеры
 
