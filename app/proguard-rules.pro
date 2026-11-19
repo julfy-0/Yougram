@@ -13,9 +13,24 @@
 }
 
 # Нативные плагины: JNI вызывает onNativeNotify по имени
+-keep class app.yougram.plugin.NativePluginManager { *; }
 -keepclassmembers class app.yougram.plugin.NativePluginManager {
-    void onNativeNotify(java.lang.String, java.lang.String, java.lang.String);
+    void onNativeNotify(java.lang.String, byte[], byte[]);
+    byte[] onNativeCall(java.lang.String, java.lang.String, byte[]);
 }
 
 # Вызывается из правленого байткода tdl-coroutines (buildSrc/TdJsonPatchFactory.kt)
 -keep class app.yougram.core.telegram.TdJsonFix { *; }
+
+# MediaPipe GenAI (локальная ИИ-модель): JNI и protobuf обращаются к классам по именам
+-keep class com.google.mediapipe.** { *; }
+-dontwarn com.google.mediapipe.**
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.protobuf.**
+-dontwarn javax.lang.model.**
+-dontwarn com.google.auto.value.**
+-dontwarn autovalue.shaded.**
+
+# Для читаемых стектрейсов в release
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

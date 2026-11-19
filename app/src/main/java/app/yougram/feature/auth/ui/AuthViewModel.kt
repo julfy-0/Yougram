@@ -8,12 +8,15 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.yougram.core.settings.ProxyEntry
 import app.yougram.core.settings.SettingsRepository
+import app.yougram.feature.auth.data.AccountAlreadyAddedException
 import app.yougram.feature.auth.data.AuthRepository
 import app.yougram.feature.auth.data.AuthStep
+import app.yougram.feature.auth.data.CodeVia
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,6 +41,16 @@ class AuthViewModel(
     /** true — пользователь нажал «Изменить номер» / «Войти по номеру» и видит поле телефона поверх шага кода или QR. */
     private val _editPhone = MutableStateFlow(false)
     val editPhone: StateFlow<Boolean> = _editPhone.asStateFlow()
+
+    init {
+        // Сервер выбрал Firebase-SMS, который сторонний клиент получить не может: сразу просим другой способ,
+        // как это делает официальный клиент (LoginActivity.resendCodeFromSafetyNet).
+        viewModelScope.launch {
+            repository.step.filterIsInstance<AuthStep.EnterCode>().collect { s ->
+                if (s.via == CodeVia.Firebase && s.canResend) repository.fallbackFromFirebase()
+            }
+        }
+    }
 
     fun submitPhone(phone: String) = run(onDone = { _editPhone.value = false }) { repository.sendPhone(phone) }
     fun submitCode(code: String) = run { repository.sendCode(code) }
@@ -89,11 +102,15 @@ class AuthViewModel(
     private fun humanize(raw: String?): String {
         val m = raw.orEmpty()
         return when {
+            m.contains(AccountAlreadyAddedException.MESSAGE, true) ->
+                tr("Этот номер уже добавлен в Yougram. Переключитесь на него в списке аккаунтов")
             m.contains("PHONE_NUMBER_INVALID", true) -> tr("Неверный номер телефона")
             m.contains("PHONE_NUMBER_BANNED", true) -> tr("Этот номер заблокирован в Telegram")
-            m.contains("PHONE_CODE_INVALID", true) -> tr("Неверный код")
+            m.contains("PHONE_CODE_EMPTY", true) || m.contains("PHONE_CODE_INVALID", true) -> tr("Неверный код")
             m.contains("PHONE_CODE_EXPIRED", true) -> tr("Код устарел, запросите новый")
             m.contains("PASSWORD_HASH_INVALID", true) -> tr("Неверный пароль")
+            m.contains("PHONE_NUMBER_FLOOD", true) ->
+                tr("С этим номером слишком часто удаляли и создавали аккаунт. Подождите несколько дней")
             m.contains("FLOOD", true) || m.contains("Too Many Requests", true) -> tr("Слишком много попыток, подождите немного")
             m.isBlank() -> tr("Неизвестная ошибка")
             else -> m

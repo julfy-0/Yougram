@@ -83,6 +83,8 @@ fun AuthScreen(
     val fromQr = realStep is AuthStep.QrLogin
     val step = if (editPhone && (realStep is AuthStep.EnterCode || realStep is AuthStep.QrLogin)) AuthStep.EnterPhone else realStep
     val ui by viewModel.ui.collectAsState()
+    // Перед отправкой номера один раз просим разрешения на звонки (порт onNextPressed из официального клиента).
+    val phoneGate = rememberCallPermissionGate(onReady = viewModel::submitPhone)
     val proxies by viewModel.proxies.collectAsState()
     val activeProxyId by viewModel.activeProxyId.collectAsState()
     val activeProxy = proxies.firstOrNull { it.id == activeProxyId }
@@ -170,7 +172,7 @@ fun AuthScreen(
                                         hint = "В международном формате, например +380…",
                                         busy = ui.busy,
                                         onEdit = viewModel::clearError,
-                                        onSubmit = viewModel::submitPhone,
+                                        onSubmit = phoneGate::request,
                                         bottomContent = if (editPhone && !fromQr) null else ({
                                             // Три кнопки вплотную (connected group M3): «Далее» сверху, «Прокси» и «QR-код» под ней.
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -287,7 +289,11 @@ fun AuthScreen(
                                         TextButton(onClick = viewModel::resendCode, enabled = left <= 0 && !ui.busy) {
                                             Text(
                                                 if (left > 0) tr("Запросить код ещё раз через {0} с", left)
-                                                else "Не пришёл код? Отправить ещё раз",
+                                                else when (s.nextVia) {
+                                                    CodeVia.Sms -> "Не пришёл код? Отправить по SMS"
+                                                    CodeVia.Call, CodeVia.MissedCall -> "Не пришёл код? Получить звонок"
+                                                    else -> "Не пришёл код? Отправить ещё раз"
+                                                },
                                             )
                                         }
                                     }
@@ -379,6 +385,8 @@ fun AuthScreen(
                 )
             }
         }
+
+        phoneGate.Dialog()
 
         if (showFeatures) {
             AuthFeaturesSheet(onDismiss = { showFeatures = false })

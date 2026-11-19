@@ -7,6 +7,8 @@ import app.yougram.core.telegram.TelegramClient
 import app.yougram.feature.account.data.AccountManager
 import app.yougram.feature.account.data.AccountRepository
 import app.yougram.feature.auth.data.AuthRepository
+import app.yougram.feature.auth.data.AuthTokenStore
+import app.yougram.feature.auth.data.PhoneAuthSettingsFactory
 import app.yougram.feature.auth.data.AuthStep
 import app.yougram.feature.calls.data.CallAudio
 import app.yougram.feature.calls.data.TgCallsEngine
@@ -19,7 +21,8 @@ import app.yougram.feature.notifications.ConnectionService
 import app.yougram.feature.notifications.NotificationCenter
 import app.yougram.feature.security.data.AppLock
 import app.yougram.feature.stories.data.StoriesRepository
-import app.yougram.feature.update.data.AppUpdater
+import app.yougram.feature.update.yougramOtaConfig
+import app.yougram.ota.AppUpdater
 import app.yougram.plugin.NativePluginManager
 import app.yougram.plugin.PluginApi
 import kotlinx.coroutines.CoroutineScope
@@ -63,17 +66,24 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
     val plates: PlateRepository = previous?.plates ?: PlateRepository(context.applicationContext)
     val appLock: AppLock = previous?.appLock ?: AppLock(context.applicationContext)
     val accountManager: AccountManager = previous?.accountManager ?: AccountManager(context.applicationContext)
+    val authTokens: AuthTokenStore = previous?.authTokens ?: AuthTokenStore(context.applicationContext)
     val spy: SpyStore = previous?.spy ?: SpyStore(context.applicationContext)
-    val updater: AppUpdater = previous?.updater ?: AppUpdater(context.applicationContext, processScope)
+    val updater: AppUpdater = previous?.updater ?: AppUpdater(context.applicationContext, processScope, yougramOtaConfig())
     val assistant: app.yougram.feature.assistant.data.AiAssistant =
         previous?.assistant ?: app.yougram.feature.assistant.data.AiAssistant(context.applicationContext, processScope, settings)
 
     // Всё ниже привязано к аккаунту и пересоздаётся при его смене.
     val telegram = TelegramClient(context.applicationContext, appScope, accountManager.activeAccountId.value)
-    val authRepository = AuthRepository(telegram)
+        .also { it.onAuthenticationToken = authTokens::add }
+    val authRepository = AuthRepository(
+        telegram,
+        PhoneAuthSettingsFactory(context.applicationContext, authTokens) { accountManager.accounts.value.any { !it.isBlank } },
+        accountManager,
+    )
     val stories = StoriesRepository(telegram, appScope)
     val groupAdmin = GroupAdminRepository(telegram)
     val chatRepository = ChatRepository(telegram, appScope, settings, spy, context.applicationContext, plugins)
+    val wallpaperSync = app.yougram.feature.chat.data.WallpaperSync(telegram, appScope, settings, context.applicationContext)
 
     /** API плагинов: команды, пункты меню, хуки. UI читает pluginApi.commands / pluginApi.actions. */
     val pluginApi = PluginApi(context.applicationContext, telegram, chatRepository, plugins)
@@ -109,6 +119,7 @@ class AppContainer(private val context: Context, previous: AppContainer? = null)
                 .collect { runCatching { telegram.applyProxy(settings.dataPrefs.value) } }
         }
         chatRepository.start()
+        wallpaperSync.start()
         notificationCenter.start()
         callManager.start()
         // После входа записываем имя, телефон и аватарку в список аккаунтов, чтобы переключатель их показывал.

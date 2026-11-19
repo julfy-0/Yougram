@@ -80,8 +80,8 @@ import app.yougram.feature.settings.component.SettingRow
 import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.settings.extras.PrimeEasterEgg
 import app.yougram.feature.settings.telegram.openUrl
-import app.yougram.feature.update.data.AppUpdater
-import app.yougram.feature.update.data.UpdateState
+import app.yougram.ota.AppUpdater
+import app.yougram.ota.UpdateState
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.dto.OptionValueString
 import java.io.File
@@ -181,6 +181,15 @@ fun AboutScreen(
                     title = "Версия Yougram",
                     subtitle = "Текущий релиз",
                     value = BuildConfig.VERSION_NAME,
+                    icon = Icons.Filled.Info,
+                )
+            }
+            item {
+                val isRelease = BuildConfig.RELEASE_TYPE == "release"
+                SettingRow(
+                    title = "Тип релиза",
+                    subtitle = if (isRelease) tr("Стабильная сборка") else tr("Тестовая сборка, возможны ошибки"),
+                    value = if (isRelease) tr("Релиз") else tr("Бета"),
                     icon = Icons.Filled.Info,
                 )
             }

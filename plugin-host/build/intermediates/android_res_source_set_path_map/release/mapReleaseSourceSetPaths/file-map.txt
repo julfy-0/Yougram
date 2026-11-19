@@ -1,0 +1,9 @@
+app.yougram.pluginhost.plugin-host-pngs-0 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\res\pngs\release
+app.yougram.pluginhost.plugin-host-resValues-1 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\res\resValues\release
+app.yougram.pluginhost.plugin-host-updated_navigation_xml-2 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\generated\updated_navigation_xml\release
+app.yougram.pluginhost.plugin-host-mergeReleaseResources-3 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+app.yougram.pluginhost.plugin-host-mergeReleaseResources-4 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+app.yougram.pluginhost.plugin-host-release-5 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\merged_res\release\mergeReleaseResources
+app.yougram.pluginhost.plugin-host-release-6 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\build\intermediates\packaged_res\release\packageReleaseResources
+app.yougram.pluginhost.plugin-host-main-7 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\src\main\res
+app.yougram.pluginhost.plugin-host-release-8 C:\Users\sdc99\StudioProjects\Yougram\plugin-host\src\release\res

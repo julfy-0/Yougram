@@ -1,0 +1,9 @@
+app.yougram.ota-pngs-0 C:\Users\sdc99\StudioProjects\Yougram\ota\build\generated\res\pngs\release
+app.yougram.ota-resValues-1 C:\Users\sdc99\StudioProjects\Yougram\ota\build\generated\res\resValues\release
+app.yougram.ota-updated_navigation_xml-2 C:\Users\sdc99\StudioProjects\Yougram\ota\build\generated\updated_navigation_xml\release
+app.yougram.ota-mergeReleaseResources-3 C:\Users\sdc99\StudioProjects\Yougram\ota\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+app.yougram.ota-mergeReleaseResources-4 C:\Users\sdc99\StudioProjects\Yougram\ota\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+app.yougram.ota-release-5 C:\Users\sdc99\StudioProjects\Yougram\ota\build\intermediates\merged_res\release\mergeReleaseResources
+app.yougram.ota-release-6 C:\Users\sdc99\StudioProjects\Yougram\ota\build\intermediates\packaged_res\release\packageReleaseResources
+app.yougram.ota-main-7 C:\Users\sdc99\StudioProjects\Yougram\ota\src\main\res
+app.yougram.ota-release-8 C:\Users\sdc99\StudioProjects\Yougram\ota\src\release\res

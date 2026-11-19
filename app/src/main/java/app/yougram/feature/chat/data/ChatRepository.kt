@@ -92,6 +92,10 @@ import dev.g000sha256.tdl.dto.ChatActionTyping
 import dev.g000sha256.tdl.dto.ChatActionUploadingDocument
 import dev.g000sha256.tdl.dto.ChatActionUploadingPhoto
 import dev.g000sha256.tdl.dto.ChatActionUploadingVideo
+import dev.g000sha256.tdl.dto.MessageSchedulingState
+import dev.g000sha256.tdl.dto.MessageSchedulingStateSendAtDate
+import dev.g000sha256.tdl.dto.MessageSchedulingStateSendWhenOnline
+import dev.g000sha256.tdl.dto.MessageSendOptions
 import dev.g000sha256.tdl.dto.MessageSenderChat
 import dev.g000sha256.tdl.dto.MessageSenderUser
 import dev.g000sha256.tdl.dto.MessageSticker
@@ -1905,6 +1909,8 @@ class ChatRepository(
         fromPlugin: Boolean = false,
         /** Упоминания людей без username: текст «@Имя» → id пользователя. */
         mentions: Map<String, Long> = emptyMap(),
+        /** Отложенная отправка; null — отправить сразу. */
+        schedule: SendSchedule? = null,
     ) {
         // Плагинные отправки идут мимо хука, иначе плагин зациклится на собственных сообщениях.
         val text = if (fromPlugin) rawText else plugins?.beforeSend(chatId, rawText, replyToId) ?: return
@@ -1913,13 +1919,62 @@ class ChatRepository(
             topicId = topicParam(chatId),
             replyTo = replyToId?.let { InputMessageReplyToMessage(messageId = it, quote = null, checklistTaskId = 0, pollOptionId = "") }
                 ?: threadReply(chatId),
-            options = null,
+            options = schedule?.toSendOptions(),
             replyMarkup = null,
             inputMessageContent = InputMessageText(
                 text = FormattedText(text = text, entities = if (text == rawText) mentionEntities(text, mentions) else emptyArray()),
                 linkPreviewOptions = null,
                 clearDraft = true,
             ),
+        ).getOrThrow()
+    }
+
+    private fun SendSchedule.toSchedulingState(): MessageSchedulingState = when (this) {
+        is SendSchedule.At -> MessageSchedulingStateSendAtDate(sendDate = epochSeconds, repeatPeriod = 0)
+        SendSchedule.WhenOnline -> MessageSchedulingStateSendWhenOnline()
+    }
+
+    private fun SendSchedule.toSendOptions() = MessageSendOptions(
+        suggestedPostInfo = null,
+        disableNotification = false,
+        fromBackground = false,
+        protectContent = false,
+        allowPaidBroadcast = false,
+        paidMessageStarCount = 0L,
+        updateOrderOfInstalledStickerSets = false,
+        schedulingState = toSchedulingState(),
+        effectId = 0L,
+        sendingId = 0,
+        onlyPreview = false,
+    )
+
+    /** Запланированные сообщения чата, ближайшие — первыми. */
+    suspend fun scheduledMessages(chatId: Long): List<ScheduledItem> =
+        client.getChatScheduledMessages(chatId = chatId).getOrThrow().messages.orEmpty().filterNotNull().map { m ->
+            val state = m.schedulingState
+            ScheduledItem(
+                id = m.id,
+                chatId = m.chatId,
+                text = m.toItem().summary,
+                sendDate = (state as? MessageSchedulingStateSendAtDate)?.sendDate ?: 0,
+                whenOnline = state is MessageSchedulingStateSendWhenOnline,
+            )
+        }.sortedWith(compareBy({ it.whenOnline }, { it.sendDate }))
+
+    suspend fun deleteScheduled(chatId: Long, messageId: Long) {
+        client.deleteMessages(chatId = chatId, messageIds = longArrayOf(messageId), revoke = true).getOrThrow()
+    }
+
+    /** Отправить запланированное сообщение прямо сейчас. */
+    suspend fun sendScheduledNow(chatId: Long, messageId: Long) {
+        client.editMessageSchedulingState(chatId = chatId, messageId = messageId, schedulingState = null).getOrThrow()
+    }
+
+    suspend fun rescheduleMessage(chatId: Long, messageId: Long, schedule: SendSchedule) {
+        client.editMessageSchedulingState(
+            chatId = chatId,
+            messageId = messageId,
+            schedulingState = schedule.toSchedulingState(),
         ).getOrThrow()
     }
 

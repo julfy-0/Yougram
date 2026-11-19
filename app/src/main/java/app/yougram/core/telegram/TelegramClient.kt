@@ -19,6 +19,7 @@ import dev.g000sha256.tdl.dto.NetworkTypeNone
 import dev.g000sha256.tdl.dto.NetworkTypeOther
 import dev.g000sha256.tdl.dto.NetworkTypeWiFi
 import dev.g000sha256.tdl.dto.OptionValueInteger
+import dev.g000sha256.tdl.dto.OptionValueString
 import dev.g000sha256.tdl.dto.Proxy as TdProxy
 import dev.g000sha256.tdl.dto.ProxyTypeHttp
 import dev.g000sha256.tdl.dto.ProxyTypeMtproto
@@ -111,8 +112,22 @@ class TelegramClient(
         }
     }
 
+    /**
+     * Получатель токенов авторизации, которые TDLib присылает при выходе из аккаунта
+     * (`updateOption("authentication_token")`); их надо передать в настройках следующего входа.
+     */
+    @Volatile
+    var onAuthenticationToken: ((String) -> Unit)? = null
+
     fun start() {
         registerNetworkMonitor()
+        scope.launch {
+            client.optionUpdates.collect { update ->
+                if (update.name == AUTHENTICATION_TOKEN_OPTION) {
+                    (update.value as? OptionValueString)?.value?.let { onAuthenticationToken?.invoke(it) }
+                }
+            }
+        }
         // ВАЖНО: подписка на обновления должна начаться до первого запроса.
         scope.launch {
             client.authorizationStateUpdates.collect { update ->
@@ -183,6 +198,8 @@ class TelegramClient(
         client.setOption(name = "notification_group_size_max", value = OptionValueInteger(value = 10L))
     }
 }
+
+private const val AUTHENTICATION_TOKEN_OPTION = "authentication_token"
 
 /** Разворачивает TdlResult: успех -> значение, ошибка -> исключение с текстом от Telegram. */
 fun <T> TdlResult<T>.getOrThrow(): T = when (this) {

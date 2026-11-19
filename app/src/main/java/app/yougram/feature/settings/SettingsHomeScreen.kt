@@ -55,8 +55,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.SystemUpdate
 import app.yougram.core.ui.component.LinearWavyProgressIndicator
-import app.yougram.feature.update.data.AppUpdater
-import app.yougram.feature.update.data.UpdateState
+import app.yougram.ota.AppUpdater
+import app.yougram.ota.UpdateState
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Lightbulb

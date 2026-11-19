@@ -92,6 +92,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Surface
@@ -145,6 +146,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -290,6 +292,9 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var pollOpen by remember { mutableStateOf(false) }
+    var scheduleOpen by remember { mutableStateOf(false) }
+    var scheduledSheetOpen by remember { mutableStateOf(false) }
+    val scheduled by viewModel.scheduled.collectAsState()
     var locationOpen by remember { mutableStateOf(false) }
     val locationContext = LocalContext.current
     LaunchedEffect(Unit) { viewModel.ensureLiveLocation(locationContext) }
@@ -523,7 +528,7 @@ fun ChatScreen(
         // Источник размытия: фон, обои и список. Панели внутрь класть нельзя — они лежат сверху отдельными слоями.
         // Фон должен быть внутри источника (после backdropSource): иначе размытая копия прозрачная и под панелями виден чёткий список.
         Box(Modifier.fillMaxSize().backdropSource(backdrop).background(MaterialTheme.colorScheme.surface)) {
-            if (prefs.wallpaper != 0L) ChatWallpaper(version = prefs.wallpaper, modifier = Modifier.fillMaxSize())
+            ChatWallpaper(version = prefs.wallpaper, modifier = Modifier.fillMaxSize())
 
             Box(Modifier.fillMaxSize()) {
                 when {
@@ -596,6 +601,10 @@ fun ChatScreen(
                 overflowOpen = overflowOpen,
                 onOverflow = { overflowOpen = it },
                 onSearch = { /* поиск живёт в ChatViewModel.search(); панель поиска подключается отдельно */ },
+                onScheduled = if (state.isSecret) null else ({
+                    viewModel.refreshScheduled()
+                    scheduledSheetOpen = true
+                }),
             )
 
             if (state.pinned.isNotEmpty()) {
@@ -700,6 +709,7 @@ fun ChatScreen(
                             draft = ""
                             mode = ComposerMode.Idle
                         },
+                        onSendOptions = { if (!state.isSecret) scheduleOpen = true },
                     )
 
                     Column(Modifier.onSizeChanged { panelPx = it.height }) {
@@ -839,6 +849,36 @@ fun ChatScreen(
         )
     }
 
+    if (scheduleOpen) {
+        ScheduleSendDialog(
+            canWhenOnline = isDirect,
+            onDismiss = { scheduleOpen = false },
+            onConfirm = { schedule ->
+                scheduleOpen = false
+                val text = draft.trim()
+                if (text.isNotEmpty()) {
+                    when (val m = mode) {
+                        is ComposerMode.Reply -> viewModel.sendScheduled(text, schedule, replyToId = m.message.id)
+                        else -> viewModel.sendScheduled(text, schedule)
+                    }
+                    draft = ""
+                    mode = ComposerMode.Idle
+                }
+            },
+        )
+    }
+
+    if (scheduledSheetOpen) {
+        ScheduledMessagesSheet(
+            items = scheduled,
+            canWhenOnline = isDirect,
+            onDismiss = { scheduledSheetOpen = false },
+            onSendNow = viewModel::sendScheduledNow,
+            onReschedule = viewModel::rescheduleMessage,
+            onDelete = viewModel::deleteScheduled,
+        )
+    }
+
     pendingMedia?.let { pending ->
         MediaComposerDialog(
             pending = pending,
@@ -938,6 +978,7 @@ private fun ChatTopBar(
     overflowOpen: Boolean,
     onOverflow: (Boolean) -> Unit,
     onSearch: () -> Unit,
+    onScheduled: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     TopAppBar(
@@ -994,6 +1035,13 @@ private fun ChatTopBar(
                         leadingIcon = { Icon(Icons.Filled.Search, null) },
                         onClick = { onOverflow(false); onSearch() },
                     )
+                    if (onScheduled != null) {
+                        DropdownMenuItem(
+                            text = { Text("Запланированные") },
+                            leadingIcon = { Icon(Icons.Filled.Schedule, null) },
+                            onClick = { onOverflow(false); onScheduled() },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Профиль") },
                         onClick = { onOverflow(false); onTitleClick() },
@@ -1618,6 +1666,7 @@ private fun Composer(
     onFieldFocus: () -> Unit,
     onAttach: () -> Unit,
     onSend: () -> Unit,
+    onSendOptions: () -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     val scheme = MaterialTheme.colorScheme
@@ -1848,6 +1897,34 @@ private fun Composer(
                     }
                 } else Modifier
 
+                // Долгое нажатие на «Отправить» — отложенная отправка. Жест ловится в Initial-проходе и гасится,
+                // чтобы внутренний onClick кнопки не отправил сообщение сразу после отпускания.
+                val optionsPress by rememberUpdatedState(onSendOptions)
+                val sendOptionsGesture = if (kind == ComposerButtonKind.Send) {
+                    Modifier.pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            // Отпустили раньше 450 мс — обычный тап, событие не трогаем.
+                            val released = withTimeoutOrNull(450) {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                                true
+                            }
+                            if (released == null) {
+                                haptics(Haptics.Kind.Tick)
+                                optionsPress()
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    event.changes.forEach { it.consume() }
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                            }
+                        }
+                    }
+                } else Modifier
+
                 FilledIconButton(
                     onClick = {
                         when (kind) {
@@ -1858,7 +1935,7 @@ private fun Composer(
                             }
                         }
                     },
-                    modifier = Modifier.size(ComposerHeight).graphicsLayer { rotationZ = spin.value }.then(holdGesture),
+                    modifier = Modifier.size(ComposerHeight).graphicsLayer { rotationZ = spin.value }.then(holdGesture).then(sendOptionsGesture),
                     shape = buttonShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = container,

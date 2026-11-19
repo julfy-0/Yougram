@@ -32,8 +32,11 @@ android {
         minSdk = 29
         targetSdk = 36
 
-        versionCode = 40
-        versionName = "1.4.3"
+        // Суффикс версии: -b — бета, -r — релиз.
+        val appVersion = "1.4.3-r"
+        versionCode = 44
+        versionName = appVersion
+        buildConfigField("String", "RELEASE_TYPE", "\"${if (appVersion.endsWith("-r")) "release" else "beta"}\"")
 
         buildConfigField(
             "int",
@@ -53,8 +56,8 @@ android {
 
         buildConfigField(
             "String",
-            "UPDATE_URL",
-            "\"${localProps.getProperty("UPDATE_URL") ?: ""}\""
+            "OTA_URL",
+            "\"${(localProps.getProperty("OTA_URL") ?: "").trim().trimEnd('/')}\""
         )
 
         // Шаблон чата локальной ИИ-модели: gemma | chatml (должен совпадать с файлом модели).
@@ -133,6 +136,8 @@ dependencies {
     // Нативный код (плагины, tgcalls/libyougram_voip) вынесен в модуль :cpp
     implementation(project(":plugin-host"))
     implementation(project(":voip"))
+    implementation(project(":navbar"))
+    implementation(project(":ota"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

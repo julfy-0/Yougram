@@ -1,0 +1,9 @@
+app.yougram.navbar-pngs-0 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\generated\res\pngs\release
+app.yougram.navbar-resValues-1 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\generated\res\resValues\release
+app.yougram.navbar-updated_navigation_xml-2 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\generated\updated_navigation_xml\release
+app.yougram.navbar-mergeReleaseResources-3 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+app.yougram.navbar-mergeReleaseResources-4 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+app.yougram.navbar-release-5 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\intermediates\merged_res\release\mergeReleaseResources
+app.yougram.navbar-release-6 C:\Users\sdc99\StudioProjects\Yougram\navbar\build\intermediates\packaged_res\release\packageReleaseResources
+app.yougram.navbar-main-7 C:\Users\sdc99\StudioProjects\Yougram\navbar\src\main\res
+app.yougram.navbar-release-8 C:\Users\sdc99\StudioProjects\Yougram\navbar\src\release\res

@@ -34,7 +34,7 @@ object YougramBadge {
 
     /** Версия текущего клиента (major.minor.patch, каждое 0..15) невидимыми символами. */
     fun versionPayload(): String {
-        val p = BuildConfig.VERSION_NAME.split(".").map { it.toIntOrNull() ?: 0 }
+        val p = BuildConfig.VERSION_NAME.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
         val bits = (p.getOrElse(0) { 0 }.coerceIn(0, 15)) or
                 (p.getOrElse(1) { 0 }.coerceIn(0, 15) shl 4) or
                 (p.getOrElse(2) { 0 }.coerceIn(0, 15) shl 8)

@@ -10,3 +10,4 @@
 .cxx/
 *.zip
 .yougram-updates-json
+*.jks

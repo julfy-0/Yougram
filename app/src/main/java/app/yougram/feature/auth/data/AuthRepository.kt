@@ -1,7 +1,10 @@
 package app.yougram.feature.auth.data
 
+import android.telephony.PhoneNumberUtils
+import android.util.Log
 import app.yougram.core.telegram.TelegramClient
 import app.yougram.core.telegram.getOrThrow
+import app.yougram.feature.account.data.AccountManager
 import dev.g000sha256.tdl.dto.AuthorizationState
 import dev.g000sha256.tdl.dto.AuthorizationStateReady
 import dev.g000sha256.tdl.dto.AuthorizationStateWaitCode
@@ -22,13 +25,14 @@ sealed interface AuthStep {
     /**
      * [via] — куда Telegram отправил код (по имени типа из codeInfo), [timeoutSec] — через сколько секунд
      * можно запросить код повторно другим способом, [canResend] — есть ли следующий способ доставки,
-     * [phone] — номер, на который ушёл код (чтобы заметить опечатку).
+     * [nextVia] — какой именно (SMS / звонок), [phoneHint] — номер, на который ушёл код (чтобы заметить опечатку).
      */
     data class EnterCode(
         val phoneHint: String,
         val via: CodeVia = CodeVia.Unknown,
         val timeoutSec: Int = 0,
         val canResend: Boolean = false,
+        val nextVia: CodeVia? = null,
     ) : AuthStep
     data class EnterPassword(val hint: String) : AuthStep
     data object Ready : AuthStep
@@ -37,9 +41,23 @@ sealed interface AuthStep {
 
 enum class CodeVia { Telegram, Sms, Call, MissedCall, Firebase, Fragment, Unknown }
 
-class AuthRepository(private val telegram: TelegramClient) {
+/** Номер уже добавлен как аккаунт (в оригинале диалог «AccountAlreadyLoggedIn» с переключением). */
+class AccountAlreadyAddedException(val accountId: String) : Exception(MESSAGE) {
+    companion object {
+        const val MESSAGE = "ACCOUNT_ALREADY_ADDED"
+    }
+}
+
+class AuthRepository(
+    private val telegram: TelegramClient,
+    private val codeSettings: PhoneAuthSettingsFactory,
+    private val accounts: AccountManager,
+) {
 
     private val lastPhone = MutableStateFlow("")
+
+    /** Fallback с Firebase уже пробовали для текущего номера (защита от цикла повторных запросов). */
+    private var firebaseFallbackUsed = false
 
     val step: Flow<AuthStep> = combine(telegram.authState, telegram.credentialsMissing, lastPhone) { state, missing, phone ->
         if (missing) AuthStep.MissingCredentials else state.toStep(phone)
@@ -48,9 +66,18 @@ class AuthRepository(private val telegram: TelegramClient) {
     /** Работает и из шага «код» (смена номера), и из шага QR (переход на вход по номеру). */
     suspend fun sendPhone(phone: String) {
         val p = phone.trim()
+        val digits = p.filter { it.isDigit() }
+
+        // Как в LoginActivity: номер, который уже залогинен в другом аккаунте, второй раз не добавляем.
+        val duplicate = accounts.accounts.value.firstOrNull {
+            !it.isBlank && it.phone.isNotEmpty() && PhoneNumberUtils.compare(digits, it.phone)
+        }
+        if (duplicate != null) throw AccountAlreadyAddedException(duplicate.id)
+
+        firebaseFallbackUsed = false
         telegram.client.setAuthenticationPhoneNumber(
             phoneNumber = p,
-            settings = null,
+            settings = codeSettings.create(digits),
         ).getOrThrow()
         lastPhone.value = p
     }
@@ -63,6 +90,23 @@ class AuthRepository(private val telegram: TelegramClient) {
     /** Повторный запрос кода следующим способом (SMS / звонок), когда в Telegram код не пришёл. */
     suspend fun resendCode() {
         telegram.client.resendAuthenticationCode().getOrThrow()
+    }
+
+    /**
+     * Порт `resendCodeFromSafetyNet`: сервер выбрал доставку кода через Firebase, а получить его можно только
+     * с токеном Play Integrity для проекта Telegram, который у стороннего клиента недоступен. Официальный клиент
+     * в таком случае сразу просит сервер выслать код другим способом — делаем то же, один раз на номер.
+     * Ошибки глушим: если TDLib ещё не разрешает повтор (не истёк таймаут), пользователь увидит подсказку
+     * на экране кода и сможет запросить SMS вручную.
+     */
+    suspend fun fallbackFromFirebase() {
+        if (firebaseFallbackUsed) return
+        firebaseFallbackUsed = true
+        try {
+            telegram.client.resendAuthenticationCode().getOrThrow()
+        } catch (e: Exception) {
+            Log.w("YougramAuth", "firebase fallback failed: ${e.message}")
+        }
     }
 
     suspend fun sendCode(code: String) {
@@ -97,11 +141,16 @@ class AuthRepository(private val telegram: TelegramClient) {
                 "YougramAuth",
                 "WaitCode: type=${codeInfo.type::class.simpleName} next=${codeInfo.nextType?.let { it::class.simpleName }} timeout=${codeInfo.timeout}",
             )
+            val via = codeInfo.type.toVia()
+            // Как в LoginActivity.fillNextCodeParams: для кода «в приложении» таймера нет, а для остальных способов
+            // сервер иногда присылает 0 — тогда ждём стандартные 60 с, иначе «отправить ещё раз» нажмут сразу.
+            val timeout = if (via == CodeVia.Telegram) codeInfo.timeout else codeInfo.timeout.takeIf { it > 0 } ?: DEFAULT_RESEND_TIMEOUT_SEC
             AuthStep.EnterCode(
                 phoneHint = phone,
-                via = codeInfo.type.toVia(),
-                timeoutSec = codeInfo.timeout,
+                via = via,
+                timeoutSec = timeout,
                 canResend = codeInfo.nextType != null,
+                nextVia = codeInfo.nextType?.toVia(),
             )
         }
         is AuthorizationStateWaitPassword -> AuthStep.EnterPassword(hint = passwordHint)
@@ -116,5 +165,9 @@ class AuthRepository(private val telegram: TelegramClient) {
                 AuthStep.Unsupported(name)
             }
         }
+    }
+
+    private companion object {
+        const val DEFAULT_RESEND_TIMEOUT_SEC = 60
     }
 }

@@ -37,7 +37,7 @@ object AiKnowledge {
         ),
         e(
             "Версия", "верси", "обновлен", "обнови", "update", "апдейт",
-            text = "Сейчас версия 0.8.4 (versionCode 18). Обновления приложение проверяет по UPDATE_URL: если versionCode на сервере выше, " +
+            text = "Сейчас версия 0.8.4 (versionCode 18). Обновления приложение проверяет на сервере OTA_URL (Cloudflare): если versionCode на сервере выше, " +
                 "APK скачивается в кэш и запускается системный установщик. Раздел: «Обновление».",
         ),
         e(
@@ -197,7 +197,7 @@ object AiKnowledge {
         e(
             "Сборка", "собрать", "сборк", "gradle", "assemble", "release", "debug", "api_id", "api_hash", "local.properties",
             text = "Нужны Android Studio, JDK 17, SDK 36, NDK и CMake 3.22.1. В local.properties укажите sdk.dir, TG_API_ID и TG_API_HASH " +
-                "(с my.telegram.org), UPDATE_URL; для релиза — KS_PASS. Debug: ./gradlew assembleDebug, release: ./gradlew assembleRelease.",
+                "(с my.telegram.org), OTA_URL; для релиза — KS_PASS. Debug: ./gradlew assembleDebug, release: ./gradlew assembleRelease.",
         ),
         e(
             "Ограничения", "ограничен", "недостатк", "не работает+бэкграунд", "известн+проблем",

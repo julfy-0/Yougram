@@ -6,13 +6,18 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import app.yougram.core.ui.wallpaper.WallpaperBackground
+import app.yougram.core.ui.wallpaper.WallpaperKind
+import app.yougram.core.ui.wallpaper.WallpaperStore
 import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
@@ -41,14 +46,23 @@ suspend fun saveChatWallpaper(context: Context, uri: Uri): Boolean = withContext
     }
 }
 
-/** Обои чата; [version] меняется при замене картинки и перезагружает её. */
+/**
+ * Обои чата. Если на экране «Обои» выбраны пресет, узор или фото (WallpaperStore) — рисуем их;
+ * иначе старые обои-фото [version] (0 — обоев нет).
+ */
 @Composable
 fun ChatWallpaper(version: Long, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val bitmap by produceState<ImageBitmap?>(null, version) {
-        value = withContext(Dispatchers.IO) {
-            BitmapFactory.decodeFile(chatWallpaperFile(context).absolutePath)?.asImageBitmap()
+    val store = remember { WallpaperStore.get(context) }
+    val config by store.config.collectAsState()
+    if (config.kind != WallpaperKind.None) {
+        WallpaperBackground(config, modifier)
+    } else if (version != 0L) {
+        val bitmap by produceState<ImageBitmap?>(null, version) {
+            value = withContext(Dispatchers.IO) {
+                BitmapFactory.decodeFile(chatWallpaperFile(context).absolutePath)?.asImageBitmap()
+            }
         }
+        bitmap?.let { Image(bitmap = it, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop) }
     }
-    bitmap?.let { Image(bitmap = it, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop) }
 }

@@ -199,10 +199,6 @@ private val StoriesBarHeight = 88.dp
 private val BottomBarHeight = 64.dp
 private val BottomBarMargin = 8.dp
 
-/** Кнопка поиска: квадрат со скруглёнными углами. */
-private val SearchButtonShape = RoundedCornerShape(13.dp)
-/** Кнопка поиска внизу меньше «таблетки» на 30%. */
-private const val SearchButtonScale = 0.7f
 private val SearchBlurRadius = 24.dp
 /** Радиус размытия уходящей вкладки при переключении вкладок. */
 private val LeavingTabBlurRadius = 18.dp
@@ -759,20 +755,45 @@ fun MainScreen(
                 animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f),
                 label = "navbar-hide",
             )
-            GlassBottomBar(
-                order = navOrder,
-                selected = tab,
-                onSelect = {
-                    selectTab(it)
+            val navBackdrop = remember(backdrop) { app.yougram.navbar.BackdropState(backdrop.layer, backdrop.small) }
+            navBackdrop.sourceOffset = backdrop.sourceOffset
+            val navItems = run {
+                navOrder.map { t ->
+                    app.yougram.navbar.NavBarItem(t.name, tr(t.title), t.icon, if (t == MainTab.Chats) (folderUnread[null] ?: 0) else 0)
+                }
+            }
+            val navGlass = remember(glass, lowTier) {
+                app.yougram.navbar.NavBarGlassSettings(
+                    blurRadius = if (lowTier) 0f else glass.blurRadius,
+                    opacity = glass.opacity,
+                    kawase = glass.blurType == app.yougram.core.settings.BlurType.Kawase,
+                )
+            }
+            val navTint = androidx.compose.ui.graphics.lerp(
+                MaterialTheme.colorScheme.surface,
+                androidx.compose.ui.graphics.Color.White,
+                0.10f,
+            )
+            app.yougram.navbar.YougramNavBar(
+                items = navItems,
+                selectedId = tab.name,
+                onSelect = { id ->
+                    MainTab.entries.firstOrNull { it.name == id }?.let { selectTab(it) }
                     searching = false
                     query = ""
                 },
-                onSearch = { searching = true },
-                showSearch = !chatPrefs.searchOnTop,
-                chatsUnread = folderUnread[null] ?: 0,
-                backdrop = backdrop,
-                glass = glass,
+                backdrop = navBackdrop,
+                onSearch = if (!chatPrefs.searchOnTop) ({ searching = true }) else null,
+                glass = navGlass,
+                tint = navTint,
+                labelStyleFor = { item ->
+                    val title = item.label
+                    MaterialTheme.typography.labelLargeEmphasized
+                        .copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(title))
+                        .withRole(FontRole.Navbar)
+                },
                 bottomInset = bottomInset,
+                haptics = false,
                 progress = { navProgress },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
@@ -1204,122 +1225,6 @@ private val NavGap = 2.dp
 private val NavPadVertical = 8.dp
 private val NavPadHorizontal = 8.dp
 
-/**
- * Вкладки навбара. У каждой вкладки своя «таблетка»: при нажатии на кнопку плашка раскрывается пружиной,
- * а подпись плавно появляется (и плавно исчезает при переключении на другую вкладку),
- * фон плавно переходит между «залитым» и прозрачным. Слот вкладки 48 dp, зазор 2 dp.
- */
-@Composable
-private fun NavTabs(order: List<MainTab>, selected: MainTab, onSelect: (MainTab) -> Unit, chatsUnread: Int) {
-    val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
-    // Меряем ровно ту строку и тем шрифтом, которыми подпись рисуется (перевод + роль Navbar), иначе она обрезается.
-    val baseLabelStyle = MaterialTheme.typography.labelLargeEmphasized
-    Row(
-        Modifier.padding(horizontal = NavPadHorizontal, vertical = NavPadVertical),
-        horizontalArrangement = Arrangement.spacedBy(NavGap),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        order.forEach { tab ->
-            // Дополнительная ширина под подпись: сама подпись + правый отступ 8 dp.
-            val title = tr(tab.title)
-            // Кириллица — в Nunito (в Google Sans Flex её нет), остальное — Google Sans Flex со скруглением.
-            val labelStyle = baseLabelStyle.copy(fontFamily = app.yougram.core.ui.theme.roundedFamilyFor(title)).withRole(FontRole.Navbar)
-            val px = remember(title, labelStyle) { measurer.measure(title, labelStyle, maxLines = 1).size.width }
-            val extra = with(density) { px.toDp() } + 8.dp
-            NavTab(
-                tab,
-                selected = tab == selected,
-                extra = extra,
-                style = labelStyle,
-                badge = if (tab == MainTab.Chats) chatsUnread else 0,
-                onClick = { onSelect(tab) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun NavTab(tab: MainTab, selected: Boolean, extra: Dp, style: TextStyle, badge: Int, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    // Быстрая пружина с лёгким перелётом, как в образце.
-    val frac by animateFloatAsState(
-        if (selected) 1f else 0f,
-        spring(dampingRatio = 0.72f, stiffness = 650f),
-        label = "navFrac",
-    )
-    val textAlpha by animateFloatAsState(
-        if (selected) 1f else 0f,
-        tween(200, easing = FastOutSlowInEasing),
-        label = "navTextAlpha",
-    )
-    val container by animateColorAsState(
-        if (selected) scheme.primaryContainer else scheme.primaryContainer.copy(alpha = 0f),
-        tween(160),
-        label = "navContainer",
-    )
-    val content by animateColorAsState(
-        if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-        tween(160),
-        label = "navContent",
-    )
-    Box(
-        Modifier
-            .width(NavSlot + extra * frac.coerceIn(0f, 1.12f))
-            .height(NavSlot)
-            .clip(CircleShape)
-            .background(container)
-            .clickable(role = Role.Tab, onClick = onClick)
-            .semantics { this.selected = selected },
-    ) {
-        Row(
-            // requiredWidth центрировал строку в слоте и сдвигал иконку влево на extra/2 (за пределы clip),
-            // поэтому у неактивных вкладок иконки пропадали. Здесь содержимое всегда прижато к левому краю.
-            Modifier.align(Alignment.CenterStart).wrapContentWidth(Alignment.Start, unbounded = true),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(NavSlot), contentAlignment = Alignment.Center) {
-                Icon(
-                    tab.icon,
-                    contentDescription = if (selected) null else tab.title,
-                    tint = content,
-                    modifier = Modifier.size(24.dp),
-                )
-                if (badge > 0) {
-                    // Плашка числа чатов с непрочитанными, как на вкладках папок.
-                    Surface(
-                        shape = CircleShape,
-                        color = scheme.primary,
-                        contentColor = scheme.onPrimary,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 6.dp, end = 6.dp)
-                            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp),
-                    ) {
-                        Box(Modifier.padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                if (badge > 99) "99+" else badge.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
-            if (selected || frac > 0.001f) {
-                Text(
-                    tab.title,
-                    modifier = Modifier.graphicsLayer { alpha = textAlpha },
-                    color = content,
-                    maxLines = 1,
-                    softWrap = false,
-                    style = style,
-                )
-            }
-        }
-    }
-}
-
 private val PluginStorePages = setOf(SettingsPage.Plugins, SettingsPage.PluginsNew)
 
 private class PluginBarTab(val page: SettingsPage, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -1433,62 +1338,6 @@ private fun PluginBarTabItem(tab: PluginBarTab, selected: Boolean, extra: Dp, st
                     style = style,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun GlassBottomBar(
-    order: List<MainTab>,
-    selected: MainTab,
-    onSelect: (MainTab) -> Unit,
-    onSearch: () -> Unit,
-    showSearch: Boolean,
-    chatsUnread: Int,
-    backdrop: BackdropState,
-    glass: GlassSettings,
-    bottomInset: Dp,
-    progress: () -> Float,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier
-            // Уезжает вниз на всю свою высоту вместе с отступами.
-            .offset {
-                val distance = (BottomBarHeight + BottomBarMargin + bottomInset).roundToPx()
-                IntOffset(0, (distance * (1f - progress())).roundToInt())
-            }
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = bottomInset + BottomBarMargin),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Цвет стекла навбара: на пару тонов светлее поверхности (как у верхней панели).
-        val barTint = androidx.compose.ui.graphics.lerp(
-            MaterialTheme.colorScheme.surface,
-            androidx.compose.ui.graphics.Color.White,
-            0.10f,
-        )
-        // Стеклянная «таблетка» по ширине вкладок: стекло даёт Modifier.glass.
-        Box(
-            Modifier
-                .height(BottomBarHeight)
-                .glass(backdrop, glass, CircleShape, barTint)
-                .clip(CircleShape),
-        ) {
-            Box(Modifier.align(Alignment.Center)) { NavTabs(order, selected, onSelect, chatsUnread) }
-        }
-
-        // Отдельная кнопка поиска справа, той же высоты, что и «таблетка».
-        if (showSearch) Box(
-            Modifier
-                .size(BottomBarHeight * SearchButtonScale)
-                .glass(backdrop, glass, SearchButtonShape, barTint)
-                .clip(SearchButtonShape)
-                .clickable(onClick = onSearch, role = Role.Button, onClickLabel = "Поиск"),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Search, contentDescription = tr("Поиск"), modifier = Modifier.size(20.dp))
         }
     }
 }

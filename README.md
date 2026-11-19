@@ -720,7 +720,7 @@ sdk.dir=/path/to/Android/Sdk
 TG_API_ID=12345678
 TG_API_HASH=your_api_hash
 
-UPDATE_URL=https://example.com/update.json
+OTA_URL=https://yougram-ota.your-account.workers.dev
 ```
 
 `local.properties` не должен попадать в Git.
@@ -736,7 +736,7 @@ UPDATE_URL=https://example.com/update.json
 | `sdk.dir` | путь к Android SDK |
 | `TG_API_ID` | Telegram API ID |
 | `TG_API_HASH` | Telegram API Hash |
-| `UPDATE_URL` | URL JSON с информацией об обновлении |
+| `OTA_URL` | адрес OTA-сервера обновлений (Cloudflare Worker), без `/` в конце |
 | `KS_PASS` | пароль release keystore |
 
 Значения Telegram API передаются в `BuildConfig`.
@@ -960,41 +960,36 @@ host->notify(...)
 
 # Обновление приложения
 
-Yougram умеет проверять обновления из приложения.
-
-Адрес задаётся:
-
-```properties
-UPDATE_URL=https://example.com/update.json
-```
-
-Ожидаемый JSON:
-
-```json
-{
-  "versionCode": 19,
-  "versionName": "0.8.5",
-  "apkUrl": "https://example.com/yougram.apk",
-  "notes": "Исправления и новые функции"
-}
-```
-
-Проверка выполняется по `versionCode`.
-
-Если удалённая версия выше текущей:
-
-1. показывается доступное обновление;
-2. APK скачивается в cache;
-3. пользователь запускает установку;
-4. Android открывает системный установщик.
-
-Ссылки на обновления и APK должны использовать:
+Yougram обновляется «по воздуху» (OTA) с собственного сервера на Cloudflare: Worker + R2.
+Сервер и инструменты публикации живут в отдельном репозитории
+[Yougram-ota](https://github.com/julfy-0/Yougram-ota); GitHub приложением для обновлений не используется.
 
 ```text
-https://
+APK ──скрипт публикации──▶ Cloudflare R2 ◀── Worker ◀── приложение
+                           (apk, manifest)   /v1/check, /v1/apk
 ```
 
-Для установки APK приложение использует Android `FileProvider`.
+Адрес сервера задаётся в `local.properties`:
+
+```properties
+OTA_URL=https://yougram-ota.your-account.workers.dev
+```
+
+Как это работает в приложении:
+
+1. `GET {OTA_URL}/v1/check?channel=release|beta&code=<versionCode>` — сервер отвечает, есть ли сборка новее;
+2. APK качается с того же сервера с докачкой (HTTP Range) в `cache/updates`;
+3. проверяются размер, `sha256`, имя пакета и подпись (должна совпадать с установленной);
+4. пользователь запускает установку через системный установщик (`FileProvider`).
+
+Каналы: `release` (стабильные) и `beta` (получает самую свежую сборку из обоих каналов).
+Канал сборки определяется суффиксом версии в `app/build.gradle.kts`: `-bN` — бета №N, `-r` — релиз.
+Сервер поддерживает поэтапную раздачу (`-Rollout 10` — только ~10% устройств).
+
+Настройка сервера и публикация релизов — в README репозитория Yougram-ota.
+
+Код клиента вынесен в отдельный Gradle-модуль [`:ota`](ota/README.md) (пакет `app.yougram.ota`);
+экраны и диалог обновления остаются в приложении и используют `AppUpdater` из модуля.
 
 ---
 

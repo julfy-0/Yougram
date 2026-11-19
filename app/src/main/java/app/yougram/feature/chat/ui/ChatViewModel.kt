@@ -15,6 +15,8 @@ import app.yougram.feature.chat.data.MessageItem
 import app.yougram.feature.chat.data.PinnedItem
 import app.yougram.feature.chat.data.ReplyPreview
 import app.yougram.feature.chat.data.ReplyRef
+import app.yougram.feature.chat.data.ScheduledItem
+import app.yougram.feature.chat.data.SendSchedule
 import app.yougram.feature.chat.data.SenderInfo
 import app.yougram.feature.chat.data.StickerItem
 import app.yougram.feature.chat.data.StickerSetItem
@@ -701,6 +703,37 @@ class ChatViewModel(
 
     /** Участники группы для подсказки упоминания «@». */
     suspend fun searchMentions(query: String) = repository.searchMentions(chatId, query)
+
+    private val _scheduled = MutableStateFlow<List<ScheduledItem>>(emptyList())
+
+    /** Запланированные сообщения этого чата (обновляются через [refreshScheduled]). */
+    val scheduled: StateFlow<List<ScheduledItem>> = _scheduled.asStateFlow()
+
+    fun refreshScheduled() = action { _scheduled.value = repository.scheduledMessages(chatId) }
+
+    fun sendScheduled(text: String, schedule: SendSchedule, replyToId: Long? = null, mentions: Map<String, Long> = emptyMap()) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        action(tr("Сообщение запланировано")) {
+            repository.sendText(chatId, trimmed, replyToId, mentions = mentions, schedule = schedule)
+            _scheduled.value = repository.scheduledMessages(chatId)
+        }
+    }
+
+    fun deleteScheduled(messageId: Long) = action {
+        repository.deleteScheduled(chatId, messageId)
+        _scheduled.value = repository.scheduledMessages(chatId)
+    }
+
+    fun sendScheduledNow(messageId: Long) = action {
+        repository.sendScheduledNow(chatId, messageId)
+        _scheduled.value = repository.scheduledMessages(chatId)
+    }
+
+    fun rescheduleMessage(messageId: Long, schedule: SendSchedule) = action {
+        repository.rescheduleMessage(chatId, messageId, schedule)
+        _scheduled.value = repository.scheduledMessages(chatId)
+    }
 
     fun send(text: String, replyToId: Long? = null, mentions: Map<String, Long> = emptyMap()) {
         val trimmed = text.trim()

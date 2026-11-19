@@ -8,10 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.view.HapticFeedbackConstants
+import android.net.http.SslError
 import android.webkit.PermissionRequest
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -98,6 +101,7 @@ import app.yougram.feature.chat.data.ChatRepository
 import app.yougram.feature.chat.data.MiniAppLaunch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.json.JSONTokener
 
@@ -189,14 +193,21 @@ fun MiniAppScreen(
         pageError = null
         loading = true
         val theme = scheme.toThemeParameters()
-        val result = if (request.fromLink) {
-            repository.miniAppFromLink(request.chatId, request.botUserId, request.shortName, request.startParameter, theme)
-        } else {
-            repository.openMiniApp(request.chatId, request.botUserId, request.url, theme)
+        // Без таймаута запрос к TDLib мог висеть вечно, и спиннер не исчезал.
+        val result = withTimeoutOrNull(20_000) {
+            if (request.fromLink) {
+                repository.miniAppFromLink(request.chatId, request.botUserId, request.shortName, request.startParameter, theme)
+            } else {
+                repository.openMiniApp(request.chatId, request.botUserId, request.url, theme)
+            }
         }
-        result
-            .onSuccess { launch = it }
-            .onFailure { error = it.message ?: tr("Не удалось открыть мини-приложение") }
+        if (result == null) {
+            error = tr("Telegram не ответил. Проверьте соединение и нажмите «Обновить»")
+        } else {
+            result
+                .onSuccess { launch = it }
+                .onFailure { error = it.message ?: tr("Не удалось открыть мини-приложение") }
+        }
     }
     DisposableEffect(launch) {
         val id = launch?.launchId ?: 0L
@@ -205,7 +216,10 @@ fun MiniAppScreen(
     LaunchedEffect(launch, web) {
         val l = launch ?: return@LaunchedEffect
         web?.loadUrl(l.url)
-        // Запасной выход, если приложение так и не прислало web_app_ready.
+    }
+    LaunchedEffect(launch) {
+        if (launch == null) return@LaunchedEffect
+        // Запасной выход, если приложение так и не прислало web_app_ready, а страница не закончила загрузку.
         delay(8_000)
         loading = false
     }
@@ -475,7 +489,7 @@ fun MiniAppScreen(
                                             val host = u.host?.lowercase().orEmpty()
                                             return when {
                                                 (scheme0 == "http" || scheme0 == "https") &&
-                                                    (host == "t.me" || host == "telegram.me") -> {
+                                                        (host == "t.me" || host == "telegram.me") -> {
                                                     latestOpenLink(u.toString())
                                                     latestClose()
                                                     true
@@ -501,6 +515,19 @@ fun MiniAppScreen(
                                         override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) {
                                             if (r.isForMainFrame) pageError = e.description?.toString() ?: "Ошибка загрузки"
                                         }
+
+                                        override fun onReceivedHttpError(v: WebView, r: WebResourceRequest, e: WebResourceResponse) {
+                                            if (r.isForMainFrame && e.statusCode >= 400) pageError = "Ошибка сервера: ${e.statusCode}"
+                                        }
+
+                                        override fun onReceivedSslError(v: WebView, handler: SslErrorHandler, e: SslError) {
+                                            handler.cancel()
+                                            pageError = "Ошибка SSL-сертификата"
+                                        }
+
+                                        override fun onPageFinished(v: WebView, url: String?) {
+                                            if (pageError == null) loading = false
+                                        }
                                     }
                                     webChromeClient = object : WebChromeClient() {
                                         override fun onProgressChanged(v: WebView, newProgress: Int) {
@@ -516,7 +543,7 @@ fun MiniAppScreen(
                                                     else -> null
                                                 }
                                                 perm != null && androidx.core.content.ContextCompat.checkSelfPermission(ctx, perm) ==
-                                                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                                                        android.content.pm.PackageManager.PERMISSION_GRANTED
                                             }
                                             if (granted.isEmpty()) req.deny() else req.grant(granted.toTypedArray())
                                         }

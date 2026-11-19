@@ -21,8 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.yougram.BuildConfig
-import app.yougram.feature.update.data.AppUpdater
-import app.yougram.feature.update.data.UpdateState
+import app.yougram.ota.AppUpdater
+import app.yougram.ota.UpdateState
 
 /**
  * Диалог «Обновление vX» при входе в приложение: список изменений, «Обновить» / «Позже».

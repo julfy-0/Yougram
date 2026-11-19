@@ -1,0 +1,60 @@
+name: OTA → Cloudflare
+
+# GitHub здесь только помощник: когда вы публикуете релиз (с APK в файлах),
+# сборка зеркалится в Cloudflare R2, и приложение обновляется уже оттуда.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, который нужно (пере)опубликовать"
+        required: true
+      rollout:
+        description: "Процент пользователей (1–100)"
+        default: "100"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Скачать APK, баннер и описание релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir -p dl
+          gh release download "$TAG" --pattern '*.apk' --dir dl
+          gh release download "$TAG" --pattern 'banner*' --dir dl || true
+          gh release view "$TAG" --json body --jq .body > dl/notes.txt
+          ls -la dl
+
+      - name: Выбрать файлы
+        id: pick
+        run: |
+          APK=$(ls dl/app-debug.apk dl/yougram.apk 2>/dev/null | head -n1 || true)
+          [ -z "$APK" ] && APK=$(ls dl/*.apk | head -n1)
+          BANNER=$(ls dl/banner*.png dl/banner*.jpg dl/banner*.jpeg dl/banner*.webp 2>/dev/null | head -n1 || true)
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "banner=$BANNER" >> "$GITHUB_OUTPUT"
+
+      - name: Опубликовать в Cloudflare R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          APK: ${{ steps.pick.outputs.apk }}
+          BANNER: ${{ steps.pick.outputs.banner }}
+          ROLLOUT: ${{ inputs.rollout || '100' }}
+        run: |
+          ARGS=(--notes dl/notes.txt --rollout "$ROLLOUT")
+          [ -n "$BANNER" ] && ARGS+=(--banner "$BANNER")
+          node tools/ota-publish.mjs "$APK" "${ARGS[@]}"

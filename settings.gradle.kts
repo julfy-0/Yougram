@@ -18,3 +18,5 @@ rootProject.name = "Yougram"
 include(":app")
 include(":plugin-host")
 include(":voip")
+include(":navbar")
+include(":ota")

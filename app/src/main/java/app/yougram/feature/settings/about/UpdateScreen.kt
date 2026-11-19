@@ -25,6 +25,10 @@ import app.yougram.core.ui.component.Button
 import app.yougram.core.ui.component.LinearWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import app.yougram.core.i18n.Text
 import androidx.compose.runtime.Composable
@@ -55,9 +59,10 @@ import app.yougram.feature.settings.component.SettingGroup
 import app.yougram.feature.settings.component.SettingRow
 import app.yougram.feature.settings.component.SettingsPageColumn
 import app.yougram.feature.splash.ui.HalloweenEvent
-import app.yougram.feature.update.data.AppUpdater
-import app.yougram.feature.update.data.UpdateInfo
-import app.yougram.feature.update.data.UpdateState
+import app.yougram.ota.AppUpdater
+import app.yougram.ota.UpdateChannel
+import app.yougram.ota.UpdateInfo
+import app.yougram.ota.UpdateState
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.dto.OptionValueString
 
@@ -74,7 +79,7 @@ internal fun YougramAboutBanner(modifier: Modifier = Modifier) {
 }
 
 /**
- * Баннер обновления 1000×400 — картинка banner.png/jpg/webp из файлов релиза на GitHub.
+ * Баннер обновления 1000×400 — картинка banner.png/jpg/webp, приложенная к релизу (приходит с сервера обновлений).
  * Пока грузится — заглушка того же размера; если баннера в релизе нет или он не загрузился — OTA-баннер, нарисованный кодом (см. [YougramOtaBanner]).
  */
 @Composable
@@ -115,6 +120,7 @@ private fun UpdateReleaseBanner(updater: AppUpdater, url: String?) {
  * Кнопка действия («Скачать» → прогресс → «Установить», а если обновления нет — «Проверить») закреплена
  * внизу на стеклянной панели — см. [UpdateGlassBar], её рисует MainScreen вместо нижней навигации.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateScreen(
     updater: AppUpdater,
@@ -153,7 +159,7 @@ fun UpdateScreen(
         if (info != null) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
                 Text(
-                    tr("Доступна версия {0}", info.versionName),
+                    tr("Доступна версия {0}", info.versionName) + if (info.beta > 0) " (бета ${info.beta})" else "",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -163,29 +169,31 @@ fun UpdateScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            SectionLabel("Что нового")
-            val lines = remember(info) { info.notes.changelogLines() }
-            Surface(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
-                Column(
-                    Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+            if (info.notes.isNotBlank()) {
+                SectionLabel("Что нового")
+                val lines = remember(info) { info.notes.changelogLines() }
+                Surface(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    if (lines.isEmpty()) {
-                        Text(
-                            "Список изменений не указан.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        lines.forEach { line ->
-                            Row {
-                                Text("•", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(10.dp))
-                                Text(line, style = MaterialTheme.typography.bodyLarge)
+                    Column(
+                        Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (lines.isEmpty()) {
+                            Text(
+                                "Список изменений не указан.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            lines.forEach { line ->
+                                Row {
+                                    Text("•", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(line, style = MaterialTheme.typography.bodyLarge)
+                                }
                             }
                         }
                     }
@@ -216,6 +224,27 @@ fun UpdateScreen(
                 )
             }
         }
+
+        val channel by updater.channel.collectAsState()
+        SectionLabel("Канал обновлений")
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            val channels = UpdateChannel.entries
+            channels.forEachIndexed { i, c ->
+                SegmentedButton(
+                    selected = c == channel,
+                    onClick = { updater.setChannel(c) },
+                    shape = SegmentedButtonDefaults.itemShape(i, channels.size),
+                    enabled = state !is UpdateState.Downloading,
+                ) { Text(if (c == UpdateChannel.Release) "Релиз" else "Бета") }
+            }
+        }
+        Text(
+            if (channel == UpdateChannel.Beta) "Ранние сборки с новыми функциями, возможны ошибки"
+            else "Только стабильные версии",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
 
         SectionLabel("О клиенте")
         SettingGroup {
